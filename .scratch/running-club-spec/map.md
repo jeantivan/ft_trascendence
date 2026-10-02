@@ -18,6 +18,7 @@ Spec listo para pasar a tickets de construcción: modelo de dominio (`CONTEXT.md
 <!-- una línea por ticket cerrado: [título](issues/NN-slug.md): gist -->
 
 - [Criterios de aceptación de los módulos](issues/03-module-acceptance-criteria.md): checklist hecho; SSE aceptado como "similar"; Notification con mecanismo central y test de mutaciones; OAuth con Google, GitHub y 42; 2FA con código por email más TOTP, no exigido a OAuth.
+- [Matriz de permisos](issues/01-permissions-matrix.md): roles Admin (global) más Manager y Athlete por club; solo el Admin crea clubes y da el rol de Manager; entrada por invitación o solicitud aprobada por Manager; Manager ve todas las métricas de su club; Admin no lee DM ni RPE; permisos aplicados en servidor.
 - [Infra y autenticación](issues/06-infra-and-auth.md): pila viable (Next.js, Auth.js v5 con JWT, SSE tras NGINX, Docker Compose con HTTPS autofirmado, archivos en volumen local); correo con Mailpit más Brevo.
 
 ## Not yet specified
