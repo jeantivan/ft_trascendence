@@ -2,6 +2,7 @@
 
 Type: grilling
 Status: open
+Assignee: mvigara-
 
 ## Question
 

@@ -2,6 +2,7 @@
 
 Type: prototype
 Status: open
+Assignee: mvigara- (con jtivan-r en el registro de sesión)
 
 ## Question
 

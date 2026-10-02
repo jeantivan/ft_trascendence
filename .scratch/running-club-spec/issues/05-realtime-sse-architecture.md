@@ -2,6 +2,7 @@
 
 Type: grilling
 Status: open
+Assignee: jmateo-v
 Blocked by: 01
 
 ## Question
