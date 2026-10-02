@@ -12,8 +12,8 @@ Con los módulos cerrados y los criterios claros, repartir módulos y funcionali
 
 | Persona | Rol | Módulos | Puntos |
 |---|---|---|---|
-| **rebgarci** | Tech Lead | ORM, SSR, Advanced permissions; base técnica (Docker Compose, NGINX con HTTPS, `.env.example`, esquema Prisma y migraciones) | 4 |
-| **jtivan-r** | PO | Standard user management, OAuth, 2FA, File upload; núcleo de entrenamiento | 5 |
+| **rebgarci** | Tech Lead | ORM, SSR, Advanced permissions, File upload; base técnica (Docker Compose, NGINX con HTTPS, `.env.example`, esquema Prisma y migraciones) | 5 |
+| **jtivan-r** | PO | Standard user management, OAuth, 2FA; núcleo de entrenamiento | 4 |
 | **mvigara-** | Dev | Web (framework), Organization system, Advanced analytics dashboard, GDPR; Privacy Policy y Terms of Service | 7 |
 | **jmateo-v** | PM | Real-time, User interaction (chat, perfil, Contacts), Notification | 5 |
 
@@ -23,6 +23,7 @@ Total: 21 puntos (14 Major + 7 Minor). Cuentan como máximo 19 por el tope del b
 
 - **Núcleo de entrenamiento** (plantillas, `sessions`, `session_logs`, Events, reservas y Feedback): jtivan-r.
 - **Privacy Policy y Terms of Service:** mvigara-.
+- **File upload:** rebgarci (movido desde jtivan-r para equilibrar la carga; encaja con el almacenamiento en volumen y NGINX).
 - **Base técnica** (Docker, NGINX con HTTPS, `.env.example`, Prisma): rebgarci.
 - **README** (secciones obligatorias del subject): pendiente de decidir quién lo coordina; cada persona rellena la sección de sus módulos y su contribución individual.
 - **Demo de la evaluación:** cada persona demuestra y explica sus propios módulos.
