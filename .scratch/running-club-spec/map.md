@@ -17,6 +17,9 @@ Spec listo para pasar a tickets de construcción: modelo de dominio (`CONTEXT.md
 
 <!-- una línea por ticket cerrado: [título](issues/NN-slug.md): gist -->
 
+- [Criterios de aceptación de los módulos](issues/03-module-acceptance-criteria.md): checklist hecho; SSE aceptado como "similar"; Notification con mecanismo central y test de mutaciones; OAuth con Google, GitHub y 42; 2FA con código por email más TOTP, no exigido a OAuth.
+- [Infra y autenticación](issues/06-infra-and-auth.md): pila viable (Next.js, Auth.js v5 con JWT, SSE tras NGINX, Docker Compose con HTTPS autofirmado, archivos en volumen local); correo con Mailpit más Brevo.
+
 ## Not yet specified
 
 - Catálogo de disparadores de notificaciones (el subject pide notificar toda creación, actualización y borrado).
