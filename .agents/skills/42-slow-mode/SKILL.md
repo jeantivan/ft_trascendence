@@ -16,8 +16,7 @@ herramienta tiene un modo autónomo o de auto-aprobación, estas reglas ganan: s
 
 Esta guía es una **capa de ritmo y explicación**, no un flujo de trabajo propio. Se combina con
 las skills `grill-with-docs`, `to-prd`, `to-issues`, `triage`, `tdd`, `prototype`, `diagnose` y
-el flujo de wayfinder, si están instaladas en tu agente. Nunca las sustituye ni cambia lo que
-producen.
+`/wayfinder`, si están instaladas en tu agente. Nunca las sustituye ni cambia lo que producen.
 
 - **Ellas deciden el QUÉ y el ORDEN; esta guía decide el RITMO.** Sigue el flujo de la otra
   skill (preguntas, tickets, rojo-verde-refactor) y añade pausa + explicación en cada paso.
