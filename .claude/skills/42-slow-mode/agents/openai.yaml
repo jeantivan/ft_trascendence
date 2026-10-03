@@ -1,0 +1,5 @@
+interface:
+  display_name: "42 Slow Mode"
+  short_description: "Aprende paso a paso: explicaciones, pausas y comparaciones con C/C++"
+policy:
+  allow_implicit_invocation: false
