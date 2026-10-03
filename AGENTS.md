@@ -12,6 +12,10 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Skill obligatoria
+
+Usar siempre la skill 42-slow-mode al escribir, editar o revisar código.
+
 ## Commits
 
 Commit solo como el usuario: sin líneas `Co-Authored-By` ni firmas de Claude, ChatGPT/Codex, Gemini ni ninguna otra IA, y sin "Generated with Claude Code" ni equivalentes en commits ni PRs.
