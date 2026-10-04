@@ -22,6 +22,7 @@ Spec listo para pasar a tickets de construcción: modelo de dominio (`CONTEXT.md
 - [Esquema de base de datos](issues/02-database-schema.md): PostgreSQL con Prisma; `sessions` (prescripción) y `session_logs` (resultado) separadas; sin tabla de planes; Event con sesión opcional y Feedback solo si hay sesión; chat y notificaciones con id `bigserial`; métricas core en columnas y `extra` JSONB solo para opcionales validadas con Zod; borrado GDPR real con mensajes de Events anónimos.
 - [Reparto de módulos y roles](issues/08-module-and-role-assignment.md): rebgarci ORM, SSR, permisos y File upload más base técnica (5 pts); jtivan-r identidad, OAuth, 2FA y núcleo de entrenamiento (4); mvigara- Web, Organization, dashboard, GDPR y legales (7); jmateo-v Real-time, User interaction y Notification (5).
 - [Infra y autenticación](issues/06-infra-and-auth.md): pila viable (Next.js, Auth.js v5 con JWT, SSE tras NGINX, Docker Compose con HTTPS autofirmado, archivos en volumen local); correo con Mailpit más Brevo.
+- [Prototipo: registro de sesión y dashboard](issues/04-session-logging-and-dashboard-prototype.md): prototipo HTML interactivo validado; registro de sesiones prescritas (precargadas) vs libres; sesiones completadas, interrumpidas (con motivo en `extra` JSONB) y no realizadas; escala RPE Borg 1-10 descriptiva; dashboard semanal con KPI, Volume Alert (+10%) y evolución a 6 semanas.
 
 ## Not yet specified
 
