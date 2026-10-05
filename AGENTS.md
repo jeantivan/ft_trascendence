@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues live as local markdown under `.scratch/` (map and tickets for the running-club spec in `.scratch/running-club-spec/`). See `docs/agents/issue-tracker.md`.
+Issues live in GitHub. Use `gh issue` CLI or the GitHub web interface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -18,8 +18,8 @@ Usar siempre la skill 42-slow-mode al escribir, editar o revisar código y confi
 
 ## Antes de tocar código
 
-- Leer `CONTEXT.md` y usar su vocabulario, leer el ticket de `.scratch/` y leer los archivos que se van a modificar.
-- Trabajar un solo ticket a la vez. No cambiar su `Status:`, ni cerrar tickets, ni empezar otro sin confirmación del equipo.
+- Leer `CONTEXT.md` y usar su vocabulario, leer el ticket en GitHub y leer los archivos que se van a modificar.
+- Trabajar un solo ticket a la vez. No cambiar su estado ni cerrar tickets sin confirmación del equipo.
 - Si una decisión de dominio, permisos o seguridad no está cerrada en un ticket, no la inventes: pregunta.
 
 ## Git
@@ -39,7 +39,7 @@ Usar siempre la skill 42-slow-mode al escribir, editar o revisar código y confi
 
 ## Autorización
 
-- La matriz de permisos (`.scratch/running-club-spec/issues/01-permissions-matrix.md`) es la fuente de verdad. No duplicarla en otros documentos; si el código necesita un permiso que no está en la matriz, preguntar.
+- La matriz de permisos es la fuente de verdad (referenciada en GitHub issues o documentación). No duplicarla en otros documentos; si el código necesita un permiso que no está en la matriz, preguntar.
 - Toda acción que lea o modifique datos comprueba permisos en el servidor, y las sensibles comprueban usuario y rol vigente en la base de datos. No basta el rol del JWT ni el proxy.ts (antes middleware).
 
 ## Veracidad
