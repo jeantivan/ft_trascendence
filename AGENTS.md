@@ -16,6 +16,10 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 
 Usar siempre la skill 42-slow-mode al escribir, editar o revisar código y configuración (Docker, Prisma, NGINX).
 
+## Skill management
+
+Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. To add an external skill (e.g., from [Matt Pocock's v1.3 skills](https://github.com/mattpocock/skills/tree/main/skills/engineering)): download its SKILL.md and README.md, place in `.agents/skills/{skill-name}/`, then symlink to `.claude/skills/{skill-name}`.
+
 ## Antes de tocar código
 
 - Leer `CONTEXT.md` y usar su vocabulario, leer el ticket en GitHub y leer los archivos que se van a modificar.
