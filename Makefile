@@ -5,9 +5,9 @@ COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 all: .env
 	$(COMPOSE) up --build -d
 
-# Development: hot reload, logs in the terminal (Ctrl+C to stop)
+# Development: hot reload without rebuilding (make logs to see the output)
 dev: .env
-	$(COMPOSE_DEV) up --build --renew-anon-volumes
+	$(COMPOSE_DEV) up --build --renew-anon-volumes -d
 
 # Create .env from the template only if it does not exist yet
 .env:
