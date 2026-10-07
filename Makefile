@@ -20,8 +20,10 @@ ps:
 	$(COMPOSE) ps
 
 # Stop and remove the containers (database data is kept)
-clean:
+down:
 	$(COMPOSE) down
+
+clean: down
 
 # Also remove the volumes and the images: DELETES THE DATABASE DATA
 fclean:
@@ -29,4 +31,4 @@ fclean:
 
 re: clean all
 
-.PHONY: all dev logs ps clean fclean re
+.PHONY: all dev down logs ps clean fclean re
