@@ -1,0 +1,27 @@
+name: transcendence
+
+services:
+  db:
+    image: postgres:18.4-alpine
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: ./web
+    depends_on:
+      db:
+        condition: service_healthy
+    # TEMPORARY: remove when NGINX is added. Only NGINX may publish ports (HTTPS only). See issue #14.
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
