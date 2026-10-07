@@ -1,0 +1,11 @@
+# Development override: use with `make dev`, never alone.
+# Runs `next dev` with the local ./web folder mounted, so changes reload without rebuilding.
+services:
+  app:
+    image: transcendence-app-dev
+    build:
+      target: dev
+    volumes:
+      - ./web:/app
+      # Keep the container's node_modules (Linux/Alpine binaries) instead of the host's
+      - /app/node_modules

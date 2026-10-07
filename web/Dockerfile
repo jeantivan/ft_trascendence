@@ -4,6 +4,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Dev stage (make dev): no build, the source code is bind-mounted at runtime
+# and `next dev` reloads on every change. Not used by the default build.
+FROM deps AS dev
+ENV NEXT_TELEMETRY_DISABLED=1
+USER node
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+
 # Stage 2: build the app (generates .next/standalone)
 FROM node:24.21.0-alpine AS build
 WORKDIR /app
