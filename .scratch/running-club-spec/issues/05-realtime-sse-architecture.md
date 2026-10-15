@@ -16,7 +16,7 @@ Decisión de arquitectura en `docs/adr/0001-tiempo-real-sse-un-stream-por-pestan
 ### Stream
 
 - **Un stream SSE por pestaña** (`/api/events`) que lleva todo. Cada evento tiene un `event:` (tipo) y el cliente lo enruta.
-- **Al abrir**, el stream no envía nada antiguo: las páginas cargan los datos iniciales (endpoints o SSR) y el stream solo trae cambios. Envía un primer `id:` con el cursor actual. Un usuario que estaba desconectado ve sus mensajes al abrir el chat, porque la página los lee de la base de datos.
+- **Al abrir**, el stream no envía nada antiguo: las páginas cargan los datos iniciales (endpoints o SSR) y el stream solo trae cambios. La carga inicial devuelve el cursor con el que se calculó y el cliente abre el stream con él (parámetro de la URL: `EventSource` no permite fijar `Last-Event-ID` en la primera conexión), de modo que no queda hueco entre la carga y el stream. Un usuario que estaba desconectado ve sus mensajes al abrir el chat, porque la página los lee de la base de datos.
 
 ### Dos clases de evento
 
@@ -36,12 +36,14 @@ Decisión de arquitectura en `docs/adr/0001-tiempo-real-sse-un-stream-por-pestan
 ### Reconexión
 
 - **Cursor combinado:** `id: <último message id>-<último notification id>`. Amplía el ticket 02 (que solo nombraba `notifications.id`) sin cambiar el esquema.
-- Al reconectar se reenvían las notificaciones con id > cursor y los mensajes con id > cursor − 50 (solape por commits fuera de orden). El cliente ordena por id y descarta duplicados.
+- Al reconectar, el servidor envía primero un evento de control `resync`; el cliente vuelve a pedir el estado de los recursos activos. Después se reenvían las notificaciones con id > cursor y los mensajes con id > cursor − 50 como optimización: el solape no garantiza recuperar commits muy retrasados, la garantía es el `resync`. El cliente ordena por id y descarta duplicados.
+- **Caída del listener:** reintentar, volver a ejecutar `LISTEN` y emitir `resync` a todos los streams abiertos.
 
 ### Seguridad del stream
 
 - **Al abrir:** cookie de sesión y comprobación en la base de datos de que el usuario existe y no está bloqueado (`blocked_at`). El JWT solo no basta.
 - **Mientras está abierto:** en cada ping (cada 15 s) una consulta comprueba que todos los usuarios conectados siguen existiendo y no están bloqueados (`blocked_at`), y cierra los streams de los que no. Solo el Admin bloquea o borra cuentas. Opcional más adelante: que esas acciones del Admin llamen a `publish` para cerrarlo al instante.
+- **Caducidad del JWT (confirmado por el equipo):** al abrir se valida la firma y `exp`. Al llegar `exp`, el servidor cierra el stream; el cliente lo reabre si tiene sesión válida y, si no, redirige a login.
 - **Expulsiones:** cuando un Manager expulsa a alguien del club o del chat de un Event, su stream sigue abierto (sigue siendo usuario de la plataforma), pero deja de recibir eventos de ese club o chat porque los destinatarios se resuelven en la base de datos en cada entrega.
 - **Logout:** el cliente cierra su propio stream. Con JWT sin tabla de sesiones, otras pestañas siguen con cookie válida hasta que expire.
 
@@ -51,6 +53,8 @@ Decisión de arquitectura en `docs/adr/0001-tiempo-real-sse-un-stream-por-pestan
 - **Contador de conexiones por usuario** (varias pestañas): offline solo cuando llega a 0.
 - **Ping `: ping` cada 15 s**; si la escritura falla, la conexión está muerta.
 - Sin periodo de gracia por ahora (el estado puede parpadear al reconectar; se añade después si hace falta).
+- **Quién lo ve:** solo Contacts aceptados (confirmado por el equipo). La fuente de verdad es la matriz de permisos (ticket 01).
+- **Ocultar el estado online** (confirmado por el equipo): cada usuario puede desactivarlo en sus ajustes; si lo desactiva, sus Contacts no ven su estado online.
 
 ### Justificación de SSE ante el evaluador (README)
 
@@ -60,7 +64,5 @@ Decisión de arquitectura en `docs/adr/0001-tiempo-real-sse-un-stream-por-pestan
 4. Demo: dos navegadores, cortar la conexión y ver el reenvío.
 
 ### Pendiente del equipo
-
-- **Quién ve el estado online.** La matriz de permisos no tiene fila para ello. Propuesta: solo Contacts aceptados (lo que pide el subject). Hay que añadirlo a la matriz (ticket 01) con confirmación del equipo.
 
 Confirmado por el equipo: **no existe bloqueo entre usuarios**. Solo se puede enviar DM a un Contact aceptado; si alguien borra el Contact, dejan de poder escribirse y el stream deja de entregar esos DM.
