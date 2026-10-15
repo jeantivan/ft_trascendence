@@ -8,7 +8,7 @@
 
 Esta política describe cómo trata tus datos personales **[NOMBRE DE LA PLATAFORMA]** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
-- **Responsable del tratamiento:** [IDENTIDAD DEL RESPONSABLE: nombre o entidad y dirección]
+- **Responsable del tratamiento:** [IDENTIDAD DEL RESPONSABLE: persona o entidad y dirección]
 - **Contacto de privacidad:** [EMAIL DE CONTACTO]
 
 ## 2. Qué datos tratamos
@@ -40,25 +40,27 @@ Esta política describe cómo trata tus datos personales **[NOMBRE DE LA PLATAFO
 
 ### Datos técnicos
 - Dirección IP, navegador y registros de acceso.
-- Un registro de auditoría de quién accede a tus datos sensibles (ver sección 7).
+- Registro de auditoría de quién accede a tus datos sensibles (ver sección 7). Contiene identificadores de usuario, que siguen siendo datos personales aunque no incluyan tu perfil.
 
 ## 3. Para qué los usamos y con qué base legal
 
 | Finalidad | Datos | Base legal (RGPD) |
 |---|---|---|
 | Prestarte el servicio: cuenta, entrenamientos, eventos, mensajes | Cuenta, entrenamientos, eventos, relaciones | Ejecución del contrato (art. 6.1.b) |
-| Mostrar tu Club Profile y estadísticas a tu club | Perfil de club | Tu consentimiento (art. 6.1.a), que puedes retirar cuando quieras |
+| Mostrar tu nick y foto a tu club | Perfil básico | Ejecución del contrato (art. 6.1.b) |
+| Mostrar tus estadísticas a tu club | Estadísticas de Club Profile | Tu consentimiento (art. 6.1.a), que puedes retirar cuando quieras |
 | Enviarte notificaciones opcionales | Preferencias de notificación | Tu consentimiento (art. 6.1.a) |
-| Seguridad, prevención de fraude y atención de denuncias | Datos técnicos, registro de auditoría | Interés legítimo (art. 6.1.f) |
+| Tratar tu RPE y tu Feedback cuando puedan revelar información de salud | RPE, Feedback, campos opcionales | Tu consentimiento explícito (art. 9.2.a), separado de aceptar esta política |
+| Seguridad, prevención de fraude y atención de denuncias | Datos técnicos, registro de auditoría, contenido denunciado | Interés legítimo (art. 6.1.f) |
 
 ## 4. Esfuerzo percibido (RPE) y Feedback
 
 El RPE y el Feedback pueden revelar información sobre tu condición física. Los tratamos con especial cuidado:
 
+- **Consentimiento explícito.** Antes de registrar RPE o de recibir Feedback te pediremos un consentimiento específico para estos datos, distinto de aceptar esta política. Puedes retirarlo cuando quieras en Ajustes > Privacidad. Retirarlo no afecta a lo ya tratado, y puedes pedir que se borren los datos ya registrados.
 - **RPE:** solo lo ven tú y los Managers de tu club.
-- **Feedback:** solo lo ven tú y el Manager que lo escribió. Otros Managers del club no lo ven y el Admin tampoco, salvo que tú lo autorices en una denuncia (sección 6).
+- **Feedback:** solo lo ven tú y el Manager que lo escribió. Otros Managers del club no lo ven. El Admin solo accede en caso de denuncia (sección 6).
 - **Nunca se publican** en tu Club Profile, ni en registros técnicos, ni en notificaciones.
-- Si incluyes información de salud en un campo opcional, la tratamos como dato sensible.
 
 **La plataforma no ofrece consejo médico ni diagnóstico.** El RPE y el Feedback son observaciones sobre entrenamiento. Ante dolor o lesión, consulta a un profesional sanitario.
 
@@ -70,7 +72,7 @@ El RPE y el Feedback pueden revelar información sobre tu condición física. Lo
 | Estadísticas de Club Profile | Athletes de tu club, solo si las activas |
 | RPE y resultados de tus sesiones | Tú y los Managers de tu club |
 | Feedback | Tú y el Manager autor |
-| Mensajes privados | Tú y tu Contact. El Admin no accede |
+| Mensajes privados | Tú y tu Contact. El Admin solo accede a los mensajes afectados por una denuncia (sección 6) |
 | Chat de un Event | Asistentes admitidos y Managers, que lo administran |
 | Número de asistentes a un Event | Todo tu club |
 | Nombres de los asistentes | Solo los Managers |
@@ -79,33 +81,41 @@ Los usuarios sin club solo ven la lista de clubes (nombre y número de miembros)
 
 ## 6. Denuncias
 
-Si denuncias un contenido o una conducta, puedes autorizar de forma expresa al Admin para leer el contenido denunciado, incluido un Feedback. Sin tu autorización no accede a él.
+Si un Manager denuncia un contenido o una conducta, el Admin puede ver los **mensajes afectados por la denuncia**, tanto los del Manager como los del Athlete implicado, y solo esos. Esta consulta queda registrada en el registro de auditoría (sección 7).
+
+Si eres el Athlete afectado, el contenido denunciado puede incluir datos tuyos. La base legal de este acceso es el interés legítimo en la seguridad y moderación de la plataforma (art. 6.1.f).
 
 ## 7. Registro de auditoría
 
-Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ejemplo, un Manager leyendo RPE o Feedback), **cuándo** y **sobre qué recurso**. No registramos el valor del RPE, el contenido del Feedback ni el texto de los mensajes.
+Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ejemplo, un Manager leyendo RPE o Feedback, o el Admin leyendo un contenido denunciado), **cuándo** y **sobre qué recurso**. No registramos el valor del RPE, el contenido del Feedback ni el texto de los mensajes.
 
-Este registro se conserva aunque borres tu cuenta, para poder demostrar quién accedió a qué datos. Después del borrado solo contiene identificadores, sin tu perfil. Plazo de conservación: **[PLAZO DEL REGISTRO DE AUDITORÍA: pendiente de decidir]**.
+- **Finalidad:** seguridad y poder responder ante reclamaciones.
+- **Base legal:** interés legítimo (art. 6.1.f).
+- **Plazo:** 12 meses desde la fecha del registro. Se conserva aunque borres tu cuenta y después contiene solo identificadores, sin tu perfil.
 
 ## 8. Cuánto tiempo conservamos tus datos
 
 | Situación | Qué ocurre |
 |---|---|
 | Mientras eres miembro | Conservamos tus datos activos |
-| Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) y solo tú los ves. Dejas de recibir invitaciones de ese club. No se borra tu cuenta |
+| Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. No se borra tu cuenta |
 | Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts |
 | Después de borrar tu cuenta | Los registros técnicos (IP, navegador, accesos) se conservan como máximo 3 meses |
 
 ### Qué se conserva al borrar tu cuenta
 
-- **Mensajes en chats de Events y mensajes privados:** se conservan sin tu nombre (el autor queda sin vincular) para que otros usuarios mantengan la conversación. **Esto es una desvinculación técnica, no una anonimización garantizada:** si el texto del mensaje te identifica, puede seguir haciéndolo.
-- **Events, plantillas de entrenamiento e invitaciones que creaste como Manager:** se conservan sin autor, porque otros Athletes los usan.
-- **Feedback que escribiste como Manager:** se conserva en la ficha del Athlete que lo recibió, sin tu nombre.
-- **Registro de auditoría:** ver sección 7.
+Tu nombre se desvincula de estos datos, pero no es una anonimización garantizada: si el texto de un mensaje te identifica, puede seguir haciéndolo.
+
+| Dato | Finalidad | Fundamento | Plazo |
+|---|---|---|---|
+| Mensajes en chats de Events y mensajes privados, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | [PLAZO: mientras exista la conversación u otro criterio] |
+| Events, plantillas de entrenamiento e invitaciones que creaste como Manager, sin autor | Que otros Athletes del club sigan usándolos | Interés legítimo (art. 6.1.f). No contienen tu identidad tras la desvinculación | Mientras el club los mantenga |
+| Feedback que escribiste como Manager, sin tu nombre | Que el Athlete conserve su historial | Ejecución del contrato con el Athlete (art. 6.1.b) | Mientras el Athlete mantenga su cuenta |
+| Registro de auditoría (solo identificadores) | Seguridad y defensa ante reclamaciones | Interés legítimo (art. 6.1.f) y art. 17.3.e | 12 meses |
 
 ### Si eres el único Manager de un club
 
-No puedes borrar tu cuenta ni abandonar el club hasta que haya otro Manager nombrado.
+Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Admin, que asume la gestión del club o nombra a un sustituto.
 
 ## 9. Tus derechos
 
@@ -114,28 +124,39 @@ No puedes borrar tu cuenta ni abandonar el club hasta que haya otro Manager nomb
 | **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días |
 | **Rectificación** (art. 16) | Ajustes > Perfil: nombre, email, foto y nick |
 | **Supresión** (art. 17) | Ajustes > Privacidad > Borrar cuenta. Confirmas con un código enviado a tu email, que caduca en 10 minutos. **Es permanente y no tiene marcha atrás** |
+| **Limitación del tratamiento** (art. 18) | Escríbenos a [EMAIL DE CONTACTO] |
 | **Portabilidad** (art. 20) | La descarga incluye los datos en JSON y CSV |
-| **Oposición** (art. 21) | Ajustes > Privacidad: rechazar análisis de uso y notificaciones |
-| **Retirar un consentimiento** | Ajustes > Privacidad: desactivar las estadísticas de Club Profile o las notificaciones |
+| **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a [EMAIL DE CONTACTO] |
+| **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile, notificaciones y datos de salud (RPE y Feedback) |
 
-La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación.
+La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
 
-Respondemos **sin dilación indebida y, como máximo, en un mes**. También puedes escribirnos a [EMAIL DE CONTACTO].
+Respondemos **sin dilación indebida y, como máximo, en un mes**. En casos complejos o con muchas solicitudes podemos prorrogarlo **dos meses más**, y te avisaremos del motivo.
 
 Si crees que tratamos tus datos de forma incorrecta, tienes derecho a reclamar ante la autoridad de control de protección de datos [AUTORIDAD COMPETENTE SEGÚN LA JURISDICCIÓN].
 
-## 10. Seguridad
+## 10. Destinatarios y transferencias
+
+No vendemos tus datos. Pueden acceder a ellos proveedores que nos prestan servicios técnicos, siempre por cuenta nuestra:
+
+- Alojamiento y base de datos: [PROVEEDOR O CONFIRMAR]
+- Envío de correo electrónico: [PROVEEDOR O CONFIRMAR]
+- Inicio de sesión con proveedor externo (OAuth): [PROVEEDOR O NINGUNO]
+
+**Transferencias internacionales:** [CONFIRMAR si algún proveedor trata datos fuera del Espacio Económico Europeo y con qué garantías; si no hay, decirlo aquí].
+
+## 11. Seguridad
 
 Aplicamos medidas técnicas y organizativas para proteger tus datos: conexión cifrada (HTTPS), autenticación con segundo factor opcional y comprobación de permisos en el servidor en cada acceso a datos personales.
 
-## 11. Menores
+## 12. Menores
 
 [EDAD MÍNIMA DE USO: pendiente de decidir según la jurisdicción]
 
-## 12. Cambios en esta política
+## 13. Cambios en esta política
 
 Si la modificamos de forma relevante, te avisaremos por email con al menos 30 días de antelación.
 
-## 13. Contacto
+## 14. Contacto
 
 [EMAIL DE CONTACTO]
