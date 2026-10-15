@@ -45,18 +45,19 @@ Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "M
 
 ## Regla del último Manager
 
-**Decidido:** un Manager no puede dejar un club (ni borrar su cuenta) si es el único Manager de ese club. Antes tiene que haber otro Manager nombrado.
+**Decidido (revisado tras la revisión legal externa):** el borrado de cuenta de un Manager **no se bloquea** aunque sea el único de un club. Un bloqueo indefinido compromete el derecho de supresión (art. 17 RGPD).
 
-- Se comprueba **en servidor, dentro de la misma transacción** del borrado o de la salida del club (no basta con la interfaz).
+- Al borrar la cuenta de un Manager que es el único de un club, el club queda sin Manager y **se avisa al Admin**, que asume la gestión o nombra a un sustituto (el Admin es quien da el rol de Manager).
 - Aplica si es el único Manager de **cualquiera** de sus clubes.
-- Si bloquea, el mensaje debe indicar qué club le falta por asignar.
+- El aviso al Admin se genera en la misma transacción del borrado.
+- Mientras el club no tiene Manager, el Admin gestiona el club.
 
 ## Lo que implica para el esquema (#19)
 
 - Nullable con `SetNull`: `messages.author_id`, `feedback.manager_id`, `events.created_by`, `training_templates.created_by`, `membership_requests.created_by`.
 - `Cascade` desde `users` en los datos personales del usuario (filas marcadas Cascade en la tabla).
 - **`audit_log`**: para que el registro sobreviva al borrado, `actor_id` y `subject_id` no pueden ser FK con `Cascade`. Dos opciones, a elegir por Rebeca: columnas `uuid` **sin FK** (conservan el id), o FK con `SetNull` (pierde quién era). Con la decisión "se conserva el registro", la primera opción es la que lo cumple.
-- El borrado es una **transacción de servidor** con pasos fuera de la BD (borrar archivo de avatar y ZIPs) y la comprobación del último Manager. `onDelete` solo no basta.
+- El borrado es una **transacción de servidor** con pasos fuera de la BD (borrar archivo de avatar y ZIPs) y el aviso al Admin cuando el club se queda sin Manager. `onDelete` solo no basta.
 
 ## Contradicción a corregir en la documentación
 
