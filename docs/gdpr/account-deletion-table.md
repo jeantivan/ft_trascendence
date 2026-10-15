@@ -1,10 +1,10 @@
 # Tabla de borrado de cuenta (GDPR Art. 17)
 
-Ticket: GitHub #8 (`issues/07-privacy-tos-gdpr.md`). Insumo para #19 (`schema.prisma`): qué hace cada FK a `users` cuando se borra una cuenta.
+Ticket: GitHub #8, sub-issue #29. Insumo para #19 (`schema.prisma`): qué hace cada FK a `users` cuando se borra una cuenta.
 
 Estado: **decidido por Marta (responsable de #8); pendiente de que el equipo lo vea en el PR**. Las filas "Decidido" resuelven las preguntas P1 a P5 del borrador anterior.
 
-Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "Mensajes en Events tras Borrado", "Mensajes Privados (DM) tras Borrado", "Auditoría") y esquema de #3 (`issues/02-database-schema.md`).
+Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "Mensajes en Events tras Borrado", "Mensajes Privados (DM) tras Borrado", "Auditoría") y esquema de #3.
 
 ## Leyenda
 
@@ -60,7 +60,7 @@ Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "M
 
 ## Contradicción a corregir en la documentación
 
-- #3 (`02-database-schema.md`, sección "Borrado") dice que los **DM se borran** realmente. La spec final de #8 dice que se **conservan con `author_id = null`** para el otro Contact. Manda #8, que es posterior y aprobada. Hay que actualizar #3 para que Rebeca no implemente lo antiguo.
+- #3 (sección "Borrado") dice que los **DM se borran** realmente. La spec final de #8 dice que se **conservan con `author_id = null`** para el otro Contact. Manda #8, que es posterior y aprobada. Hay que actualizar #3 para que Rebeca no implemente lo antiguo.
 
 ## Pendiente (menor)
 
