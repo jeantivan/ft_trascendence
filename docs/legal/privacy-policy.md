@@ -100,6 +100,7 @@ Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ej
 | Mientras eres miembro | Conservamos tus datos activos |
 | Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. No se borra tu cuenta |
 | Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts |
+| El Admin borra un club | Te avisamos por email con al menos 30 días de antelación y puedes descargar tus datos antes. Después se borran el club, sus sesiones y tu historial de entrenamiento en él. Tu cuenta no se borra |
 | Después de borrar tu cuenta | Los registros técnicos (IP, navegador, accesos) se conservan como máximo 3 meses |
 
 ### Qué se conserva al borrar tu cuenta
@@ -122,7 +123,7 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | Derecho | Cómo ejercerlo |
 |---|---|
 | **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días |
-| **Rectificación** (art. 16) | Ajustes > Perfil: nombre, email, foto y nick |
+| **Rectificación** (art. 16) | Ajustes > Perfil: email, foto y nick |
 | **Supresión** (art. 17) | Ajustes > Privacidad > Borrar cuenta. Confirmas con un código enviado a tu email, que caduca en 10 minutos. **Es permanente y no tiene marcha atrás** |
 | **Limitación del tratamiento** (art. 18) | Escríbenos a [EMAIL DE CONTACTO] |
 | **Portabilidad** (art. 20) | La descarga incluye los datos en JSON y CSV |
