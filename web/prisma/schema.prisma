@@ -1,0 +1,553 @@
+// Prisma schema: the map of every table in the database.
+// Docs: https://pris.ly/d/prisma-schema
+
+// Generates the Prisma Client (TypeScript code built from this schema).
+// The output folder is generated code: it is not committed to git.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// The database engine. The connection URL lives in prisma.config.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Dates: every DateTime is timestamptz (stored in UTC), as the spec asks.
+// Naming: models in PascalCase, fields in camelCase; @@map / @map keep the
+// real table and column names in snake_case, as in the spec (issue #3).
+// Account deletion rules (onDelete): account deletion table in PR #24
+// (docs/gdpr/account-deletion-table.md once that PR is merged).
+// ---------------------------------------------------------------------------
+
+// ===== Block 1: identity and 2FA =====
+
+enum GlobalRole {
+  admin
+  user
+}
+
+model User {
+  id                   String     @id @default(uuid()) @db.Uuid
+  email                String     @unique
+  // Auth.js adapter field; null for OAuth-only accounts
+  emailVerified        DateTime?  @map("email_verified") @db.Timestamptz(3)
+  passwordHash         String?    @map("password_hash")
+  // name (full name) and image (avatar URL) use the names the Auth.js
+  // Prisma adapter writes; nick is the name shown in the app
+  name                 String?
+  nick                 String?
+  image                String?
+  roleGlobal           GlobalRole @default(user) @map("role_global")
+  blockedAt            DateTime?  @map("blocked_at") @db.Timestamptz(3)
+  // Encrypted by the server before saving
+  totpSecret           String?    @map("totp_secret")
+  totpEnabled          Boolean    @default(false) @map("totp_enabled")
+  email2faEnabled      Boolean    @default(false) @map("email_2fa_enabled")
+  // Opt-in for the Club Profile stats
+  statsPublic          Boolean    @default(false) @map("stats_public")
+  // Explicit consent for health data (RPE and Feedback); null = not given or
+  // withdrawn (Privacy Policy, PR #30; pending confirmation from Marta)
+  healthConsentAt      DateTime?  @map("health_consent_at") @db.Timestamptz(3)
+  // Consent for notifications (Privacy Policy, PR #30; default pending)
+  notificationsEnabled Boolean    @default(true) @map("notifications_enabled")
+  // Whether accepted Contacts see the online status (PR #16)
+  showOnline           Boolean    @default(true) @map("show_online")
+  createdAt            DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  accounts      Account[]
+  emailOtpCodes EmailOtpCode[]
+  recoveryCodes RecoveryCode[]
+
+  memberships               Membership[]
+  membershipRequests        MembershipRequest[] @relation("RequestUser")
+  createdMembershipRequests MembershipRequest[] @relation("RequestCreator")
+  groupMemberships          GroupMember[]
+
+  createdTrainingTemplates TrainingTemplate[]
+  sessions                 Session[]
+  sessionLogs              SessionLog[]
+
+  createdEvents    Event[]
+  spotRequests     SpotRequest[]
+  feedbackReceived Feedback[]    @relation("FeedbackAthlete")
+  feedbackWritten  Feedback[]    @relation("FeedbackManager")
+
+  contactsAsA              Contact[]                 @relation("ContactA")
+  contactsAsB              Contact[]                 @relation("ContactB")
+  contactRequestsSent      Contact[]                 @relation("ContactRequester")
+  conversationParticipants ConversationParticipant[]
+  messages                 Message[]
+  notifications            Notification[]
+
+  @@map("users")
+}
+
+// OAuth accounts (google, github, 42), in the format the Auth.js Prisma adapter
+// expects. No sessions table: sessions are JWT.
+model Account {
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model EmailOtpCode {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  codeHash   String    @map("code_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  attempts   Int       @default(0)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_otp_codes")
+}
+
+model RecoveryCode {
+  id       String    @id @default(uuid()) @db.Uuid
+  userId   String    @map("user_id") @db.Uuid
+  codeHash String    @map("code_hash")
+  usedAt   DateTime? @map("used_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("recovery_codes")
+}
+
+// ===== Block 2: club and membership =====
+
+// A club. Only the Admin creates them.
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  // IANA zone, e.g. "Europe/Madrid": weekly stats are grouped by the club's week
+  timezone    String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  memberships        Membership[]
+  membershipRequests MembershipRequest[]
+  groups             Group[]
+  trainingTemplates  TrainingTemplate[]
+  sessions           Session[]
+  events             Event[]
+
+  @@map("organizations")
+}
+
+enum MembershipRole {
+  manager
+  athlete
+}
+
+// A person's role in one club (one role per club). A club keeps at least one
+// Manager, with one exception: if the only Manager deletes the account or
+// leaves the club, it is not blocked (GDPR right to erasure); the server
+// notifies the Admin, who takes over or names a new Manager. Decided in #8,
+// PR #24 still pending team review.
+model Membership {
+  userId   String         @map("user_id") @db.Uuid
+  orgId    String         @map("org_id") @db.Uuid
+  role     MembershipRole
+  joinedAt DateTime       @default(now()) @map("joined_at") @db.Timestamptz(3)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([userId, orgId])
+  @@index([orgId])
+  @@map("memberships")
+}
+
+enum MembershipRequestKind {
+  invite
+  request
+}
+
+enum MembershipRequestStatus {
+  pending
+  accepted
+  rejected
+  revoked
+}
+
+// Entry to a club: an invitation from a Manager or a request from the user
+model MembershipRequest {
+  id        String                  @id @default(uuid()) @db.Uuid
+  orgId     String                  @map("org_id") @db.Uuid
+  userId    String                  @map("user_id") @db.Uuid
+  kind      MembershipRequestKind
+  status    MembershipRequestStatus @default(pending)
+  // Who created it; kept with null if that account is deleted
+  createdBy String?                 @map("created_by") @db.Uuid
+  createdAt DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation("RequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  creator      User?        @relation("RequestCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([createdBy])
+  @@map("membership_requests")
+}
+
+model Group {
+  id        String  @id @default(uuid()) @db.Uuid
+  orgId     String  @map("org_id") @db.Uuid
+  name      String
+  level     String?
+  // e.g. maratón, carrera corta, media distancia, marcha
+  objective String?
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members      GroupMember[]
+  sessions     Session[]
+
+  @@index([orgId])
+  @@map("groups")
+}
+
+// An Athlete can be in several Groups
+model GroupMember {
+  groupId String @map("group_id") @db.Uuid
+  userId  String @map("user_id") @db.Uuid
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+// ===== Block 3: training =====
+
+enum SessionType {
+  rodaje
+  intervalos
+  cuestas
+  tirada_larga
+  fartlek
+}
+
+// Reusable plan made by a Manager. Assigning it to a Group copies its
+// template_sessions into group sessions (there is no "plans" table).
+model TrainingTemplate {
+  id        String  @id @default(uuid()) @db.Uuid
+  orgId     String  @map("org_id") @db.Uuid
+  name      String
+  // Kept with null if the author deletes the account (PR #24)
+  createdBy String? @map("created_by") @db.Uuid
+
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  creator      User?             @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  sessions     TemplateSession[]
+  copies       Session[]
+
+  @@index([orgId])
+  @@index([createdBy])
+  @@map("training_templates")
+}
+
+model TemplateSession {
+  templateId       String      @map("template_id") @db.Uuid
+  // Order inside the template
+  position         Int
+  sessionType      SessionType @map("session_type")
+  targetDistanceM  Int?        @map("target_distance_m")
+  targetPaceSPerKm Int?        @map("target_pace_s_per_km")
+  targetDurationS  Int?        @map("target_duration_s")
+  // Days after the start date chosen when the template is assigned
+  dayOffset        Int         @map("day_offset")
+
+  template TrainingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([templateId, position])
+  @@map("template_sessions")
+}
+
+enum SessionOrigin {
+  template
+  customized
+  free
+}
+
+// Prescribed training session. Group session: group_id set, athlete_id null.
+// Individual session (customized or free): athlete_id set.
+// Not the Auth.js login session: login uses JWT (no sessions table). If the
+// Auth.js database session strategy is ever enabled, its model must get
+// another name, because the adapter writes to prisma.session.
+model Session {
+  id                  String        @id @default(uuid()) @db.Uuid
+  orgId               String        @map("org_id") @db.Uuid
+  origin              SessionOrigin
+  sessionType         SessionType   @map("session_type")
+  targetDistanceM     Int?          @map("target_distance_m")
+  targetPaceSPerKm    Int?          @map("target_pace_s_per_km")
+  targetDurationS     Int?          @map("target_duration_s")
+  scheduledAt         DateTime      @map("scheduled_at") @db.Timestamptz(3)
+  groupId             String?       @map("group_id") @db.Uuid
+  athleteId           String?       @map("athlete_id") @db.Uuid
+  // Traceability only
+  sourceTemplateId    String?       @map("source_template_id") @db.Uuid
+  // The group session this customized copy modifies
+  customizesSessionId String?       @map("customizes_session_id") @db.Uuid
+
+  // Restrict: a club with sessions cannot be deleted, so nobody loses their
+  // training history by accident (pending decision, asked in PR #24).
+  // Deleting a group keeps its sessions (and the Athletes' logs) without group.
+  organization   Organization      @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  group          Group?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  athlete        User?             @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  sourceTemplate TrainingTemplate? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  customizes     Session?          @relation("Customization", fields: [customizesSessionId], references: [id], onDelete: SetNull)
+  customizations Session[]         @relation("Customization")
+  logs           SessionLog[]
+  events         Event[]
+
+  @@index([orgId])
+  @@index([groupId, scheduledAt])
+  @@index([athleteId, scheduledAt])
+  @@index([sourceTemplateId])
+  @@index([customizesSessionId])
+  @@map("sessions")
+}
+
+// What one Athlete actually did in one session
+model SessionLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  sessionId   String   @map("session_id") @db.Uuid
+  athleteId   String   @map("athlete_id") @db.Uuid
+  completed   Boolean
+  // 1-10, validated by the server
+  rpe         Int      @db.SmallInt
+  distanceM   Int?     @map("distance_m")
+  durationS   Int?     @map("duration_s")
+  performedAt DateTime @map("performed_at") @db.Timestamptz(3)
+  // Optional metrics only, validated with Zod when written (rule in issue #3)
+  extra       Json?
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  athlete User    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, athleteId])
+  // Weekly stats: logs of one Athlete grouped by week
+  @@index([athleteId, performedAt])
+  @@map("session_logs")
+}
+
+// ===== Block 4: events and feedback =====
+
+// In-person meetup of the club, with its own chat. All club members see it.
+model Event {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgId       String    @map("org_id") @db.Uuid
+  title       String
+  location    String
+  startsAt    DateTime  @map("starts_at") @db.Timestamptz(3)
+  // Optional: an Event with a session can have Feedback
+  sessionId   String?   @map("session_id") @db.Uuid
+  // Kept with null if the author deletes the account (PR #24)
+  createdBy   String?   @map("created_by") @db.Uuid
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session      Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  creator      User?         @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  spotRequests SpotRequest[]
+  feedback     Feedback[]
+  conversation Conversation?
+
+  @@index([orgId, startsAt])
+  @@index([sessionId])
+  @@index([createdBy])
+  @@map("events")
+}
+
+enum SpotRequestStatus {
+  pending
+  approved
+  rejected
+  withdrawn
+}
+
+// A member asks for a place in an Event; a Manager approves or rejects it
+model SpotRequest {
+  eventId   String            @map("event_id") @db.Uuid
+  userId    String            @map("user_id") @db.Uuid
+  status    SpotRequestStatus @default(pending)
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([userId])
+  @@map("spot_requests")
+}
+
+// A Manager's comment to one Athlete about an Event with a session.
+// Only that Athlete and the Manager who wrote it can read it.
+model Feedback {
+  id        String   @id @default(uuid()) @db.Uuid
+  // Kept with null if the Event is deleted: the Athlete keeps their history
+  eventId   String?  @map("event_id") @db.Uuid
+  athleteId String   @map("athlete_id") @db.Uuid
+  // Kept with null if the Manager deletes the account (PR #24)
+  managerId String?  @map("manager_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  event   Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  athlete User   @relation("FeedbackAthlete", fields: [athleteId], references: [id], onDelete: Cascade)
+  manager User?  @relation("FeedbackManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([athleteId])
+  @@index([managerId])
+  @@map("feedback")
+}
+
+// ===== Block 5: social and real time =====
+
+enum ContactStatus {
+  pending
+  accepted
+}
+
+// Two people who can send DMs to each other. Only members of a shared Group
+// can ask (checked by the server). One row per pair: the server stores the
+// pair ordered (user_a < user_b) so the same pair cannot appear twice.
+model Contact {
+  userA       String        @map("user_a") @db.Uuid
+  userB       String        @map("user_b") @db.Uuid
+  status      ContactStatus @default(pending)
+  requestedBy String        @map("requested_by") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  a         User @relation("ContactA", fields: [userA], references: [id], onDelete: Cascade)
+  b         User @relation("ContactB", fields: [userB], references: [id], onDelete: Cascade)
+  requester User @relation("ContactRequester", fields: [requestedBy], references: [id], onDelete: Cascade)
+
+  @@id([userA, userB])
+  @@index([userB])
+  @@index([requestedBy])
+  @@map("contacts")
+}
+
+enum ConversationKind {
+  event
+  dm
+}
+
+// A chat: the one of an Event, or a DM between two Contacts (one per pair,
+// checked by the server)
+model Conversation {
+  id        String           @id @default(uuid()) @db.Uuid
+  kind      ConversationKind
+  // Only for kind = event; one chat per Event
+  eventId   String?          @unique @map("event_id") @db.Uuid
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  event        Event?                    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+// Who is in a chat. removed_at: expelled by a Manager or no longer a Contact.
+model ConversationParticipant {
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  removedAt      DateTime? @map("removed_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  // bigserial: increasing number, used to resend missed messages (SSE, PR #16)
+  id             BigInt    @id @default(autoincrement())
+  conversationId String    @map("conversation_id") @db.Uuid
+  // Null if the author deleted the account (PR #24)
+  authorId       String?   @map("author_id") @db.Uuid
+  body           String
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, id])
+  @@index([authorId])
+  @@map("messages")
+}
+
+model Notification {
+  // bigserial: the id is used as the SSE Last-Event-ID (PR #16)
+  id        BigInt    @id @default(autoincrement())
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  // Never contains RPE or Feedback (Privacy Policy, PR #30)
+  payload   Json
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, id])
+  @@map("notifications")
+}
+
+// ===== Block 6: audit =====
+
+enum AuditAction {
+  read
+  update
+}
+
+// Who read or changed sensitive data of an Athlete (RPE, Feedback, reported
+// content), when and on which resource. Never stores the value itself.
+// actor_id and subject_id are plain uuids with NO foreign key on purpose:
+// the rows must survive account deletion (PR #24). Kept 12 months (PR #30).
+model AuditLog {
+  id         BigInt      @id @default(autoincrement())
+  actorId    String      @map("actor_id") @db.Uuid
+  subjectId  String?     @map("subject_id") @db.Uuid
+  action     AuditAction
+  // e.g. "session_log", "feedback", "message"
+  resource   String
+  resourceId String?     @map("resource_id")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([actorId])
+  @@index([subjectId])
+  // To delete rows older than 12 months
+  @@index([createdAt])
+  @@map("audit_log")
+}
