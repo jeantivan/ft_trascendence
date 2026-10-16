@@ -14,9 +14,11 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
+// Dates: every DateTime is timestamptz (stored in UTC), as the spec asks.
 // Naming: models in PascalCase, fields in camelCase; @@map / @map keep the
 // real table and column names in snake_case, as in the spec (issue #3).
-// Account deletion rules (onDelete): docs/gdpr/account-deletion-table.md (PR #24).
+// Account deletion rules (onDelete): account deletion table in PR #24
+// (docs/gdpr/account-deletion-table.md once that PR is merged).
 // ---------------------------------------------------------------------------
 
 // ===== Block 1: identity and 2FA =====
@@ -30,7 +32,7 @@ model User {
   id                   String     @id @default(uuid()) @db.Uuid
   email                String     @unique
   // Auth.js adapter field; null for OAuth-only accounts
-  emailVerified        DateTime?  @map("email_verified")
+  emailVerified        DateTime?  @map("email_verified") @db.Timestamptz(3)
   passwordHash         String?    @map("password_hash")
   // name (full name) and image (avatar URL) use the names the Auth.js
   // Prisma adapter writes; nick is the name shown in the app
@@ -38,7 +40,7 @@ model User {
   nick                 String?
   image                String?
   roleGlobal           GlobalRole @default(user) @map("role_global")
-  blockedAt            DateTime?  @map("blocked_at")
+  blockedAt            DateTime?  @map("blocked_at") @db.Timestamptz(3)
   // Encrypted by the server before saving
   totpSecret           String?    @map("totp_secret")
   totpEnabled          Boolean    @default(false) @map("totp_enabled")
@@ -47,12 +49,12 @@ model User {
   statsPublic          Boolean    @default(false) @map("stats_public")
   // Explicit consent for health data (RPE and Feedback); null = not given or
   // withdrawn (Privacy Policy, PR #30; pending confirmation from Marta)
-  healthConsentAt      DateTime?  @map("health_consent_at")
+  healthConsentAt      DateTime?  @map("health_consent_at") @db.Timestamptz(3)
   // Consent for notifications (Privacy Policy, PR #30; default pending)
   notificationsEnabled Boolean    @default(true) @map("notifications_enabled")
   // Whether accepted Contacts see the online status (PR #16)
   showOnline           Boolean    @default(true) @map("show_online")
-  createdAt            DateTime   @default(now()) @map("created_at")
+  createdAt            DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
 
   accounts      Account[]
   emailOtpCodes EmailOtpCode[]
@@ -108,9 +110,9 @@ model EmailOtpCode {
   id         String    @id @default(uuid()) @db.Uuid
   userId     String    @map("user_id") @db.Uuid
   codeHash   String    @map("code_hash")
-  expiresAt  DateTime  @map("expires_at")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
   attempts   Int       @default(0)
-  consumedAt DateTime? @map("consumed_at")
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -122,7 +124,7 @@ model RecoveryCode {
   id       String    @id @default(uuid()) @db.Uuid
   userId   String    @map("user_id") @db.Uuid
   codeHash String    @map("code_hash")
-  usedAt   DateTime? @map("used_at")
+  usedAt   DateTime? @map("used_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -139,7 +141,7 @@ model Organization {
   description String?
   // IANA zone, e.g. "Europe/Madrid": weekly stats are grouped by the club's week
   timezone    String
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   memberships        Membership[]
   membershipRequests MembershipRequest[]
@@ -156,13 +158,16 @@ enum MembershipRole {
   athlete
 }
 
-// A person's role in one club. The server guarantees every club keeps at
-// least one Manager (except the last-Manager deletion rule, see PR #24).
+// A person's role in one club (one role per club). A club keeps at least one
+// Manager, with one exception: if the only Manager deletes the account or
+// leaves the club, it is not blocked (GDPR right to erasure); the server
+// notifies the Admin, who takes over or names a new Manager. Decided in #8,
+// PR #24 still pending team review.
 model Membership {
   userId   String         @map("user_id") @db.Uuid
   orgId    String         @map("org_id") @db.Uuid
   role     MembershipRole
-  joinedAt DateTime       @default(now()) @map("joined_at")
+  joinedAt DateTime       @default(now()) @map("joined_at") @db.Timestamptz(3)
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -193,7 +198,7 @@ model MembershipRequest {
   status    MembershipRequestStatus @default(pending)
   // Who created it; kept with null if that account is deleted
   createdBy String?                 @map("created_by") @db.Uuid
-  createdAt DateTime                @default(now()) @map("created_at")
+  createdAt DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user         User         @relation("RequestUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -286,8 +291,11 @@ enum SessionOrigin {
   free
 }
 
-// Prescribed session. Group session: group_id set, athlete_id null.
+// Prescribed training session. Group session: group_id set, athlete_id null.
 // Individual session (customized or free): athlete_id set.
+// Not the Auth.js login session: login uses JWT (no sessions table). If the
+// Auth.js database session strategy is ever enabled, its model must get
+// another name, because the adapter writes to prisma.session.
 model Session {
   id                  String        @id @default(uuid()) @db.Uuid
   orgId               String        @map("org_id") @db.Uuid
@@ -296,7 +304,7 @@ model Session {
   targetDistanceM     Int?          @map("target_distance_m")
   targetPaceSPerKm    Int?          @map("target_pace_s_per_km")
   targetDurationS     Int?          @map("target_duration_s")
-  scheduledAt         DateTime      @map("scheduled_at")
+  scheduledAt         DateTime      @map("scheduled_at") @db.Timestamptz(3)
   groupId             String?       @map("group_id") @db.Uuid
   athleteId           String?       @map("athlete_id") @db.Uuid
   // Traceability only
@@ -334,7 +342,7 @@ model SessionLog {
   rpe         Int      @db.SmallInt
   distanceM   Int?     @map("distance_m")
   durationS   Int?     @map("duration_s")
-  performedAt DateTime @map("performed_at")
+  performedAt DateTime @map("performed_at") @db.Timestamptz(3)
   // Optional metrics only, validated with Zod when written (rule in issue #3)
   extra       Json?
 
@@ -355,13 +363,13 @@ model Event {
   orgId       String    @map("org_id") @db.Uuid
   title       String
   location    String
-  startsAt    DateTime  @map("starts_at")
+  startsAt    DateTime  @map("starts_at") @db.Timestamptz(3)
   // Optional: an Event with a session can have Feedback
   sessionId   String?   @map("session_id") @db.Uuid
   // Kept with null if the author deletes the account (PR #24)
   createdBy   String?   @map("created_by") @db.Uuid
-  cancelledAt DateTime? @map("cancelled_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   session      Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -388,7 +396,7 @@ model SpotRequest {
   eventId   String            @map("event_id") @db.Uuid
   userId    String            @map("user_id") @db.Uuid
   status    SpotRequestStatus @default(pending)
-  createdAt DateTime          @default(now()) @map("created_at")
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -408,7 +416,7 @@ model Feedback {
   // Kept with null if the Manager deletes the account (PR #24)
   managerId String?  @map("manager_id") @db.Uuid
   body      String
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   event   Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
   athlete User   @relation("FeedbackAthlete", fields: [athleteId], references: [id], onDelete: Cascade)
@@ -435,7 +443,7 @@ model Contact {
   userB       String        @map("user_b") @db.Uuid
   status      ContactStatus @default(pending)
   requestedBy String        @map("requested_by") @db.Uuid
-  createdAt   DateTime      @default(now()) @map("created_at")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
 
   a         User @relation("ContactA", fields: [userA], references: [id], onDelete: Cascade)
   b         User @relation("ContactB", fields: [userB], references: [id], onDelete: Cascade)
@@ -459,7 +467,7 @@ model Conversation {
   kind      ConversationKind
   // Only for kind = event; one chat per Event
   eventId   String?          @unique @map("event_id") @db.Uuid
-  createdAt DateTime         @default(now()) @map("created_at")
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
 
   event        Event?                    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   participants ConversationParticipant[]
@@ -472,7 +480,7 @@ model Conversation {
 model ConversationParticipant {
   conversationId String    @map("conversation_id") @db.Uuid
   userId         String    @map("user_id") @db.Uuid
-  removedAt      DateTime? @map("removed_at")
+  removedAt      DateTime? @map("removed_at") @db.Timestamptz(3)
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -489,8 +497,8 @@ model Message {
   // Null if the author deleted the account (PR #24)
   authorId       String?   @map("author_id") @db.Uuid
   body           String
-  createdAt      DateTime  @default(now()) @map("created_at")
-  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   author       User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
@@ -507,8 +515,8 @@ model Notification {
   type      String
   // Never contains RPE or Feedback (Privacy Policy, PR #30)
   payload   Json
-  readAt    DateTime? @map("read_at")
-  createdAt DateTime  @default(now()) @map("created_at")
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -535,7 +543,7 @@ model AuditLog {
   // e.g. "session_log", "feedback", "message"
   resource   String
   resourceId String?     @map("resource_id")
-  createdAt  DateTime    @default(now()) @map("created_at")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([actorId])
   @@index([subjectId])

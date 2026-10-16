@@ -4,25 +4,28 @@
 // exist; if it exists, leave it as it is").
 // Users have no password yet: it depends on the hashing library of issue #20.
 import { prisma } from "../src/lib/prisma";
+import type { GlobalRole, MembershipRole } from "../src/generated/prisma/client";
 
 // Fixed ids, so the upserts always find the same club and groups
 const CLUB_ID = "00000000-0000-4000-8000-000000000001";
 const GROUP_BEGINNERS_ID = "00000000-0000-4000-8000-000000000011";
 const GROUP_ADVANCED_ID = "00000000-0000-4000-8000-000000000012";
 
-async function upsertUser(email: string, nick: string, isAdmin: boolean) {
+// name = full name, nick = name shown in the app
+async function upsertUser(email: string, name: string, nick: string, roleGlobal: GlobalRole) {
   return prisma.user.upsert({
     where: { email },
     update: {},
-    create: { email, nick, roleGlobal: isAdmin ? "admin" : "user" },
+    create: { email, name, nick, roleGlobal },
   });
 }
 
 async function main() {
-  await upsertUser("admin@demo.local", "Admin", true);
-  const manager = await upsertUser("manager@demo.local", "Manager Demo", false);
-  const athlete1 = await upsertUser("athlete1@demo.local", "Athlete Uno", false);
-  const athlete2 = await upsertUser("athlete2@demo.local", "Athlete Dos", false);
+  const admin = await upsertUser("admin@demo.local", "Admin Demo", "Admin", "admin");
+  const manager = await upsertUser("manager@demo.local", "Manager Demo", "Manager", "user");
+  const athlete1 = await upsertUser("athlete1@demo.local", "Athlete Uno", "Uno", "user");
+  const athlete2 = await upsertUser("athlete2@demo.local", "Athlete Dos", "Dos", "user");
+  const users = [admin, manager, athlete1, athlete2];
 
   await prisma.organization.upsert({
     where: { id: CLUB_ID },
@@ -35,10 +38,10 @@ async function main() {
     },
   });
 
-  const members = [
-    { userId: manager.id, role: "manager" as const },
-    { userId: athlete1.id, role: "athlete" as const },
-    { userId: athlete2.id, role: "athlete" as const },
+  const members: { userId: string; role: MembershipRole }[] = [
+    { userId: manager.id, role: "manager" },
+    { userId: athlete1.id, role: "athlete" },
+    { userId: athlete2.id, role: "athlete" },
   ];
   for (const member of members) {
     await prisma.membership.upsert({
@@ -65,7 +68,9 @@ async function main() {
     });
   }
 
-  console.log("Seed: 4 users, 1 club, 3 memberships, 2 groups ready");
+  console.log(
+    `Seed: ${users.length} users, 1 club, ${members.length} memberships, ${groups.length} groups ready`,
+  );
 }
 
 main()
