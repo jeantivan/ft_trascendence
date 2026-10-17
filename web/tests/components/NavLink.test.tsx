@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { NavLink } from "./NavLink";
+import { NavLink } from "@/components/NavLink";
 
 const mockPathname = vi.fn();
 vi.mock("next/navigation", () => ({

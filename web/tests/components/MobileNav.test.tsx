@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { NAV_ITEMS } from "@/config/navigation";
-import { MobileNav } from "./MobileNav";
+import { MobileNav } from "@/components/MobileNav";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
