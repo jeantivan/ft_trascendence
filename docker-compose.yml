@@ -21,6 +21,9 @@ services:
     # TEMPORARY: remove when NGINX is added. Only NGINX may publish ports (HTTPS only). See issue #14.
     ports:
       - "3000:3000"
+    environment:
+      # Read from .env; off unless it is exactly "true". See .env.example.
+      LEGAL_DRAFTS_ENABLED: ${LEGAL_DRAFTS_ENABLED:-false}
     restart: unless-stopped
 
 volumes:
