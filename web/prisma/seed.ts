@@ -2,30 +2,38 @@
 // 2 Athletes and 2 Groups. Never run in production.
 // Safe to run many times: every write is an upsert ("create it if it does not
 // exist; if it exists, leave it as it is").
+// A database seeded before users had fixed ids fails here with a duplicate
+// email: recreate it with make fclean + make dev. WARNING: make fclean
+// DELETES ALL the local data stored in the project's Docker volumes
+// (the database and any other volume), not only the demo data.
 // Users have no password yet: it depends on the hashing library of issue #20.
 import { prisma } from "../src/lib/prisma";
 import type { GlobalRole, MembershipRole } from "../src/generated/prisma/client";
-
-// Fixed ids, so the upserts always find the same club and groups
-const CLUB_ID = "00000000-0000-4000-8000-000000000001";
-const GROUP_BEGINNERS_ID = "00000000-0000-4000-8000-000000000011";
-const GROUP_ADVANCED_ID = "00000000-0000-4000-8000-000000000012";
-
-// name = full name, nick = name shown in the app
-async function upsertUser(email: string, name: string, nick: string, roleGlobal: GlobalRole) {
-  return prisma.user.upsert({
-    where: { email },
-    update: {},
-    create: { email, name, nick, roleGlobal },
-  });
-}
+import {
+  ADMIN_ID,
+  ATHLETE_1_ID,
+  ATHLETE_2_ID,
+  CLUB_ID,
+  GROUP_ADVANCED_ID,
+  GROUP_BEGINNERS_ID,
+  MANAGER_ID,
+} from "./seed/ids";
 
 async function main() {
-  const admin = await upsertUser("admin@demo.local", "Admin Demo", "Admin", "admin");
-  const manager = await upsertUser("manager@demo.local", "Manager Demo", "Manager", "user");
-  const athlete1 = await upsertUser("athlete1@demo.local", "Athlete Uno", "Uno", "user");
-  const athlete2 = await upsertUser("athlete2@demo.local", "Athlete Dos", "Dos", "user");
-  const users = [admin, manager, athlete1, athlete2];
+  // name = full name, nick = name shown in the app
+  const users: { id: string; email: string; name: string; nick: string; roleGlobal: GlobalRole }[] = [
+    { id: ADMIN_ID, email: "admin@demo.local", name: "Admin Demo", nick: "Admin", roleGlobal: "admin" },
+    { id: MANAGER_ID, email: "manager@demo.local", name: "Manager Demo", nick: "Manager", roleGlobal: "user" },
+    { id: ATHLETE_1_ID, email: "athlete1@demo.local", name: "Athlete Uno", nick: "Uno", roleGlobal: "user" },
+    { id: ATHLETE_2_ID, email: "athlete2@demo.local", name: "Athlete Dos", nick: "Dos", roleGlobal: "user" },
+  ];
+  for (const user of users) {
+    await prisma.user.upsert({
+      where: { id: user.id },
+      update: {},
+      create: user,
+    });
+  }
 
   await prisma.organization.upsert({
     where: { id: CLUB_ID },
@@ -39,9 +47,9 @@ async function main() {
   });
 
   const members: { userId: string; role: MembershipRole }[] = [
-    { userId: manager.id, role: "manager" },
-    { userId: athlete1.id, role: "athlete" },
-    { userId: athlete2.id, role: "athlete" },
+    { userId: MANAGER_ID, role: "manager" },
+    { userId: ATHLETE_1_ID, role: "athlete" },
+    { userId: ATHLETE_2_ID, role: "athlete" },
   ];
   for (const member of members) {
     await prisma.membership.upsert({
@@ -52,8 +60,8 @@ async function main() {
   }
 
   const groups = [
-    { id: GROUP_BEGINNERS_ID, name: "Iniciación", level: "inicial", objective: "carrera corta", athleteId: athlete1.id },
-    { id: GROUP_ADVANCED_ID, name: "Avanzado", level: "avanzado", objective: "maratón", athleteId: athlete2.id },
+    { id: GROUP_BEGINNERS_ID, name: "Iniciación", level: "inicial", objective: "carrera corta", athleteId: ATHLETE_1_ID },
+    { id: GROUP_ADVANCED_ID, name: "Avanzado", level: "avanzado", objective: "maratón", athleteId: ATHLETE_2_ID },
   ];
   for (const group of groups) {
     await prisma.group.upsert({
