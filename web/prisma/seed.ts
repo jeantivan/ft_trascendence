@@ -20,12 +20,12 @@ import {
 } from "./seed/ids";
 
 async function main() {
-  // name = full name, nick = name shown in the app
-  const users: { id: string; email: string; name: string; nick: string; roleGlobal: GlobalRole }[] = [
-    { id: ADMIN_ID, email: "admin@demo.local", name: "Admin Demo", nick: "Admin", roleGlobal: "admin" },
-    { id: MANAGER_ID, email: "manager@demo.local", name: "Manager Demo", nick: "Manager", roleGlobal: "user" },
-    { id: ATHLETE_1_ID, email: "athlete1@demo.local", name: "Athlete Uno", nick: "Uno", roleGlobal: "user" },
-    { id: ATHLETE_2_ID, email: "athlete2@demo.local", name: "Athlete Dos", nick: "Dos", roleGlobal: "user" },
+  // nick = name shown in the app
+  const users: { id: string; email: string; nick: string; roleGlobal: GlobalRole }[] = [
+    { id: ADMIN_ID, email: "admin@demo.local", nick: "Admin", roleGlobal: "admin" },
+    { id: MANAGER_ID, email: "manager@demo.local", nick: "Manager", roleGlobal: "user" },
+    { id: ATHLETE_1_ID, email: "athlete1@demo.local", nick: "Uno", roleGlobal: "user" },
+    { id: ATHLETE_2_ID, email: "athlete2@demo.local", nick: "Dos", roleGlobal: "user" },
   ];
   for (const user of users) {
     await prisma.user.upsert({

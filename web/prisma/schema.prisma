@@ -34,9 +34,9 @@ model User {
   // Auth.js adapter field; null for OAuth-only accounts
   emailVerified        DateTime?  @map("email_verified") @db.Timestamptz(3)
   passwordHash         String?    @map("password_hash")
-  // name (full name) and image (avatar URL) use the names the Auth.js
-  // Prisma adapter writes; nick is the name shown in the app
-  name                 String?
+  // image (avatar URL) uses the name the Auth.js Prisma adapter writes.
+  // No name column (data minimization): nick is the name shown in the app,
+  // to be filled from the OAuth profile() (issue #20)
   nick                 String?
   image                String?
   roleGlobal           GlobalRole @default(user) @map("role_global")
@@ -48,8 +48,10 @@ model User {
   // Opt-in for the Club Profile stats
   statsPublic          Boolean    @default(false) @map("stats_public")
   // Explicit consent for health data (RPE and Feedback); null = not given or
-  // withdrawn (Privacy Policy, PR #30; pending confirmation from Marta)
+  // withdrawn (Privacy Policy, PR #30)
   healthConsentAt      DateTime?  @map("health_consent_at") @db.Timestamptz(3)
+  // Version of the consent text accepted (1, 2, 3...); null like healthConsentAt
+  healthConsentVersion Int?       @map("health_consent_version")
   // Consent for notifications (Privacy Policy, PR #30; default pending)
   notificationsEnabled Boolean    @default(true) @map("notifications_enabled")
   // Whether accepted Contacts see the online status (PR #16)
@@ -66,7 +68,7 @@ model User {
   groupMemberships          GroupMember[]
 
   createdTrainingTemplates TrainingTemplate[]
-  sessions                 Session[]
+  sessions                 TrainingSession[]
   sessionLogs              SessionLog[]
 
   createdEvents    Event[]
@@ -147,7 +149,7 @@ model Organization {
   membershipRequests MembershipRequest[]
   groups             Group[]
   trainingTemplates  TrainingTemplate[]
-  sessions           Session[]
+  sessions           TrainingSession[]
   events             Event[]
 
   @@map("organizations")
@@ -218,9 +220,9 @@ model Group {
   // e.g. maratón, carrera corta, media distancia, marcha
   objective String?
 
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   members      GroupMember[]
-  sessions     Session[]
+  sessions     TrainingSession[]
 
   @@index([orgId])
   @@map("groups")
@@ -261,7 +263,7 @@ model TrainingTemplate {
   organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   creator      User?             @relation(fields: [createdBy], references: [id], onDelete: SetNull)
   sessions     TemplateSession[]
-  copies       Session[]
+  copies       TrainingSession[]
 
   @@index([orgId])
   @@index([createdBy])
@@ -293,10 +295,9 @@ enum SessionOrigin {
 
 // Prescribed training session. Group session: group_id set, athlete_id null.
 // Individual session (customized or free): athlete_id set.
-// Not the Auth.js login session: login uses JWT (no sessions table). If the
-// Auth.js database session strategy is ever enabled, its model must get
-// another name, because the adapter writes to prisma.session.
-model Session {
+// Named TrainingSession (table: sessions) so it does not clash with the
+// Auth.js login session, which uses JWT (no login sessions table).
+model TrainingSession {
   id                  String        @id @default(uuid()) @db.Uuid
   orgId               String        @map("org_id") @db.Uuid
   origin              SessionOrigin
@@ -319,8 +320,8 @@ model Session {
   group          Group?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
   athlete        User?             @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   sourceTemplate TrainingTemplate? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
-  customizes     Session?          @relation("Customization", fields: [customizesSessionId], references: [id], onDelete: SetNull)
-  customizations Session[]         @relation("Customization")
+  customizes     TrainingSession?  @relation("Customization", fields: [customizesSessionId], references: [id], onDelete: SetNull)
+  customizations TrainingSession[] @relation("Customization")
   logs           SessionLog[]
   events         Event[]
 
@@ -346,8 +347,8 @@ model SessionLog {
   // Optional metrics only, validated with Zod when written (rule in issue #3)
   extra       Json?
 
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  athlete User    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  athlete User            @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, athleteId])
   // Weekly stats: logs of one Athlete grouped by week
@@ -371,9 +372,9 @@ model Event {
   cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  session      Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  creator      User?         @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session      TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  creator      User?            @relation(fields: [createdBy], references: [id], onDelete: SetNull)
   spotRequests SpotRequest[]
   feedback     Feedback[]
   conversation Conversation?
