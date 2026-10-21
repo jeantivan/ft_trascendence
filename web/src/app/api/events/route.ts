@@ -2,6 +2,7 @@
 // Sends a heartbeat and every event the hub dispatches.
 
 import { subscribe } from "@/lib/events/hub";
+import { ensureListener } from "@/lib/events/listener";
 
 // pg (LISTEN/NOTIFY) needs Node APIs, so this route cannot run on Edge.
 export const runtime = "nodejs";
@@ -12,6 +13,7 @@ const PING_INTERVAL_MS = 15_000;
 const encoder = new TextEncoder();
 
 export async function GET(request: Request) {
+  await ensureListener();
   let pingTimer: ReturnType<typeof setInterval> | undefined;
   let unsubscribe: (() => void) | undefined;
 
