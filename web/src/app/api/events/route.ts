@@ -1,5 +1,7 @@
 // GET /api/events: the one SSE stream per browser tab (ADR 0001).
-// For now it only sends a heartbeat; real events come in later steps.
+// Sends a heartbeat and every event the hub dispatches.
+
+import { subscribe } from "@/lib/events/hub";
 
 // pg (LISTEN/NOTIFY) needs Node APIs, so this route cannot run on Edge.
 export const runtime = "nodejs";
@@ -11,9 +13,14 @@ const encoder = new TextEncoder();
 
 export async function GET(request: Request) {
   let pingTimer: ReturnType<typeof setInterval> | undefined;
+  let unsubscribe: (() => void) | undefined;
 
-  function stopPing() {
+  // Stops everything this stream started, so a closed tab leaves nothing behind.
+  function cleanup() {
     clearInterval(pingTimer);
+    if (unsubscribe) {
+      unsubscribe();
+    }
   }
 
   const stream = new ReadableStream<Uint8Array>({
@@ -24,15 +31,20 @@ export async function GET(request: Request) {
       pingTimer = setInterval(() => {
         controller.enqueue(encoder.encode(": ping\n\n"));
       }, PING_INTERVAL_MS);
+
+      unsubscribe = subscribe((event) => {
+        const message = `event: ${event.channel}\ndata: ${JSON.stringify(event.payload)}\n\n`;
+        controller.enqueue(encoder.encode(message));
+      });
     },
     // Called when the client stops reading (tab closed, network lost).
     cancel() {
-      stopPing();
+      cleanup();
     },
   });
 
   // Some disconnects only show up as an aborted request, so listen to both.
-  request.signal.addEventListener("abort", stopPing);
+  request.signal.addEventListener("abort", cleanup);
 
   return new Response(stream, {
     headers: {
