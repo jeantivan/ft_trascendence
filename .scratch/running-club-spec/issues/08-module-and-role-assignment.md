@@ -32,7 +32,7 @@ Total: 21 puntos (14 Major + 7 Minor). Cuentan como máximo 19 por el tope del b
 
 ### Dependencias entre personas a vigilar
 
-- **Analytics y datos de prueba:** Furiosso genera 6 semanas de datos simulados en `seed.ts` (Fase 1) para desarrollar el dashboard sin esperar al formulario de `session_logs` de jtivan-r.
+- **Analytics y datos de prueba:** Furiosso genera 6 semanas de datos simulados en `prisma/seed/session-logs.ts` (Fase 1) para desarrollar el dashboard sin esperar al formulario de `session_logs` de jtivan-r.
 - **Volume Alert:** Furiosso exporta la función `calculateVolumeTrend(athleteId, date)`, que jtivan-r invoca al guardar sesiones para disparar la notificación central de jmateo-v.
 - **Reservas y Chat de Eventos:** Furiosso gestiona la Server Action de `spot_requests` (aprobación, creación de participante de chat y broadcast SSE/notificación); jmateo-v provee el componente de `<EventChat />` y el helper `publish()`.
 - **Notification:** jmateo-v ofrece el mecanismo central que llaman todas las mutaciones del resto de módulos; los demás solo lo invocan.
