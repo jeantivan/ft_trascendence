@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { registerUser } from "@/lib/auth/register";
+import { UserAlreadyExistsError } from "@/lib/auth/user-repository";
 import { InMemoryUserRepository } from "../support/in-memory-user-repository";
 
 describe("registerUser logic", () => {
@@ -66,6 +67,28 @@ describe("registerUser logic", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toBeDefined();
+    }
+  });
+
+  it("handles race conditions gracefully when createUser throws UserAlreadyExistsError", async () => {
+    // Simular que findByEmail no encontró al usuario (carrera simultánea),
+    // pero createUser rechaza por unicidad atómica en BD.
+    repo.createUser = async () => {
+      throw new UserAlreadyExistsError("User with this email already exists");
+    };
+
+    const result = await registerUser(
+      {
+        email: "concurrent@42madrid.com",
+        password: "securePassword123!",
+        nick: "concurrent",
+      },
+      repo
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe("El email ya está registrado");
     }
   });
 });

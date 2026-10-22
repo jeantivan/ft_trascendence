@@ -7,7 +7,7 @@ export type RouteAccessResult =
   | { allowed: true }
   | { allowed: false; redirectTo: string };
 
-const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register", "/terms", "/privacy"];
+const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register"];
 
 export function checkRouteAccess({
   pathname,

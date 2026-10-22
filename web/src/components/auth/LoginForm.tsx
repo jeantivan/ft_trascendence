@@ -7,12 +7,20 @@ import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
 
-export function LoginForm() {
+interface LoginFormProps {
+  callbackUrl?: string;
+}
+
+export function LoginForm({ callbackUrl }: LoginFormProps = {}) {
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
       <h1 className="text-2xl font-bold text-center">Iniciar Sesión</h1>
+
+      {callbackUrl && (
+        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+      )}
 
       {!state.success && <AuthErrorBanner error={state.error} />}
 

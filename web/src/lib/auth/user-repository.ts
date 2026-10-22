@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient, GlobalRole } from "@/generated/prisma/client";
 
+export class UserAlreadyExistsError extends Error {
+  constructor(message = "User already exists") {
+    super(message);
+    this.name = "UserAlreadyExistsError";
+  }
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -18,7 +25,6 @@ export interface CreateUserInput {
 
 export interface UserRepository {
   findByEmail(email: string): Promise<AuthUser | null>;
-  findById(id: string): Promise<AuthUser | null>;
   createUser(input: CreateUserInput): Promise<AuthUser>;
 }
 
@@ -51,23 +57,22 @@ export class PrismaUserRepository implements UserRepository {
     return this.toAuthUser(user);
   }
 
-  async findById(id: string): Promise<AuthUser | null> {
-    const user = await this.db.user.findUnique({
-      where: { id },
-    });
-    if (!user) return null;
-    return this.toAuthUser(user);
-  }
-
   async createUser(input: CreateUserInput): Promise<AuthUser> {
-    const user = await this.db.user.create({
-      data: {
-        email: input.email.toLowerCase().trim(),
-        passwordHash: input.passwordHash,
-        nick: input.nick.trim(),
-      },
-    });
-    return this.toAuthUser(user);
+    try {
+      const user = await this.db.user.create({
+        data: {
+          email: input.email.toLowerCase().trim(),
+          passwordHash: input.passwordHash,
+          nick: input.nick.trim(),
+        },
+      });
+      return this.toAuthUser(user);
+    } catch (error: unknown) {
+      if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") {
+        throw new UserAlreadyExistsError("User with this email already exists");
+      }
+      throw error;
+    }
   }
 }
 

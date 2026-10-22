@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loginAction, registerAction, logoutAction } from "@/lib/auth/actions";
-import { signIn, signOut } from "@/auth";
+import {
+  loginAction,
+  registerAction,
+  logoutAction,
+  getCurrentSession,
+} from "@/lib/auth/actions";
+import { auth, signIn, signOut } from "@/auth";
 import * as registerModule from "@/lib/auth/register";
 import { AuthError } from "next-auth";
 
@@ -9,6 +14,7 @@ vi.mock("next-auth", () => ({
 }));
 
 vi.mock("@/auth", () => ({
+  auth: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
 }));
@@ -32,6 +38,37 @@ describe("Server Actions - Auth", () => {
         redirectTo: "/dashboard",
       });
       expect(result).toEqual({ success: true });
+    });
+
+    it("respects valid callbackUrl when provided", async () => {
+      const formData = new FormData();
+      formData.append("email", "runner@42.com");
+      formData.append("password", "secret123!");
+      formData.append("callbackUrl", "/events/running-123");
+
+      const result = await loginAction(null, formData);
+
+      expect(signIn).toHaveBeenCalledWith("credentials", {
+        email: "runner@42.com",
+        password: "secret123!",
+        redirectTo: "/events/running-123",
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it("sanitizes open-redirect attempts falling back to /dashboard", async () => {
+      const formData = new FormData();
+      formData.append("email", "runner@42.com");
+      formData.append("password", "secret123!");
+      formData.append("callbackUrl", "https://malicious-site.com");
+
+      await loginAction(null, formData);
+
+      expect(signIn).toHaveBeenCalledWith("credentials", {
+        email: "runner@42.com",
+        password: "secret123!",
+        redirectTo: "/dashboard",
+      });
     });
 
     it("catches AuthError and returns user-friendly error message", async () => {
@@ -104,6 +141,35 @@ describe("Server Actions - Auth", () => {
         success: false,
         error: "El email ya está registrado",
       });
+    });
+  });
+
+  describe("getCurrentSession", () => {
+    it("returns user session when authenticated", async () => {
+      const mockUser = {
+        id: "u123",
+        email: "runner@42.com",
+        nick: "fastrunner",
+        roleGlobal: "user" as const,
+      };
+      vi.mocked(auth).mockResolvedValueOnce({
+        user: mockUser,
+        expires: "future-date",
+      } as any);
+
+      const user = await getCurrentSession();
+
+      expect(auth).toHaveBeenCalled();
+      expect(user).toEqual(mockUser);
+    });
+
+    it("returns null when user is not authenticated", async () => {
+      vi.mocked(auth).mockResolvedValueOnce(null as any);
+
+      const user = await getCurrentSession();
+
+      expect(auth).toHaveBeenCalled();
+      expect(user).toBeNull();
     });
   });
 });

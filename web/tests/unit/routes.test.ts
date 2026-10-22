@@ -44,13 +44,9 @@ describe("checkRouteAccess - Route Protection", () => {
     ).toEqual({ allowed: false, redirectTo: "/dashboard" });
   });
 
-  it("allows anyone to access public legal routes, root path and /api/auth", () => {
+  it("allows anyone to access root path and /api/auth", () => {
     expect(
       checkRouteAccess({ pathname: "/", isLoggedIn: false })
-    ).toEqual({ allowed: true });
-
-    expect(
-      checkRouteAccess({ pathname: "/privacy", isLoggedIn: false })
     ).toEqual({ allowed: true });
 
     expect(
@@ -64,7 +60,7 @@ describe("checkRouteAccess - Route Protection", () => {
     ).toEqual({ allowed: true });
 
     expect(
-      checkRouteAccess({ pathname: "/privacy/", isLoggedIn: false })
+      checkRouteAccess({ pathname: "/register/", isLoggedIn: false })
     ).toEqual({ allowed: true });
 
     expect(

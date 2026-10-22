@@ -1,7 +1,7 @@
 "use server";
 
 import { AuthError } from "next-auth";
-import { signIn, signOut } from "@/auth";
+import { auth, signIn, signOut } from "@/auth";
 import { registerUser } from "./register";
 
 export type AuthActionResult =
@@ -11,13 +11,19 @@ export type AuthActionResult =
 async function authenticateWithCredentials(
   email: string,
   password: string,
-  authErrorMessage: string
+  authErrorMessage: string,
+  redirectTo = "/dashboard"
 ): Promise<AuthActionResult> {
+  const safeRedirect =
+    redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+      ? redirectTo
+      : "/dashboard";
+
   try {
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/dashboard",
+      redirectTo: safeRedirect,
     });
     return { success: true };
   } catch (error) {
@@ -56,6 +62,7 @@ export async function loginAction(
 ): Promise<AuthActionResult> {
   const email = formData.get("email");
   const password = formData.get("password");
+  const callbackUrl = formData.get("callbackUrl");
 
   if (typeof email !== "string" || typeof password !== "string") {
     return {
@@ -64,13 +71,24 @@ export async function loginAction(
     };
   }
 
+  const redirectTo =
+    typeof callbackUrl === "string" && callbackUrl.length > 0
+      ? callbackUrl
+      : "/dashboard";
+
   return authenticateWithCredentials(
     email,
     password,
-    "Email o contraseña incorrectos"
+    "Email o contraseña incorrectos",
+    redirectTo
   );
 }
 
 export async function logoutAction(): Promise<void> {
   await signOut({ redirectTo: "/login" });
+}
+
+export async function getCurrentSession() {
+  const session = await auth();
+  return session?.user ?? null;
 }

@@ -1,6 +1,11 @@
 import { hashPassword } from "./password";
 import { registerSchema } from "./schemas";
-import { userRepository, type AuthUser, type UserRepository } from "./user-repository";
+import {
+  userRepository,
+  UserAlreadyExistsError,
+  type AuthUser,
+  type UserRepository,
+} from "./user-repository";
 
 export type RegisterResult =
   | { success: true; user: AuthUser }
@@ -22,11 +27,18 @@ export async function registerUser(
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
-  const user = await repo.createUser({
-    email: parsed.data.email,
-    passwordHash,
-    nick: parsed.data.nick,
-  });
+  try {
+    const user = await repo.createUser({
+      email: parsed.data.email,
+      passwordHash,
+      nick: parsed.data.nick,
+    });
 
-  return { success: true, user };
+    return { success: true, user };
+  } catch (error) {
+    if (error instanceof UserAlreadyExistsError) {
+      return { success: false, error: "El email ya está registrado" };
+    }
+    throw error;
+  }
 }

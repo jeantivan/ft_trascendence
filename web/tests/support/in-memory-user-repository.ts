@@ -1,7 +1,8 @@
-import type {
-  AuthUser,
-  CreateUserInput,
-  UserRepository,
+import {
+  type AuthUser,
+  type CreateUserInput,
+  UserAlreadyExistsError,
+  type UserRepository,
 } from "@/lib/auth/user-repository";
 
 export class InMemoryUserRepository implements UserRepository {
@@ -17,14 +18,10 @@ export class InMemoryUserRepository implements UserRepository {
     return null;
   }
 
-  async findById(id: string): Promise<AuthUser | null> {
-    return this.users.get(id) ?? null;
-  }
-
   async createUser(input: CreateUserInput): Promise<AuthUser> {
     const existing = await this.findByEmail(input.email);
     if (existing) {
-      throw new Error("User with this email already exists");
+      throw new UserAlreadyExistsError("User with this email already exists");
     }
 
     const newUser: AuthUser = {
