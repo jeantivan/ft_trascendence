@@ -28,6 +28,7 @@ services:
 
   app:
     build: ./web
+    env_file: .env
     environment:
       # Built from the .env values, so the password lives only in .env.
       # "db" is the service name: Docker's internal DNS resolves it.
