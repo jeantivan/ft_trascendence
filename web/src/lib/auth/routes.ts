@@ -17,9 +17,14 @@ export function checkRouteAccess({
     return { allowed: true };
   }
 
-  const isPublic = PUBLIC_EXACT_ROUTES.includes(pathname);
+  const normalizedPath =
+    pathname.length > 1 && pathname.endsWith("/")
+      ? pathname.slice(0, -1)
+      : pathname;
 
-  if (isLoggedIn && (pathname === "/login" || pathname === "/register")) {
+  const isPublic = PUBLIC_EXACT_ROUTES.includes(normalizedPath);
+
+  if (isLoggedIn && (normalizedPath === "/login" || normalizedPath === "/register")) {
     return { allowed: false, redirectTo: "/dashboard" };
   }
 

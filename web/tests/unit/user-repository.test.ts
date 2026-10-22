@@ -20,7 +20,7 @@ describe("InMemoryUserRepository", () => {
     expect(user.id).toBeDefined();
     expect(user.email).toBe("runner@42madrid.com");
     expect(user.nick).toBe("fastrunner");
-    expect(user.role_global).toBe("user");
+    expect(user.roleGlobal).toBe("user");
 
     const found = await repo.findByEmail("runner@42madrid.com");
     expect(found).toEqual(user);
@@ -80,7 +80,7 @@ describe("PrismaUserRepository", () => {
       email: "runner@42.com",
       passwordHash: "hash123",
       nick: "runner42",
-      role_global: "user",
+      roleGlobal: "user",
       blockedAt: null,
     });
   });
@@ -101,7 +101,7 @@ describe("PrismaUserRepository", () => {
       nick: "newrunner",
     });
 
-    expect(user.role_global).toBe("user");
+    expect(user.roleGlobal).toBe("user");
     expect(mockPrismaUser.create).toHaveBeenCalledWith({
       data: {
         email: "new@42.com",

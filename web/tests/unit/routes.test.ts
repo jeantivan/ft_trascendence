@@ -57,4 +57,22 @@ describe("checkRouteAccess - Route Protection", () => {
       checkRouteAccess({ pathname: "/api/auth/session", isLoggedIn: false })
     ).toEqual({ allowed: true });
   });
+
+  it("handles paths with trailing slashes gracefully", () => {
+    expect(
+      checkRouteAccess({ pathname: "/login/", isLoggedIn: false })
+    ).toEqual({ allowed: true });
+
+    expect(
+      checkRouteAccess({ pathname: "/privacy/", isLoggedIn: false })
+    ).toEqual({ allowed: true });
+
+    expect(
+      checkRouteAccess({ pathname: "/login/", isLoggedIn: true })
+    ).toEqual({ allowed: false, redirectTo: "/dashboard" });
+
+    expect(
+      checkRouteAccess({ pathname: "/dashboard/", isLoggedIn: false })
+    ).toEqual({ allowed: false, redirectTo: "/login" });
+  });
 });

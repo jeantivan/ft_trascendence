@@ -28,7 +28,7 @@ describe("authorizeCredentials", () => {
     expect(user).not.toBeNull();
     expect(user?.email).toBe("athlete@42madrid.com");
     expect(user?.nick).toBe("athlete42");
-    expect(user?.role_global).toBe("user");
+    expect(user?.roleGlobal).toBe("user");
   });
 
   it("returns null with wrong password", async () => {

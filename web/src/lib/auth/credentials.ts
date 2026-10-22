@@ -25,6 +25,6 @@ export async function authorizeCredentials(
     id: user.id,
     email: user.email,
     nick: user.nick,
-    role_global: user.role_global,
+    roleGlobal: user.roleGlobal,
   };
 }

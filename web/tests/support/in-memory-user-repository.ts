@@ -32,7 +32,7 @@ export class InMemoryUserRepository implements UserRepository {
       email: input.email.toLowerCase().trim(),
       passwordHash: input.passwordHash,
       nick: input.nick.trim(),
-      role_global: "user",
+      roleGlobal: "user",
       blockedAt: null,
     };
 

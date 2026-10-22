@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { PrismaClient, GlobalRole } from "@/generated/prisma/client";
 
 export interface AuthUser {
   id: string;
   email: string;
   passwordHash: string | null;
   nick: string;
-  role_global: "admin" | "user";
+  roleGlobal: GlobalRole;
   blockedAt?: Date | null;
 }
 
@@ -30,7 +30,7 @@ export class PrismaUserRepository implements UserRepository {
     email: string;
     passwordHash: string | null;
     nick: string | null;
-    roleGlobal: "admin" | "user";
+    roleGlobal: GlobalRole;
     blockedAt: Date | null;
   }): AuthUser {
     return {
@@ -38,7 +38,7 @@ export class PrismaUserRepository implements UserRepository {
       email: user.email,
       passwordHash: user.passwordHash,
       nick: user.nick ?? "",
-      role_global: user.roleGlobal,
+      roleGlobal: user.roleGlobal,
       blockedAt: user.blockedAt,
     };
   }

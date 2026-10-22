@@ -9,8 +9,8 @@ export type AuthActionResult =
   | { success: false; error: string };
 
 async function authenticateWithCredentials(
-  email: unknown,
-  password: unknown,
+  email: string,
+  password: string,
   authErrorMessage: string
 ): Promise<AuthActionResult> {
   try {
@@ -44,8 +44,8 @@ export async function registerAction(
   }
 
   return authenticateWithCredentials(
-    rawData.email,
-    rawData.password,
+    String(rawData.email ?? ""),
+    String(rawData.password ?? ""),
     "Error al iniciar sesión tras el registro"
   );
 }
@@ -56,6 +56,13 @@ export async function loginAction(
 ): Promise<AuthActionResult> {
   const email = formData.get("email");
   const password = formData.get("password");
+
+  if (typeof email !== "string" || typeof password !== "string") {
+    return {
+      success: false,
+      error: "Email o contraseña incorrectos",
+    };
+  }
 
   return authenticateWithCredentials(
     email,

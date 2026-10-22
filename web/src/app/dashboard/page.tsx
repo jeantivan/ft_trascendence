@@ -9,7 +9,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { nick, email, role_global } = session.user;
+  const { nick, email, roleGlobal } = session.user;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-neutral-50 dark:bg-neutral-950">
@@ -29,7 +29,7 @@ export default async function DashboardPage() {
             Email: <span className="font-mono text-neutral-700 dark:text-neutral-300">{email}</span>
           </p>
           <p>
-            Rol: <span className="font-mono font-medium text-blue-600 dark:text-blue-400">{role_global}</span>
+            Rol: <span className="font-mono font-medium text-blue-600 dark:text-blue-400">{roleGlobal}</span>
           </p>
         </div>
 

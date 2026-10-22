@@ -29,7 +29,7 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         token.id = user.id;
         token.nick = user.nick;
-        token.role_global = user.role_global;
+        token.roleGlobal = user.roleGlobal;
       }
       return token;
     },
@@ -37,7 +37,7 @@ export const authConfig: NextAuthConfig = {
       if (session.user && token.id) {
         session.user.id = String(token.id);
         session.user.nick = typeof token.nick === "string" ? token.nick : undefined;
-        session.user.role_global = typeof token.role_global === "string" ? token.role_global : undefined;
+        session.user.roleGlobal = token.roleGlobal;
       }
       return session;
     },

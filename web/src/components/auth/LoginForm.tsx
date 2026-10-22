@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type AuthActionResult } from "@/lib/auth/actions";
+import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
 
@@ -13,11 +14,7 @@ export function LoginForm() {
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
       <h1 className="text-2xl font-bold text-center">Iniciar Sesión</h1>
 
-      {!state.success && (
-        <div className="p-3 text-sm text-red-500 bg-red-100 dark:bg-red-950/50 rounded-md border border-red-200 dark:border-red-800">
-          {state.error}
-        </div>
-      )}
+      {!state.success && <AuthErrorBanner error={state.error} />}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="email" className="text-sm font-medium">

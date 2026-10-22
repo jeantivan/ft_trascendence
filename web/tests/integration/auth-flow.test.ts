@@ -39,7 +39,7 @@ describe("Integration: Authentication Flow", () => {
     expect(authSuccess).not.toBeNull();
     expect(authSuccess?.email).toBe("marathoner@42madrid.com");
     expect(authSuccess?.nick).toBe("marathoner");
-    expect(authSuccess?.role_global).toBe("user");
+    expect(authSuccess?.roleGlobal).toBe("user");
 
     // 3. Intento de inicio de sesión con contraseña errónea
     const authWrongPassword = await authorizeCredentials(

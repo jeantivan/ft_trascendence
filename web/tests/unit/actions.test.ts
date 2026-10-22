@@ -66,7 +66,7 @@ describe("Server Actions - Auth", () => {
           email: "new@42.com",
           nick: "newrunner",
           passwordHash: "hash",
-          role_global: "user",
+          roleGlobal: "user",
         },
       });
 
