@@ -1,7 +1,7 @@
 "use server";
 
 import { AuthError } from "next-auth";
-import { auth, signIn, signOut } from "@/auth";
+import { signIn, signOut } from "@/auth";
 import { registerUser } from "./register";
 
 export type AuthActionResult =
@@ -86,9 +86,4 @@ export async function loginAction(
 
 export async function logoutAction(): Promise<void> {
   await signOut({ redirectTo: "/login" });
-}
-
-export async function getCurrentSession() {
-  const session = await auth();
-  return session?.user ?? null;
 }

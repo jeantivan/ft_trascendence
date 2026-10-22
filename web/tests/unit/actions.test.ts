@@ -3,9 +3,8 @@ import {
   loginAction,
   registerAction,
   logoutAction,
-  getCurrentSession,
 } from "@/lib/auth/actions";
-import { auth, signIn, signOut } from "@/auth";
+import { signIn, signOut } from "@/auth";
 import * as registerModule from "@/lib/auth/register";
 import { AuthError } from "next-auth";
 
@@ -14,7 +13,6 @@ vi.mock("next-auth", () => ({
 }));
 
 vi.mock("@/auth", () => ({
-  auth: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
 }));
@@ -141,35 +139,6 @@ describe("Server Actions - Auth", () => {
         success: false,
         error: "El email ya está registrado",
       });
-    });
-  });
-
-  describe("getCurrentSession", () => {
-    it("returns user session when authenticated", async () => {
-      const mockUser = {
-        id: "u123",
-        email: "runner@42.com",
-        nick: "fastrunner",
-        roleGlobal: "user" as const,
-      };
-      vi.mocked(auth).mockResolvedValueOnce({
-        user: mockUser,
-        expires: "future-date",
-      } as any);
-
-      const user = await getCurrentSession();
-
-      expect(auth).toHaveBeenCalled();
-      expect(user).toEqual(mockUser);
-    });
-
-    it("returns null when user is not authenticated", async () => {
-      vi.mocked(auth).mockResolvedValueOnce(null as any);
-
-      const user = await getCurrentSession();
-
-      expect(auth).toHaveBeenCalled();
-      expect(user).toBeNull();
     });
   });
 });

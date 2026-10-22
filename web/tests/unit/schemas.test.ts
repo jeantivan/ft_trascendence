@@ -26,6 +26,17 @@ describe("Auth Zod schemas", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("normalizes email to lowercase", () => {
+      const result = loginSchema.safeParse({
+        email: "RUNNER@42Madrid.COM",
+        password: "password123",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.email).toBe("runner@42madrid.com");
+      }
+    });
   });
 
   describe("registerSchema", () => {
@@ -54,6 +65,18 @@ describe("Auth Zod schemas", () => {
         nick: "a",
       });
       expect(result.success).toBe(false);
+    });
+
+    it("normalizes email to lowercase", () => {
+      const result = registerSchema.safeParse({
+        email: "NEWRUNNER@42Madrid.COM",
+        password: "securePassword123!",
+        nick: "fastrunner",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.email).toBe("newrunner@42madrid.com");
+      }
     });
   });
 });

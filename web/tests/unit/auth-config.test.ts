@@ -43,9 +43,8 @@ describe("Auth.js Base Configuration and Callbacks", () => {
 
       const token = await jwtCallback({
         token: existingToken,
-        user: undefined as any,
         account: null,
-      });
+      } as unknown as Parameters<NonNullable<typeof jwtCallback>>[0]);
 
       expect(token).toEqual(existingToken);
     });
@@ -72,7 +71,14 @@ describe("Auth.js Base Configuration and Callbacks", () => {
         roleGlobal: "user" as const,
       };
 
-      const result = await (sessionCallback as any)({
+      type SessionCallbackFn = (params: {
+        session: typeof baseSession;
+        token: typeof token;
+        user?: unknown;
+        newSession?: unknown;
+      }) => Promise<{ user: unknown }>;
+
+      const result = await (sessionCallback as unknown as SessionCallbackFn)({
         session: baseSession,
         token,
         user: undefined,
@@ -91,11 +97,13 @@ describe("Auth.js Base Configuration and Callbacks", () => {
   describe("authorized callback", () => {
     const authorizedCallback = authConfig.callbacks?.authorized;
 
-    function createMockRequest(pathname: string) {
+    type AuthorizedParams = Parameters<NonNullable<typeof authorizedCallback>>[0];
+
+    function createMockRequest(pathname: string): AuthorizedParams["request"] {
       const url = new URL(`http://localhost:3000${pathname}`);
       return {
         nextUrl: url as unknown as NextURL,
-      };
+      } as unknown as AuthorizedParams["request"];
     }
 
     it("allows unauthenticated access to public routes", async () => {
@@ -104,13 +112,13 @@ describe("Auth.js Base Configuration and Callbacks", () => {
 
       const allowedLogin = await authorizedCallback({
         auth: null,
-        request: createMockRequest("/login") as any,
+        request: createMockRequest("/login"),
       });
       expect(allowedLogin).toBe(true);
 
       const allowedHome = await authorizedCallback({
         auth: null,
-        request: createMockRequest("/") as any,
+        request: createMockRequest("/"),
       });
       expect(allowedHome).toBe(true);
     });
@@ -121,7 +129,7 @@ describe("Auth.js Base Configuration and Callbacks", () => {
 
       const result = await authorizedCallback({
         auth: null,
-        request: createMockRequest("/dashboard") as any,
+        request: createMockRequest("/dashboard"),
       });
       expect(result).toBe(false);
     });
@@ -139,8 +147,8 @@ describe("Auth.js Base Configuration and Callbacks", () => {
       };
 
       const result = await authorizedCallback({
-        auth: authSession as any,
-        request: createMockRequest("/login") as any,
+        auth: authSession as unknown as AuthorizedParams["auth"],
+        request: createMockRequest("/login"),
       });
 
       expect(result).toBeInstanceOf(Response);
@@ -162,8 +170,8 @@ describe("Auth.js Base Configuration and Callbacks", () => {
       };
 
       const result = await authorizedCallback({
-        auth: authSession as any,
-        request: createMockRequest("/dashboard") as any,
+        auth: authSession as unknown as AuthorizedParams["auth"],
+        request: createMockRequest("/dashboard"),
       });
 
       expect(result).toBe(true);
