@@ -85,7 +85,10 @@ Eres responsable de lo que escribes en chats de Events y mensajes privados. No e
 
 ### Cómo denunciar
 
-[QUIÉN PUEDE DENUNCIAR: decisión pendiente del equipo. Hoy solo está previsto que un Manager pueda denunciar. La revisión legal (PR #32) indica que hay que separar dos canales: (a) denuncia por infracción de normas, abierta al menos a Athletes y Managers, y (b) notificación de contenido presuntamente ilícito (art. 16 DSA), abierta a cualquier persona o entidad, aunque no sea miembro del club. Cambiarlo afecta a la matriz de permisos y a la sección 6 de la Política de Privacidad].
+Hay dos canales:
+
+- **Dentro de la plataforma:** cualquier usuario con sesión iniciada puede denunciar contenido que ya puede ver: mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts y perfiles a los que tiene acceso. Antes de registrar la denuncia, la plataforma comprueba en el servidor que tienes acceso a ese contenido.
+- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a [EMAIL DE DENUNCIAS Y NOTIFICACIONES LEGALES: pendiente de decidir el dominio].
 
 Una vez recibida una denuncia, el Admin revisa los mensajes afectados, tanto los del denunciante como los del usuario denunciado, y solo esos.
 
@@ -93,7 +96,7 @@ Una vez recibida una denuncia, el Admin revisa los mensajes afectados, tanto los
 
 ### Quién decide
 
-Las denuncias las revisa una persona: el Admin. [CONFIRMAR con el equipo que hoy no hay filtros ni decisiones automáticas, por ejemplo antispam. Si los hay, declararlos aquí].
+Las denuncias las revisa una persona: el Admin. **La moderación es exclusivamente humana**: no usamos filtros ni algoritmos que detecten, retiren o bloqueen contenido o cuentas de forma automática. El Admin revisa cada denuncia desde su panel y decide si la desestima, retira el contenido o sanciona la cuenta.
 
 ### Medidas posibles
 
