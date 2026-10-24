@@ -72,6 +72,7 @@ El tratamiento de tus datos personales se rige por la [Política de Privacidad](
 | Dato | Finalidad | Fundamento | Plazo |
 |---|---|---|---|
 | Mensajes en chats de Events, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | Mientras exista el chat del Event; se borran con él |
+| Mensajes privados (DMs), sin autor | Que la otra persona mantenga el hilo de la conversación | Interés legítimo (art. 6.1.f) | [PLAZO: pendiente de decidir] |
 | Events, plantillas de entrenamiento e invitaciones que creaste como Manager, sin autor | Que otros Athletes del club sigan usándolos | Interés legítimo (art. 6.1.f). No contienen tu identidad tras la desvinculación | Mientras el club los mantenga |
 | Feedback que escribiste como Manager, sin tu nombre | Que el Athlete conserve su historial | Ejecución del contrato con el Athlete (art. 6.1.b) | Mientras el Athlete mantenga su cuenta |
 | Registro de auditoría (solo identificadores) | Seguridad y defensa ante reclamaciones | Interés legítimo (art. 6.1.f) y art. 17.3.e | 12 meses |
