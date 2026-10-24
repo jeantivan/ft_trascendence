@@ -1,27 +1,30 @@
 # Términos de Servicio
 
-> **BORRADOR INTERNO, NO PUBLICAR (sub-issue #27, parte de #8).** Los textos entre `[CORCHETES]` son decisiones o datos que el equipo debe confirmar antes de publicar; no se han inventado. Este documento no sirve como Términos definitivos mientras queden corchetes. El issue #27 sigue abierto hasta completarlos.
+> **BORRADOR INTERNO, NO PUBLICAR (sub-issue #27, parte de #8).** Los datos del responsable, el nombre de la plataforma, el CIF y el NIF son **ficticios, de ejercicio** (no corresponden a una empresa real). Los textos entre `[CORCHETES]` son decisiones o datos que el equipo debe confirmar antes de publicar; no se han inventado. Este documento no sirve como Términos definitivos mientras queden corchetes. El issue #27 sigue abierto hasta completarlos.
 
-**Última actualización:** [FECHA DE PUBLICACIÓN]
+**Última actualización:** 24 de octubre de 2026
 
 ## 1. Quiénes somos y qué aceptas
 
-Estos términos regulan el uso de **[NOMBRE DE LA PLATAFORMA]** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Estos términos regulan el uso de **TRANSCENDENCE RUNNING HUB** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
-- **Responsable del servicio:** [IDENTIDAD DEL RESPONSABLE: persona, asociación o entidad que presta el servicio, y domicilio]
-- **Contacto:** [EMAIL DE CONTACTO]
+- **Responsable del servicio:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B842424242
+- **Domicilio:** Calle De La Trancendencia, 42. 280042 Madrid, España
+- **Representante:** Marvin Gaye, NIF 42424242A
+- **Teléfono:** +34 642 42 42 42
+- **Contacto:** legal@ft_transcendence.42school.com
 
 Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la plataforma. Antes de crear la cuenta podrás leerlos, guardarlos y aceptarlos de forma expresa.
 
-**Edad mínima:** [EDAD MÍNIMA DE USO: pendiente de decidir; se redacta igual que en la sección 12 de la Política de Privacidad].
+**Edad mínima:** 16 años. Debe coincidir con la sección 12 de la Política de Privacidad.
 
-**Precio:** [SERVICIO GRATUITO O DE PAGO: pendiente de decidir. Si es gratuito, se eliminan las referencias a pagos y reembolsos de este documento].
+**Precio:** el servicio tiene capas gratuitas y de pago. Son **gratuitos** los clubes y los Events gratuitos. Son **de pago** los entrenamientos personalizados y los Events de pago. [CONDICIONES DE PAGO: precio, renovación, cancelación, desistimiento y reembolsos, pendientes de definir antes de publicar].
 
 ## 2. Tu cuenta
 
 - Eres responsable de tu contraseña y de la actividad que se realice desde tu cuenta.
 - No compartas tus credenciales ni tu segundo factor de verificación.
-- Avísanos sin demora si sospechas de un acceso no autorizado: [EMAIL DE CONTACTO].
+- Avísanos sin demora si sospechas de un acceso no autorizado: legal@ft_transcendence.42school.com.
 - Los datos que das al registrarte (email, nick) deben ser tuyos y veraces.
 
 ## 3. Roles y clubes
@@ -46,13 +49,13 @@ La plataforma tiene tres roles:
 - Cada usuario decide si participa en una sesión o en un Event, y debe tener en cuenta su estado físico.
 - Los entrenamientos y el Feedback que publica un Manager son **observaciones y planificación deportiva, no consejo médico ni diagnóstico**.
 - **Ante dolor, lesión o malestar, para y consulta a un profesional sanitario.** No uses la plataforma como sustituto de una valoración médica.
-- [ROL DE LOS MANAGERS: aclarar si son usuarios o profesionales independientes y no representantes de la plataforma. Pendiente de decidir].
+- Los Managers no son representantes de la plataforma. Un Manager que cobra por una comunidad de pago actúa como **profesional independiente**; el resto de Managers son usuarios y no hay transacción comercial entre ellos y los Athletes.
 
 Nada de lo anterior excluye ni limita la responsabilidad que la ley no permite excluir ni limitar (véase la sección 9).
 
 ## 5. Privacidad de tus datos
 
-El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a [EMAIL DE CONTACTO] para que la corrijamos en los dos. En resumen:
+El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a legal@ft_transcendence.42school.com para que la corrijamos en los dos. En resumen:
 
 - El RPE lo ven tú y los Managers de tu club. El Feedback, solo tú y el Manager que lo escribió.
 - Para registrar RPE o recibir Feedback te pedimos un consentimiento explícito aparte, que no se da al aceptar estos términos. Puedes retirarlo en Ajustes > Privacidad.
@@ -88,7 +91,7 @@ Eres responsable de lo que escribes en chats de Events y mensajes privados. No e
 Hay dos canales:
 
 - **Dentro de la plataforma:** cualquier usuario con sesión iniciada puede denunciar contenido que ya puede ver: mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts y perfiles a los que tiene acceso. Antes de registrar la denuncia, la plataforma comprueba en el servidor que tienes acceso a ese contenido.
-- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a [EMAIL DE DENUNCIAS Y NOTIFICACIONES LEGALES: pendiente de decidir el dominio].
+- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a abuse@ft_transcendence.42school.com.
 
 Una vez recibida una denuncia, el Admin revisa los mensajes afectados, tanto los del denunciante como los del usuario denunciado, y solo esos.
 
@@ -119,25 +122,25 @@ Podemos retrasar o limitar esta comunicación solo si la ley o la seguridad de o
 
 ### Cómo recurrir
 
-Escribe a [EMAIL DE CONTACTO] indicando la decisión y tus motivos. Una persona revisa tu caso y te responde [PLAZO DE RESPUESTA: pendiente de decidir]. Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
+Escribe a legal@ft_transcendence.42school.com indicando la decisión y tus motivos. Una persona revisa tu caso y te responde [PLAZO DE RESPUESTA: pendiente de decidir]. Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
 
 ## 9. Disponibilidad y responsabilidad
 
 - La plataforma se ofrece "tal cual". No garantizamos que esté disponible de forma ininterrumpida ni libre de errores. Podemos realizar mantenimiento, que intentaremos avisar con antelación cuando sea posible.
 - **No excluimos ni limitamos** nuestra responsabilidad por daños causados por dolo o negligencia, por incumplimiento de nuestras obligaciones contractuales, ni los derechos que la ley te reconoce como consumidor.
 - Fuera de esos casos, no respondemos de lo que ocurra durante un entrenamiento o un Event por decisiones o conductas de los usuarios.
-- Si el servicio tuviera pagos, el importe a devolver ante una cancelación o un cambio perjudicial se calcula de forma proporcional al periodo no disfrutado [SOLO SI HAY PAGOS: precio, renovación, cancelación y desistimiento, a definir].
+- En los servicios de pago, el importe a devolver ante una cancelación o un cambio perjudicial se calcula de forma proporcional al periodo no disfrutado [CONDICIONES DE PAGO: precio, renovación, cancelación y desistimiento, a definir].
 
 ## 10. Cambios en estos términos
 
 Podemos modificarlos por motivos concretos: cambios legales, seguridad, funciones o modelo del servicio. Los cambios no reducen retroactivamente los derechos que ya hayas adquirido.
 
-Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización. [SOLO SI HAY PAGOS: se devuelve la parte proporcional].
+Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización. En los servicios de pago se devuelve la parte proporcional [CONDICIONES DE PAGO: a definir].
 
 ## 11. Ley aplicable y jurisdicción
 
-Se respetan las normas imperativas y el foro que corresponda al consumidor. [LEY APLICABLE Y JURISDICCIÓN CONCRETA: pendiente de la decisión de identidad del responsable. Debe coincidir con la autoridad de control indicada en la Política de Privacidad].
+Se respetan las normas imperativas y el foro que corresponda al consumidor. Estos términos se rigen por la ley española y, para cualquier controversia, las partes se someten a los juzgados y tribunales de Madrid, sin perjuicio del foro que corresponda al consumidor. Debe coincidir con la autoridad de control indicada en la Política de Privacidad.
 
 ## 12. Contacto
 
-[EMAIL DE CONTACTO]
+legal@ft_transcendence.42school.com
