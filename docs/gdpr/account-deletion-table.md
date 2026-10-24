@@ -29,7 +29,7 @@ Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "M
 | `feedback` recibido (`athlete_id` = usuario) | Se borra | Spec | Cascade |
 | `feedback` escrito (`manager_id` = usuario) | **Se conserva** en el Athlete receptor con `manager_id = null` | Decidido | SetNull |
 | `contacts` (cualquiera de las dos puntas) | Se borran | Spec | Cascade |
-| `messages` en DM | Se conservan con `author_id = null` para el otro Contact | Spec | SetNull |
+| `messages` en DM | Se conservan con `author_id = null` para el otro Contact, hasta que esa persona borre la conversación | Spec | SetNull |
 | `messages` en chats de Event | Se conservan con `author_id = null` | Spec | SetNull |
 | `conversation_participants` del usuario | Se borra la fila (o `removed_at`); la conversación DM sigue para el otro Contact | Derivado | Cascade |
 | `spot_requests` del usuario | Se borran | Derivado | Cascade |
@@ -59,13 +59,9 @@ Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "M
 - **`audit_log`**: para que el registro sobreviva al borrado, `actor_id` y `subject_id` no pueden ser FK con `Cascade`. Dos opciones, a elegir por Rebeca: columnas `uuid` **sin FK** (conservan el id), o FK con `SetNull` (pierde quién era). Con la decisión "se conserva el registro", la primera opción es la que lo cumple.
 - El borrado es una **transacción de servidor** con pasos fuera de la BD (borrar archivo de avatar y ZIPs) y el aviso al Admin cuando el club se queda sin Manager. `onDelete` solo no basta.
 
-## Contradicción a corregir en la documentación
-
-- #3 (sección "Borrado") dice que los **DM se borran** realmente. La spec final de #8 dice que se **conservan con `author_id = null`** para el otro Contact. Manda #8, que es posterior y aprobada. Hay que actualizar #3 para que Rebeca no implemente lo antiguo.
-
 ## Pendiente (menor)
 
-- **Retención del `audit_log`.** Se conserva, pero la spec solo fija 3 meses para los logs técnicos. ¿El registro de auditoría tiene plazo o es indefinido? Con la cuenta ya borrada, el registro sigue siendo dato personal pseudonimizado (ids), así que conviene fijarlo y reflejarlo en la Privacy Policy.
+- ~~**Retención del `audit_log`.**~~ **Cerrado:** 12 meses desde la fecha del registro, también tras borrar la cuenta (solo ids, sin perfil). Ver Privacy Policy, sección 7 y tabla de retención.
 - **Feedback sin autor.** Si el Manager se va, el Athlete verá el Feedback sin nombre. El texto de la interfaz ("Entrenador anterior" o similar) es decisión de UI.
 
 ## Nota legal
