@@ -103,7 +103,7 @@ Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ej
 |---|---|
 | Mientras eres miembro | Conservamos tus datos activos |
 | Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. No se borra tu cuenta |
-| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste, tus Contacts y tus mensajes privados. Las personas con las que hablabas dejan de ver esos mensajes y las conversaciones |
+| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts. Tus mensajes privados no se borran: se conservan sin tu nombre para que la otra persona mantenga el hilo (ver tabla siguiente) |
 | El Admin borra un club | Te avisamos por email con al menos 30 días de antelación y puedes descargar tus datos antes. Después se borran el club, sus sesiones y tu historial de entrenamiento en él. Tu cuenta no se borra |
 | Después de borrar tu cuenta | Los registros técnicos (IP, navegador, accesos) se conservan como máximo 3 meses |
 
@@ -114,6 +114,7 @@ Tu nombre se desvincula de estos datos, pero no es una anonimización garantizad
 | Dato | Finalidad | Fundamento | Plazo |
 |---|---|---|---|
 | Mensajes en chats de Events, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | Mientras exista el chat del Event; se borran con él |
+| Mensajes privados (DMs), sin autor | Que la otra persona mantenga el hilo de la conversación | Interés legítimo (art. 6.1.f) | [PLAZO: pendiente de decidir] |
 | Events, plantillas de entrenamiento e invitaciones que creaste como Manager, sin autor | Que otros Athletes del club sigan usándolos | Interés legítimo (art. 6.1.f). No contienen tu identidad tras la desvinculación | Mientras el club los mantenga |
 | Feedback que escribiste como Manager, sin tu nombre | Que el Athlete conserve su historial | Ejecución del contrato con el Athlete (art. 6.1.b) | Mientras el Athlete mantenga su cuenta |
 | Registro de auditoría (solo identificadores) | Seguridad y defensa ante reclamaciones | Interés legítimo (art. 6.1.f) y art. 17.3.e | 12 meses |
