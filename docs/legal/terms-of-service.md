@@ -6,7 +6,7 @@
 
 ## 1. Quiénes somos y qué aceptas
 
-Estos términos regulan el uso de **TRANSCENDENCE RUNNING HUB** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Estos términos regulan el uso de **stridesync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
 - **Responsable del servicio:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242
 - **Domicilio:** Calle De La Trancendencia, 42. 28042 Madrid, España
