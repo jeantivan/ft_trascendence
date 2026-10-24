@@ -18,7 +18,7 @@ Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la
 
 **Edad mínima:** 16 años. Debe coincidir con la sección 12 de la Política de Privacidad.
 
-**Precio:** el servicio tiene capas gratuitas y de pago. Son **gratuitos** los clubes y los Events gratuitos. Son **de pago** los entrenamientos personalizados y los Events de pago. Precios, renovación, cancelación y desistimiento: sección 12.
+**Precio:** el servicio es **gratuito** para todos los usuarios, incluidos los Managers. Nadie cobra por usar la plataforma: ni la plataforma ni los Managers.
 
 ## 2. Tu cuenta
 
@@ -49,7 +49,7 @@ La plataforma tiene tres roles:
 - Cada usuario decide si participa en una sesión o en un Event, y debe tener en cuenta su estado físico.
 - Los entrenamientos y el Feedback que publica un Manager son **observaciones y planificación deportiva, no consejo médico ni diagnóstico**.
 - **Ante dolor, lesión o malestar, para y consulta a un profesional sanitario.** No uses la plataforma como sustituto de una valoración médica.
-- Los Managers no son representantes de la plataforma. Un Manager que cobra por una comunidad de pago actúa como **profesional independiente**; el resto de Managers son usuarios y no hay transacción comercial entre ellos y los Athletes.
+- Los Managers no son representantes de la plataforma. Son usuarios, igual que los Athletes, y no cobran por sus servicios en la plataforma.
 
 Nada de lo anterior excluye ni limita la responsabilidad que la ley no permite excluir ni limitar (véase la sección 9).
 
@@ -129,34 +129,17 @@ Escribe a legal@transcendence.42school.com indicando la decisión y tus motivos.
 - La plataforma se ofrece "tal cual". No garantizamos que esté disponible de forma ininterrumpida ni libre de errores. Podemos realizar mantenimiento, que intentaremos avisar con antelación cuando sea posible.
 - **No excluimos ni limitamos** nuestra responsabilidad por daños causados por dolo o negligencia, por incumplimiento de nuestras obligaciones contractuales, ni los derechos que la ley te reconoce como consumidor.
 - Fuera de esos casos, no respondemos de lo que ocurra durante un entrenamiento o un Event por decisiones o conductas de los usuarios.
-- En los servicios de pago, el importe a devolver ante una cancelación o un cambio perjudicial se calcula de forma proporcional al periodo no disfrutado (véase también la sección 12).
 
 ## 10. Cambios en estos términos
 
 Podemos modificarlos por motivos concretos: cambios legales, seguridad, funciones o modelo del servicio. Los cambios no reducen retroactivamente los derechos que ya hayas adquirido.
 
-Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización. En los servicios de pago se devuelve la parte proporcional.
+Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización.
 
 ## 11. Ley aplicable y jurisdicción
 
 Se respetan las normas imperativas y el foro que corresponda al consumidor. Estos términos se rigen por la ley española y, para cualquier controversia, las partes se someten a los juzgados y tribunales de Madrid, sin perjuicio del foro que corresponda al consumidor. Debe coincidir con la autoridad de control indicada en la Política de Privacidad.
 
-## 12. Precios y pagos
-
-Los servicios de pago funcionan por **membresía mensual**. Puedes pagar la membresía de un solo club o contratar una tarifa plana que cubra varios.
-
-| Servicio | Precio |
-|---|---|
-| Alta general en cualquier club | Entre 0 y 200 € al mes; lo elige el Manager del club |
-| Entrenamiento personalizado | Entre 10 y 1.000 € al mes; lo elige el Manager |
-| Entrenamientos de plantillas | Entre 0 y 30 € al mes |
-| Tarifa plana: todos los clubs de 0 a 50 € al mes y todas las plantillas | 27 € al mes, o 20 € al mes si pagas anualmente |
-| Tarifa plana clubs: todos los clubs de hasta 150 € al mes | 97 € al mes, o 80 € al mes si pagas anualmente |
-
-- **Renovación:** la membresía se renueva cada mes.
-- **Cancelación:** puedes cancelar cuando quieras. La membresía se mantiene hasta el final del periodo ya pagado.
-- **Desistimiento:** dentro de los 14 días siguientes al alta de la membresía puedes desistir y te devolvemos el dinero, salvo que ya hayas usado la membresía, por ejemplo asistiendo a un Event o recibiendo un entrenamiento personalizado.
-
-## 13. Contacto
+## 12. Contacto
 
 legal@transcendence.42school.com
