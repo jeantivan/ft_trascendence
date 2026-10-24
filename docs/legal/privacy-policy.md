@@ -81,7 +81,11 @@ Los usuarios sin club solo ven la lista de clubes (nombre y número de miembros)
 
 ## 6. Denuncias
 
-Si un Manager denuncia un contenido o una conducta, el Admin puede ver los **mensajes afectados por la denuncia**, tanto los del Manager como los del Athlete implicado, y solo esos. Esta consulta queda registrada en el registro de auditoría (sección 7).
+Cualquier usuario con sesión iniciada puede denunciar un contenido que ya puede ver (mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts o perfiles a los que tiene acceso). Quien no tiene cuenta, o quiere enviar una notificación legal, puede escribir a [EMAIL DE DENUNCIAS Y NOTIFICACIONES LEGALES: pendiente de decidir el dominio].
+
+Cuando hay una denuncia, el Admin puede ver los **mensajes afectados por la denuncia**, tanto los de quien denuncia como los de la persona denunciada, y solo esos. Esta consulta queda registrada en el registro de auditoría (sección 7).
+
+**Una persona revisa cada denuncia.** No usamos filtros ni algoritmos automáticos para detectar, retirar o bloquear contenido o cuentas, así que ninguna decisión de moderación se toma de forma exclusivamente automatizada (art. 22). El Admin decide si desestima la denuncia, retira el contenido o sanciona la cuenta.
 
 Si eres el Athlete afectado, el contenido denunciado puede incluir datos tuyos. La base legal de este acceso es el interés legítimo en la seguridad y moderación de la plataforma (art. 6.1.f).
 
@@ -122,7 +126,7 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 
 | Derecho | Cómo ejercerlo |
 |---|---|
-| **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días |
+| **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días. El archivo se guarda en almacenamiento privado, solo se descarga con tu sesión y se borra a los 7 días o antes si borras tu cuenta |
 | **Rectificación** (art. 16) | Ajustes > Perfil: email, foto y nick |
 | **Supresión** (art. 17) | Ajustes > Privacidad > Borrar cuenta. Confirmas con un código enviado a tu email, que caduca en 10 minutos. **Es permanente y no tiene marcha atrás** |
 | **Limitación del tratamiento** (art. 18) | Escríbenos a [EMAIL DE CONTACTO] |
