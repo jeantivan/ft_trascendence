@@ -71,8 +71,8 @@ describe("registerUser logic", () => {
   });
 
   it("handles race conditions gracefully when createUser throws UserAlreadyExistsError", async () => {
-    // Simular que findByEmail no encontró al usuario (carrera simultánea),
-    // pero createUser rechaza por unicidad atómica en BD.
+    // Simulate findByEmail not finding the user (concurrent race condition),
+    // but createUser rejecting due to atomic uniqueness in the DB.
     repo.createUser = async () => {
       throw new UserAlreadyExistsError("User with this email already exists");
     };

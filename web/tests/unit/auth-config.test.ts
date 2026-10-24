@@ -134,6 +134,23 @@ describe("Auth.js Base Configuration and Callbacks", () => {
       expect(result).toBe(false);
     });
 
+    it("returns 401 Response for unauthenticated requests to /api/*", async () => {
+      expect(authorizedCallback).toBeDefined();
+      if (!authorizedCallback) return;
+
+      const result = await authorizedCallback({
+        auth: null,
+        request: createMockRequest("/api/events"),
+      });
+
+      expect(result).toBeInstanceOf(Response);
+      if (result instanceof Response) {
+        expect(result.status).toBe(401);
+        const body = await result.json();
+        expect(body).toEqual({ error: "Unauthorized" });
+      }
+    });
+
     it("redirects authenticated user away from login to dashboard", async () => {
       expect(authorizedCallback).toBeDefined();
       if (!authorizedCallback) return;

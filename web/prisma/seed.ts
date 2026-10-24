@@ -6,7 +6,7 @@
 // email: recreate it with make fclean + make dev. WARNING: make fclean
 // DELETES ALL the local data stored in the project's Docker volumes
 // (the database and any other volume), not only the demo data.
-// Users demo password is configured via SEED_USER_PASSWORD env var.
+// Demo users' password is configured via SEED_USER_PASSWORD env var.
 import { hashPassword } from "../src/lib/auth/password";
 import { prisma } from "../src/lib/prisma";
 import type { GlobalRole, MembershipRole } from "../src/generated/prisma/client";
@@ -21,7 +21,10 @@ import {
 } from "./seed/ids";
 
 async function main() {
-  const seedPassword = process.env.SEED_USER_PASSWORD || "dev_password_123";
+  const seedPassword = process.env.SEED_USER_PASSWORD;
+  if (!seedPassword) {
+    throw new Error("Missing required environment variable: SEED_USER_PASSWORD");
+  }
   const passwordHash = await hashPassword(seedPassword);
 
   // nick = name shown in the app
@@ -34,10 +37,18 @@ async function main() {
   for (const user of users) {
     await prisma.user.upsert({
       where: { id: user.id },
-      update: { passwordHash },
+      update: {},
       create: { ...user, passwordHash },
     });
   }
+
+  await prisma.user.updateMany({
+    where: {
+      id: { in: users.map((user) => user.id) },
+      passwordHash: null,
+    },
+    data: { passwordHash },
+  });
 
   await prisma.organization.upsert({
     where: { id: CLUB_ID },

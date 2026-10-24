@@ -71,4 +71,14 @@ describe("checkRouteAccess - Route Protection", () => {
       checkRouteAccess({ pathname: "/dashboard/", isLoggedIn: false })
     ).toEqual({ allowed: false, redirectTo: "/login" });
   });
+
+  it("denies unauthenticated requests to /api/* with 401 status", () => {
+    expect(
+      checkRouteAccess({ pathname: "/api/events", isLoggedIn: false })
+    ).toEqual({ allowed: false, status: 401 });
+
+    expect(
+      checkRouteAccess({ pathname: "/api/user/profile", isLoggedIn: false })
+    ).toEqual({ allowed: false, status: 401 });
+  });
 });

@@ -7,6 +7,10 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
 }));
 
+vi.mock("@/lib/auth/actions", () => ({
+  logoutAction: vi.fn(),
+}));
+
 describe("Sidebar", () => {
   it("renderiza un enlace por cada ruta con su destino", () => {
     render(<Sidebar />);
@@ -24,5 +28,12 @@ describe("Sidebar", () => {
     const current = screen.getAllByRole("link", { current: "page" });
     expect(current).toHaveLength(1);
     expect(current[0]).toHaveTextContent("Dashboard");
+  });
+
+  it("renderiza el botón de cerrar sesión", () => {
+    render(<Sidebar />);
+    expect(
+      screen.getByRole("button", { name: /cerrar sesión/i })
+    ).toBeInTheDocument();
   });
 });

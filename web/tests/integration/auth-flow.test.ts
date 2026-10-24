@@ -11,7 +11,7 @@ describe("Integration: Authentication Flow", () => {
   });
 
   it("completes full lifecycle: registration, credential validation and password verification", async () => {
-    // 1. Registro con datos válidos y hasheado real con bcrypt
+    // 1. Registration with valid inputs and real bcrypt hashing
     const registerResult = await registerUser(
       {
         email: "marathoner@42madrid.com",
@@ -27,7 +27,7 @@ describe("Integration: Authentication Flow", () => {
     expect(registerResult.user.email).toBe("marathoner@42madrid.com");
     expect(registerResult.user.passwordHash).not.toBe("SuperSecretPassword42!");
 
-    // 2. Intento de inicio de sesión con credenciales correctas
+    // 2. Sign-in attempt with valid credentials
     const authSuccess = await authorizeCredentials(
       {
         email: "marathoner@42madrid.com",
@@ -41,7 +41,7 @@ describe("Integration: Authentication Flow", () => {
     expect(authSuccess?.nick).toBe("marathoner");
     expect(authSuccess?.roleGlobal).toBe("user");
 
-    // 3. Intento de inicio de sesión con contraseña errónea
+    // 3. Sign-in attempt with incorrect password
     const authWrongPassword = await authorizeCredentials(
       {
         email: "marathoner@42madrid.com",
@@ -51,7 +51,7 @@ describe("Integration: Authentication Flow", () => {
     );
     expect(authWrongPassword).toBeNull();
 
-    // 4. Intento de registro duplicado con el mismo correo
+    // 4. Duplicate registration attempt with the same email
     const duplicateRegister = await registerUser(
       {
         email: "MARATHONER@42madrid.com",
@@ -65,7 +65,7 @@ describe("Integration: Authentication Flow", () => {
       expect(duplicateRegister.error).toBe("El email ya está registrado");
     }
 
-    // 5. Suspensión de cuenta: un usuario bloqueado no puede autenticarse
+    // 5. Account suspension: a blocked user cannot authenticate
     const registeredUser = await repo.findByEmail("marathoner@42madrid.com");
     if (registeredUser) {
       registeredUser.blockedAt = new Date();

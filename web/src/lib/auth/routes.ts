@@ -5,7 +5,8 @@ export interface RouteAccessCheck {
 
 export type RouteAccessResult =
   | { allowed: true }
-  | { allowed: false; redirectTo: string };
+  | { allowed: false; redirectTo: string }
+  | { allowed: false; status: 401 };
 
 const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register"];
 
@@ -33,6 +34,9 @@ export function checkRouteAccess({
   }
 
   if (!isLoggedIn) {
+    if (normalizedPath.startsWith("/api/")) {
+      return { allowed: false, status: 401 };
+    }
     return { allowed: false, redirectTo: "/login" };
   }
 
