@@ -7,10 +7,10 @@
 1. El usuario pulsa **Ajustes > Privacidad > Descargar mis datos**.
 2. **Reautenticación:** el servidor envía un código OTP por email, el mismo mecanismo que el borrado de cuenta (caduca en 10 minutos, 5 intentos).
 3. Con el OTP correcto se crea la exportación. **Solo puede haber una activa por usuario**: si ya existe una no caducada, se rechaza la petición con ese motivo.
-4. El ZIP se genera en el servidor y se guarda con un nombre no adivinable.
+4. El ZIP se genera en el servidor y se guarda con un nombre no adivinable en un **volumen local privado de Docker** (sin almacenamiento externo, según la decisión de infraestructura del ticket #06). NGINX **no** expone esa carpeta: el ZIP solo sale por el endpoint autenticado de descarga (sección 2).
 5. El servidor envía un email con el enlace de descarga. El email **no contiene datos**, solo el enlace y la fecha de caducidad.
-6. El enlace caduca a los **7 días**. Al caducar se borra el ZIP y el registro de la exportación.
-7. Si el usuario borra su cuenta, se borran el ZIP pendiente y el registro de la exportación.
+6. El enlace caduca a los **7 días**. Al caducar se borra el ZIP del disco y el registro de la exportación.
+7. Si el usuario borra su cuenta, se borran de inmediato el ZIP pendiente y el registro de la exportación.
 
 Plazo de respuesta (Privacy Policy, sección 9): sin dilación indebida y como máximo un mes. La exportación automática cubre ese plazo; las peticiones de datos que la descarga no incluya se atienden por email.
 
@@ -44,7 +44,7 @@ Comprueba que el `export_id` pertenece al usuario de la sesión (`404` si no).
 
 ### `GET /api/gdpr/export/{export_id}/download`
 
-Requiere sesión iniciada del **mismo usuario** además del token del enlace. Devuelve el ZIP (`application/zip`). Responde `404` si caducó o no es suyo.
+Requiere sesión iniciada del **mismo usuario** además del token del enlace. El servidor comprueba sesión, pertenencia y fecha de caducidad antes de leer el fichero del volumen. Devuelve el ZIP (`application/zip`). Responde `404` si caducó o no es suyo.
 
 Los logs y errores de estas rutas llevan solo `export_id`, nunca el contenido del ZIP.
 
@@ -218,10 +218,9 @@ Si necesitas más datos de los que incluye la descarga, escribe a
 
 ## 6. Decisiones abiertas
 
-Cerradas: `notifications` se exporta sin `payload`; los mensajes borrados por el usuario se incluyen con `deleted_at`; la descarga exige token válido **y** sesión iniciada del mismo usuario (requisito, no opción).
+Cerradas: `notifications` se exporta sin `payload`; los mensajes borrados por el usuario se incluyen con `deleted_at`; la descarga exige token válido **y** sesión iniciada del mismo usuario (requisito, no opción); el ZIP se guarda en el volumen local privado de Docker, sin NGINX exponiéndolo y con borrado a los 7 días o al borrar la cuenta (confirmado por Jean en #8).
 
 | Tema | Propuesta | Quién decide |
 |---|---|---|
-| Dónde se guarda el ZIP (disco del servidor, volumen Docker, almacenamiento externo) | Resolver en #25 | Equipo |
 | Formato de `health_consent_version` | Resolver en #19 | Equipo |
 | Límite de peticiones por día | Una exportación activa a la vez (sección 1) | Equipo |
