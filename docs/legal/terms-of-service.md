@@ -8,23 +8,23 @@
 
 Estos términos regulan el uso de **TRANSCENDENCE RUNNING HUB** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
-- **Responsable del servicio:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B842424242
-- **Domicilio:** Calle De La Trancendencia, 42. 280042 Madrid, España
+- **Responsable del servicio:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242
+- **Domicilio:** Calle De La Trancendencia, 42. 28042 Madrid, España
 - **Representante:** Marvin Gaye, NIF 42424242A
 - **Teléfono:** +34 642 42 42 42
-- **Contacto:** legal@ft_transcendence.42school.com
+- **Contacto:** legal@transcendence.42school.com
 
 Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la plataforma. Antes de crear la cuenta podrás leerlos, guardarlos y aceptarlos de forma expresa.
 
 **Edad mínima:** 16 años. Debe coincidir con la sección 12 de la Política de Privacidad.
 
-**Precio:** el servicio tiene capas gratuitas y de pago. Son **gratuitos** los clubes y los Events gratuitos. Son **de pago** los entrenamientos personalizados y los Events de pago. [CONDICIONES DE PAGO: precio, renovación, cancelación, desistimiento y reembolsos, pendientes de definir antes de publicar].
+**Precio:** el servicio tiene capas gratuitas y de pago. Son **gratuitos** los clubes y los Events gratuitos. Son **de pago** los entrenamientos personalizados y los Events de pago. Precios, renovación, cancelación y desistimiento: sección 12.
 
 ## 2. Tu cuenta
 
 - Eres responsable de tu contraseña y de la actividad que se realice desde tu cuenta.
 - No compartas tus credenciales ni tu segundo factor de verificación.
-- Avísanos sin demora si sospechas de un acceso no autorizado: legal@ft_transcendence.42school.com.
+- Avísanos sin demora si sospechas de un acceso no autorizado: legal@transcendence.42school.com.
 - Los datos que das al registrarte (email, nick) deben ser tuyos y veraces.
 
 ## 3. Roles y clubes
@@ -55,7 +55,7 @@ Nada de lo anterior excluye ni limita la responsabilidad que la ley no permite e
 
 ## 5. Privacidad de tus datos
 
-El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a legal@ft_transcendence.42school.com para que la corrijamos en los dos. En resumen:
+El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a legal@transcendence.42school.com para que la corrijamos en los dos. En resumen:
 
 - El RPE lo ven tú y los Managers de tu club. El Feedback, solo tú y el Manager que lo escribió.
 - Para registrar RPE o recibir Feedback te pedimos un consentimiento explícito aparte, que no se da al aceptar estos términos. Puedes retirarlo en Ajustes > Privacidad.
@@ -71,7 +71,7 @@ El tratamiento de tus datos personales se rige por la [Política de Privacidad](
 
 | Dato | Finalidad | Fundamento | Plazo |
 |---|---|---|---|
-| Mensajes en chats de Events y mensajes privados, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | [PLAZO: mientras exista la conversación u otro criterio] |
+| Mensajes en chats de Events y mensajes privados, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | Sin plazo máximo: se conservan siempre |
 | Events, plantillas de entrenamiento e invitaciones que creaste como Manager, sin autor | Que otros Athletes del club sigan usándolos | Interés legítimo (art. 6.1.f). No contienen tu identidad tras la desvinculación | Mientras el club los mantenga |
 | Feedback que escribiste como Manager, sin tu nombre | Que el Athlete conserve su historial | Ejecución del contrato con el Athlete (art. 6.1.b) | Mientras el Athlete mantenga su cuenta |
 | Registro de auditoría (solo identificadores) | Seguridad y defensa ante reclamaciones | Interés legítimo (art. 6.1.f) y art. 17.3.e | 12 meses |
@@ -91,7 +91,7 @@ Eres responsable de lo que escribes en chats de Events y mensajes privados. No e
 Hay dos canales:
 
 - **Dentro de la plataforma:** cualquier usuario con sesión iniciada puede denunciar contenido que ya puede ver: mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts y perfiles a los que tiene acceso. Antes de registrar la denuncia, la plataforma comprueba en el servidor que tienes acceso a ese contenido.
-- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a abuse@ft_transcendence.42school.com.
+- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a abuse@transcendence.42school.com.
 
 Una vez recibida una denuncia, el Admin revisa los mensajes afectados, tanto los del denunciante como los del usuario denunciado, y solo esos.
 
@@ -122,25 +122,41 @@ Podemos retrasar o limitar esta comunicación solo si la ley o la seguridad de o
 
 ### Cómo recurrir
 
-Escribe a legal@ft_transcendence.42school.com indicando la decisión y tus motivos. Una persona revisa tu caso y te responde [PLAZO DE RESPUESTA: pendiente de decidir]. Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
+Escribe a legal@transcendence.42school.com indicando la decisión y tus motivos. Una persona revisa tu caso y te responde en un máximo de **72 horas laborables** (de lunes a viernes). Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
 
 ## 9. Disponibilidad y responsabilidad
 
 - La plataforma se ofrece "tal cual". No garantizamos que esté disponible de forma ininterrumpida ni libre de errores. Podemos realizar mantenimiento, que intentaremos avisar con antelación cuando sea posible.
 - **No excluimos ni limitamos** nuestra responsabilidad por daños causados por dolo o negligencia, por incumplimiento de nuestras obligaciones contractuales, ni los derechos que la ley te reconoce como consumidor.
 - Fuera de esos casos, no respondemos de lo que ocurra durante un entrenamiento o un Event por decisiones o conductas de los usuarios.
-- En los servicios de pago, el importe a devolver ante una cancelación o un cambio perjudicial se calcula de forma proporcional al periodo no disfrutado [CONDICIONES DE PAGO: precio, renovación, cancelación y desistimiento, a definir].
+- En los servicios de pago, el importe a devolver ante una cancelación o un cambio perjudicial se calcula de forma proporcional al periodo no disfrutado (véase también la sección 12).
 
 ## 10. Cambios en estos términos
 
 Podemos modificarlos por motivos concretos: cambios legales, seguridad, funciones o modelo del servicio. Los cambios no reducen retroactivamente los derechos que ya hayas adquirido.
 
-Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización. En los servicios de pago se devuelve la parte proporcional [CONDICIONES DE PAGO: a definir].
+Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización. En los servicios de pago se devuelve la parte proporcional.
 
 ## 11. Ley aplicable y jurisdicción
 
 Se respetan las normas imperativas y el foro que corresponda al consumidor. Estos términos se rigen por la ley española y, para cualquier controversia, las partes se someten a los juzgados y tribunales de Madrid, sin perjuicio del foro que corresponda al consumidor. Debe coincidir con la autoridad de control indicada en la Política de Privacidad.
 
-## 12. Contacto
+## 12. Precios y pagos
 
-legal@ft_transcendence.42school.com
+Los servicios de pago funcionan por **membresía mensual**. Puedes pagar la membresía de un solo club o contratar una tarifa plana que cubra varios.
+
+| Servicio | Precio |
+|---|---|
+| Alta general en cualquier club | Entre 0 y 200 € al mes; lo elige el Manager del club |
+| Entrenamiento personalizado | Entre 10 y 1.000 € al mes; lo elige el Manager |
+| Entrenamientos de plantillas | Entre 0 y 30 € al mes |
+| Tarifa plana: todos los clubs de 0 a 50 € al mes y todas las plantillas | 27 € al mes, o 20 € al mes si pagas anualmente |
+| Tarifa plana clubs: todos los clubs de hasta 150 € al mes | 97 € al mes, o 80 € al mes si pagas anualmente |
+
+- **Renovación:** la membresía se renueva cada mes.
+- **Cancelación:** puedes cancelar cuando quieras. La membresía se mantiene hasta el final del periodo ya pagado.
+- **Desistimiento:** dentro de los 14 días siguientes al alta de la membresía puedes desistir y te devolvemos el dinero, salvo que ya hayas usado la membresía, por ejemplo asistiendo a un Event o recibiendo un entrenamiento personalizado.
+
+## 13. Contacto
+
+legal@transcendence.42school.com
