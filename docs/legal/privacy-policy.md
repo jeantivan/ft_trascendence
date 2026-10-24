@@ -6,7 +6,7 @@
 
 ## 1. Quiénes somos
 
-Esta política describe cómo trata tus datos personales **TRANSCENDENCE RUNNING HUB** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Esta política describe cómo trata tus datos personales **stridesync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
 - **Responsable del tratamiento:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242. Calle De La Trancendencia, 42. 28042 Madrid, España. Teléfono +34 642 42 42 42
 - **Contacto de privacidad:** legal@transcendence.42school.com
