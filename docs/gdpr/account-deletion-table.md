@@ -29,7 +29,7 @@ Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "M
 | `feedback` recibido (`athlete_id` = usuario) | Se borra | Spec | Cascade |
 | `feedback` escrito (`manager_id` = usuario) | **Se conserva** en el Athlete receptor con `manager_id = null` | Decidido | SetNull |
 | `contacts` (cualquiera de las dos puntas) | Se borran | Spec | Cascade |
-| `messages` en DM | Se conservan con `author_id = null` para el otro Contact, hasta que esa persona borre la conversación | Spec | SetNull |
+| `messages` en DM | Se conservan con `author_id = null` para el otro Contact, hasta que esa persona borre la conversación. Si esa persona también borra su cuenta, se borran | Spec | SetNull |
 | `messages` en chats de Event | Se conservan con `author_id = null` | Spec | SetNull |
 | `conversation_participants` del usuario | Se borra la fila (o `removed_at`); la conversación DM sigue para el otro Contact | Derivado | Cascade |
 | `spot_requests` del usuario | Se borran | Derivado | Cascade |
