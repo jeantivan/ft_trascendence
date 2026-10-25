@@ -151,6 +151,18 @@ test_new_env_is_readable_only_by_owner() {
   teardown
 }
 
+test_existing_env_becomes_readable_only_by_owner() {
+  setup
+  printf 'A=1\n' > .env.example
+  printf 'A=1\n' > .env
+  chmod 644 .env
+  sh "$SCRIPT"
+  if [ "$(ls -l .env | cut -c1-10)" != "-rw-------" ]; then
+    fail "makes an existing .env readable and writable only by its owner"
+  fi
+  teardown
+}
+
 test_creates_env_from_example_when_missing
 test_adds_missing_variables
 test_keeps_existing_values
@@ -162,6 +174,7 @@ test_fails_when_secret_cannot_be_generated
 test_fails_without_example
 test_keeps_env_when_rewrite_fails
 test_new_env_is_readable_only_by_owner
+test_existing_env_becomes_readable_only_by_owner
 
 if [ "$failures" -eq 0 ]; then
   echo "All tests passed"

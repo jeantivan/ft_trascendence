@@ -19,6 +19,9 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
+# An older .env may have been created readable by everyone: close it too
+chmod 600 .env
+
 # If the last line has no newline, add one so appended lines do not stick to it
 if [ -s .env ] && [ -n "$(tail -c 1 .env)" ]; then
   echo >> .env
