@@ -1,7 +1,9 @@
 import type { Session } from "next-auth";
-import type {
-  CurrentUserRecord,
-  CurrentUserRepository,
+import { auth } from "@/auth";
+import {
+  currentUserRepository,
+  type CurrentUserRecord,
+  type CurrentUserRepository,
 } from "./current-user-repository";
 
 // What callers get: the record without blockedAt, which only matters here
@@ -12,8 +14,8 @@ export type CurrentUserResult =
   | { ok: false; reason: "no-session" | "blocked" };
 
 export async function getCurrentUser(
-  getSession: () => Promise<Session | null>,
-  repo: CurrentUserRepository
+  getSession: () => Promise<Session | null> = auth,
+  repo: CurrentUserRepository = currentUserRepository
 ): Promise<CurrentUserResult> {
   // auth.config.ts only sets user.id when the JWT carries one
   const session = await getSession();

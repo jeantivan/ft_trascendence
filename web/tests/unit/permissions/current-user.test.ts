@@ -1,7 +1,10 @@
 import type { Session } from "next-auth";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getCurrentUser } from "@/lib/permissions/current-user";
 import { InMemoryCurrentUserRepository } from "../../support/in-memory-current-user-repository";
+
+// Every test passes its own session: the mock only keeps next-auth from loading
+vi.mock("@/auth", () => ({ auth: vi.fn() }));
 
 // A session as Auth.js returns it; fields may be missing, as in auth.config.ts
 function sessionFor(user: Partial<Session["user"]>) {
