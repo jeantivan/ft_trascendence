@@ -1,0 +1,329 @@
+<!DOCTYPE html><html class="dark" lang="es"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>STRIDE VOLT RC — Estado de Telemetría &amp; Error de Ruta</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-variant": "#31353c",
+            "rpe-low": "#10B981",
+            "surface-container-lowest": "#0a0e14",
+            "on-primary": "#283500",
+            "on-tertiary-container": "#00734e",
+            "surface-base": "#090D12",
+            "on-secondary-fixed-variant": "#004f54",
+            "on-error": "#690005",
+            "on-primary-fixed-variant": "#3c4d00",
+            "surface-overlay": "#1E2638",
+            "outline": "#8e9379",
+            "surface": "#10141a",
+            "rpe-hard": "#F97316",
+            "tertiary-fixed": "#6ffbbe",
+            "secondary": "#d3fbff",
+            "primary-fixed": "#c3f400",
+            "surface-container": "#1c2026",
+            "session-intervalos": "#FF3366",
+            "rpe-moderate": "#EAB308",
+            "secondary-fixed": "#7df4ff",
+            "surface-elevated": "#131923",
+            "text-secondary": "#94A3B8",
+            "on-background": "#dfe2eb",
+            "secondary-container": "#00eefc",
+            "session-cuestas": "#FF8800",
+            "inverse-primary": "#506600",
+            "text-primary": "#F8FAFC",
+            "border-subtle": "#253047",
+            "on-secondary-container": "#00686f",
+            "volume-alert": "#FFB800",
+            "primary-fixed-dim": "#abd600",
+            "error": "#ffb4ab",
+            "on-error-container": "#ffdad6",
+            "on-tertiary": "#003824",
+            "on-surface-variant": "#c4c9ac",
+            "border-strong": "#374563",
+            "on-surface": "#dfe2eb",
+            "surface-container-highest": "#31353c",
+            "tertiary-fixed-dim": "#4edea3",
+            "surface-bright": "#353940",
+            "on-primary-fixed": "#161e00",
+            "inverse-on-surface": "#2d3137",
+            "session-tirada-larga": "#A855F7",
+            "text-muted": "#64748B",
+            "session-rodaje": "#00F0FF",
+            "outline-variant": "#444933",
+            "on-secondary-fixed": "#002022",
+            "surface-dim": "#10141a",
+            "on-secondary": "#00363a",
+            "rpe-max": "#EF4444",
+            "background": "#10141a",
+            "on-tertiary-fixed": "#002113",
+            "tertiary": "#ffffff",
+            "secondary-fixed-dim": "#00dbe9",
+            "surface-container-low": "#181c22",
+            "primary-container": "#c3f400",
+            "surface-tint": "#abd600",
+            "session-fartlek": "#CCFF00",
+            "on-tertiary-fixed-variant": "#005236",
+            "tertiary-container": "#6ffbbe",
+            "error-container": "#93000a",
+            "primary": "#ffffff",
+            "inverse-surface": "#dfe2eb",
+            "surface-container-high": "#262a31",
+            "on-primary-container": "#556d00"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "margin-tablet": "2rem",
+            "margin-desktop": "3rem",
+            "gutter-desktop": "1.75rem",
+            "space-md": "1rem",
+            "margin": "1rem",
+            "gutter": "1.25rem",
+            "space-lg": "1.5rem",
+            "space-xs": "0.25rem",
+            "space-xl": "2.5rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "display-hero-mobile": ["Space Grotesk"],
+            "headline-md": ["Space Grotesk"],
+            "headline-sm": ["Space Grotesk"],
+            "headline-lg-mobile": ["Space Grotesk"],
+            "metric-huge": ["Space Grotesk"],
+            "body-lg": ["Hanken Grotesk"],
+            "body-md": ["Hanken Grotesk"],
+            "display-hero": ["Space Grotesk"],
+            "label-caps": ["Space Grotesk"],
+            "headline-lg": ["Space Grotesk"],
+            "body-sm": ["Hanken Grotesk"],
+            "label-badge": ["Space Grotesk"]
+          },
+          "fontSize": {
+            "display-hero-mobile": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+            "headline-lg-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "metric-huge": ["44px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+            "body-lg": ["17px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "400" }],
+            "body-md": ["15px", { "lineHeight": "22px", "letterSpacing": "0", "fontWeight": "400" }],
+            "display-hero": ["56px", { "lineHeight": "64px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+            "label-caps": ["11px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+            "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400" }],
+            "label-badge": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .neon-glow-volt {
+      text-shadow: 0 0 32px rgba(204, 255, 0, 0.35), 0 0 64px rgba(204, 255, 0, 0.15);
+    }
+    .neon-glow-red {
+      text-shadow: 0 0 32px rgba(239, 68, 68, 0.35), 0 0 64px rgba(239, 68, 68, 0.15);
+    }
+    .neon-glow-amber {
+      text-shadow: 0 0 32px rgba(255, 184, 0, 0.35), 0 0 64px rgba(255, 184, 0, 0.15);
+    }
+    .grid-lines {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(37, 48, 71, 0.25) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(37, 48, 71, 0.25) 1px, transparent 1px);
+    }
+  </style>
+</head>
+<body class="bg-surface-base text-text-primary min-h-screen flex flex-col font-body-md antialiased selection:bg-session-fartlek selection:text-surface-base relative overflow-x-hidden">
+<!-- Background Athletic Grid Pattern -->
+<div class="fixed inset-0 grid-lines pointer-events-none opacity-40 z-0"></div>
+<!-- Subtle Kinetic Obsidian Top Radial Glow -->
+<div class="fixed -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[360px] bg-session-fartlek/5 blur-[120px] pointer-events-none rounded-full z-0"></div>
+<!-- TOP BAR: Minimal Athletic Header -->
+<header class="relative z-20 w-full bg-surface-base/90 backdrop-blur-md border-b border-border-subtle py-3 px-4 md:px-8">
+<div class="max-w-7xl mx-auto flex items-center justify-between">
+<!-- Brand & Hub Identity -->
+<div class="flex items-center gap-3">
+<a class="flex items-center gap-2 group" href="#">
+<div class="w-7 h-7 rounded bg-session-fartlek flex items-center justify-center text-surface-base font-headline-sm font-bold">
+<span class="material-symbols-outlined text-[18px]">bolt</span>
+</div>
+<span class="font-headline-sm text-headline-sm tracking-tight font-bold text-text-primary group-hover:text-session-fartlek transition-colors">
+            STRIDE VOLT RC
+          </span>
+</a>
+<span class="hidden sm:inline-block w-px h-4 bg-border-strong mx-1"></span>
+<span class="hidden sm:inline-block font-label-caps text-label-caps text-text-muted">
+          DIVISION SUB-3:30
+        </span>
+</div>
+<!-- Quick Back & System Status Badge -->
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-elevated border border-border-subtle">
+<span class="w-2 h-2 rounded-full bg-rpe-low animate-pulse"></span>
+<span class="font-label-caps text-label-caps text-text-secondary tracking-wider">
+            SISTEMA OPERATIVO
+          </span>
+</div>
+<a class="flex items-center gap-1.5 text-text-secondary hover:text-session-fartlek font-headline-sm text-headline-sm transition-colors group" href="#">
+<span class="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span>
+<span class="hidden md:inline font-body-sm text-body-sm">Volver al Dashboard</span>
+</a>
+</div>
+</div>
+</header>
+<!-- MAIN ERROR CANVAS -->
+<main class="relative z-10 flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 flex flex-col items-center justify-center">
+<!-- ERROR STATE SELECTOR: Interactive Protocol Switcher -->
+
+<!-- ERROR HERO SECTION -->
+<div class="w-full text-center flex flex-col items-center">
+<!-- Tech Badge Tag -->
+<div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-session-fartlek/10 border border-session-fartlek text-session-fartlek mb-4 transition-all" id="error-badge-container"><span class="material-symbols-outlined text-[16px]">explore_off</span><span class="font-label-caps text-label-caps tracking-widest uppercase">ERROR 404 • RUTA NO ENCONTRADA</span></div>
+<!-- Huge Metric-Like Number -->
+<div class="relative my-2 select-none">
+<h1 class="font-display-hero text-display-hero md:text-[140px] md:leading-[140px] tracking-tighter text-session-fartlek neon-glow-volt transition-all duration-300 font-bold" id="error-number">
+          404
+        </h1>
+<div class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-session-fartlek to-transparent opacity-70"></div>
+</div>
+<!-- Main Headline -->
+<h2 class="mt-6 font-headline-lg text-headline-lg font-bold text-text-primary tracking-tight max-w-2xl transition-all" id="error-title">Te has salido del track.</h2>
+<!-- Subtext / Athletic Metaphor -->
+<p class="mt-3 font-body-lg text-body-lg text-text-secondary max-w-2xl transition-all" id="error-description">La sesión, ruta o enlace al que intentas acceder no existe o ha cambiado de recorrido en el macrociclo actual.</p>
+<!-- ATHLETIC TERMINAL / DIAGNOSTIC TELEMETRY -->
+
+<!-- PRIMARY & SECONDARY ACTIONS (CTAs) -->
+<div class="mt-8 flex flex-col sm:flex-row items-center gap-3 w-full justify-center max-w-xl"><a class="w-full sm:w-auto px-7 py-3 rounded-lg bg-session-fartlek text-surface-base font-headline-sm text-headline-sm font-bold flex items-center justify-center gap-2 hover:scale-[1.01] hover:shadow-[0px_0px_20px_rgba(204,255,0,0.35)] active:scale-[0.98] transition-all duration-150" href="#"><span class="material-symbols-outlined text-[20px]">arrow_back</span><span class="">Volver al Dashboard</span></a><a class="w-full sm:w-auto px-6 py-3 rounded-lg bg-transparent border border-border-strong text-text-primary font-headline-sm text-headline-sm hover:border-session-fartlek hover:text-session-fartlek hover:bg-session-fartlek/5 active:scale-[0.98] flex items-center justify-center gap-2 transition-all duration-150" href="#"><span class="material-symbols-outlined text-[18px]">event_upcoming</span><span class="">Ver Próximos Eventos</span></a></div>
+</div>
+<!-- CONTEXTUAL RECOVERY CARDS (BENTO STYLE) -->
+
+</main>
+<!-- FOOTER: Operational Status of Services -->
+<footer class="relative z-20 w-full bg-surface-base border-t border-border-subtle py-4 px-4 md:px-8 mt-auto">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4"><div class="w-full flex items-center justify-center text-text-muted font-body-sm text-body-sm"><span class="font-mono text-[11px]">STRIDE ATHLETICS RC • SISTEMA VOLT 404</span></div></div>
+</footer>
+<!-- Micro-Interaction Logic for Error State Switcher -->
+<script>
+    const stateData = {
+      "404": {
+        code: "404",
+        badge: "ERROR CODE: 404_TRAIL_NOT_FOUND",
+        badgeIcon: "explore_off",
+        badgeColorClasses: "bg-session-fartlek/10 border-session-fartlek text-session-fartlek",
+        title: "Te has salido del track planificado.",
+        desc: "La sesión, evento o enlace al que intentas acceder ha cambiado de recorrido, el evento ha finalizado o la URL no existe en el macrociclo actual del club.",
+        textColor: "text-session-fartlek",
+        glowClass: "neon-glow-volt",
+        route: "/events/madrid-sub330-longrun",
+        latency: "24 ms (ÓPTIMA)",
+        sync: "SINCRONIZADO",
+        syncColor: "text-rpe-low",
+        trace: "#RUN-8842-VX",
+        spineBg: "bg-session-fartlek",
+        ctaText: "Reanudar Carrera (Ir a Dashboard)"
+      },
+      "403": {
+        code: "403",
+        badge: "SECURITY PROTOCOL: 403_ACCESS_RESTRICTED",
+        badgeIcon: "lock",
+        badgeColorClasses: "bg-volume-alert/10 border-volume-alert text-volume-alert",
+        title: "Zona restringida. Spot no confirmado.",
+        desc: "Este entrenamiento específico de umbral anaeróbico o sesión grupal está reservado para atletas con marca acreditada o miembros convocados por el Head Coach.",
+        textColor: "text-volume-alert",
+        glowClass: "neon-glow-amber",
+        route: "/club/elite-fartlek/chat-privado",
+        latency: "19 ms (BAJA)",
+        sync: "AUTORIZACIÓN PENDIENTE",
+        syncColor: "text-volume-alert",
+        trace: "#AUTH-9901-LC",
+        spineBg: "bg-volume-alert",
+        ctaText: "Solicitar Spot al Entrenador"
+      },
+      "500": {
+        code: "500",
+        badge: "SYSTEM OUTAGE: 500_BOXES_PITSTOP_FAILURE",
+        badgeIcon: "error",
+        badgeColorClasses: "bg-rpe-max/10 border-rpe-max text-rpe-max",
+        title: "Parada técnica imprevista en boxes.",
+        desc: "Nuestros servidores de telemetría y tiempos han sufrido un calambre en plena serie. El equipo de ingenieros ya está aplicando hielo y electrolitos al clúster.",
+        textColor: "text-rpe-max",
+        glowClass: "neon-glow-red",
+        route: "/api/v1/telemetry/split-times/sync",
+        latency: "680 ms (DEGRADADA)",
+        sync: "REINTENTANDO DESCONEXIÓN",
+        syncColor: "text-rpe-max",
+        trace: "#ERR-5000-CRASH",
+        spineBg: "bg-rpe-max",
+        ctaText: "Reintentar Sincronización"
+      }
+    };
+
+    function switchState(code) {
+      const data = stateData[code];
+      if (!data) return;
+
+      // Update switcher buttons styling
+      const buttons = ["404", "403", "500"];
+      buttons.forEach(bCode => {
+        const btn = document.getElementById("btn-" + bCode);
+        if (bCode === code) {
+          btn.className = "flex-1 py-2 px-3 rounded-lg text-center transition-all duration-150 flex items-center justify-center gap-1.5 bg-surface-overlay " + (code === '404' ? 'text-session-fartlek border-l-2 border-session-fartlek' : code === '403' ? 'text-volume-alert border-l-2 border-volume-alert' : 'text-rpe-max border-l-2 border-rpe-max') + " shadow-sm";
+        } else {
+          btn.className = "flex-1 py-2 px-3 rounded-lg text-center transition-all duration-150 flex items-center justify-center gap-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-overlay/50";
+        }
+      });
+
+      // Update Hero Elements
+      const errorNumber = document.getElementById("error-number");
+      errorNumber.innerText = data.code;
+      errorNumber.className = "font-display-hero text-display-hero md:text-[140px] md:leading-[140px] tracking-tighter " + data.textColor + " " + data.glowClass + " transition-all duration-300 font-bold";
+
+      const badgeContainer = document.getElementById("error-badge-container");
+      badgeContainer.className = "inline-flex items-center gap-2 px-3.5 py-1 rounded-full transition-all mb-4 " + data.badgeColorClasses;
+      
+      document.getElementById("error-badge-icon").innerText = data.badgeIcon;
+      document.getElementById("error-badge-text").innerText = data.badge;
+
+      document.getElementById("error-title").innerText = data.title;
+      document.getElementById("error-description").innerText = data.desc;
+
+      // Update Telemetry block
+      document.getElementById("telemetry-route").innerText = data.route;
+      document.getElementById("telemetry-latency").innerText = data.latency;
+      
+      const syncElem = document.getElementById("telemetry-sync");
+      syncElem.innerText = data.sync;
+      syncElem.className = "font-headline-sm text-headline-sm mt-0.5 text-[14px] " + data.syncColor;
+
+      document.getElementById("telemetry-trace").innerText = data.trace;
+      
+      const spine = document.getElementById("terminal-accent-spine");
+      spine.className = "absolute top-0 left-0 w-1.5 h-full " + data.spineBg;
+
+      document.getElementById("primary-cta-label").innerText = data.ctaText;
+    }
+  </script>
+
+
+</body></html>

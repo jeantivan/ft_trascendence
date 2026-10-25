@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Quedada Cuestas &amp; Potencia — Volt Run Club</title>
+<!-- Material Symbols & Typography -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&amp;family=Space+Grotesk:wght@400..700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "background": "#10141a",
+            "primary": "#ffffff",
+            "primary-fixed-dim": "#abd600",
+            "session-tirada-larga": "#A855F7",
+            "on-tertiary": "#003824",
+            "on-secondary-fixed-variant": "#004f54",
+            "surface-elevated": "#131923",
+            "surface-dim": "#10141a",
+            "inverse-primary": "#506600",
+            "session-cuestas": "#FF8800",
+            "secondary-fixed": "#7df4ff",
+            "surface-container-highest": "#31353c",
+            "tertiary": "#ffffff",
+            "surface-tint": "#abd600",
+            "surface-container": "#1c2026",
+            "on-background": "#dfe2eb",
+            "on-primary-container": "#556d00",
+            "secondary-container": "#00eefc",
+            "on-surface": "#dfe2eb",
+            "rpe-max": "#EF4444",
+            "surface-overlay": "#1E2638",
+            "session-rodaje": "#00F0FF",
+            "on-tertiary-fixed-variant": "#005236",
+            "surface-container-high": "#262a31",
+            "primary-fixed": "#c3f400",
+            "on-secondary": "#00363a",
+            "session-intervalos": "#FF3366",
+            "error": "#ffb4ab",
+            "surface-bright": "#353940",
+            "text-muted": "#64748B",
+            "surface-variant": "#31353c",
+            "border-subtle": "#253047",
+            "surface-container-low": "#181c22",
+            "on-secondary-fixed": "#002022",
+            "error-container": "#93000a",
+            "text-primary": "#F8FAFC",
+            "inverse-surface": "#dfe2eb",
+            "primary-container": "#c3f400",
+            "rpe-moderate": "#EAB308",
+            "session-fartlek": "#CCFF00",
+            "border-strong": "#374563",
+            "surface-container-lowest": "#0a0e14",
+            "on-surface-variant": "#c4c9ac",
+            "volume-alert": "#FFB800",
+            "on-error-container": "#ffdad6",
+            "on-primary-fixed-variant": "#3c4d00",
+            "text-secondary": "#94A3B8",
+            "tertiary-fixed-dim": "#4edea3",
+            "on-tertiary-container": "#00734e",
+            "on-tertiary-fixed": "#002113",
+            "tertiary-fixed": "#6ffbbe",
+            "inverse-on-surface": "#2d3137",
+            "outline": "#8e9379",
+            "rpe-hard": "#F97316",
+            "secondary-fixed-dim": "#00dbe9",
+            "surface": "#10141a",
+            "secondary": "#d3fbff",
+            "tertiary-container": "#6ffbbe",
+            "on-error": "#690005",
+            "on-primary": "#283500",
+            "outline-variant": "#444933",
+            "on-secondary-container": "#00686f",
+            "on-primary-fixed": "#161e00",
+            "surface-base": "#090D12",
+            "rpe-low": "#10B981"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2.5rem",
+            "space-lg": "1.5rem",
+            "space-xs": "0.25rem",
+            "space-sm": "0.5rem",
+            "margin": "1rem",
+            "gutter": "1.25rem",
+            "margin-tablet": "2rem",
+            "gutter-desktop": "1.75rem",
+            "margin-desktop": "3rem",
+            "space-md": "1rem"
+          },
+          "fontFamily": {
+            "headline-md": ["Space Grotesk"],
+            "headline-sm": ["Space Grotesk"],
+            "headline-lg-mobile": ["Space Grotesk"],
+            "label-caps": ["Space Grotesk"],
+            "body-lg": ["Hanken Grotesk"],
+            "metric-huge": ["Space Grotesk"],
+            "display-hero-mobile": ["Space Grotesk"],
+            "body-md": ["Hanken Grotesk"],
+            "display-hero": ["Space Grotesk"],
+            "body-sm": ["Hanken Grotesk"],
+            "label-badge": ["Space Grotesk"],
+            "headline-lg": ["Space Grotesk"]
+          },
+          "fontSize": {
+            "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+            "headline-lg-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "label-caps": ["11px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+            "body-lg": ["17px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "400" }],
+            "metric-huge": ["44px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+            "display-hero-mobile": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "body-md": ["15px", { "lineHeight": "22px", "letterSpacing": "0", "fontWeight": "400" }],
+            "display-hero": ["56px", { "lineHeight": "64px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400" }],
+            "label-badge": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+            "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      font-size: 20px;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #10141a;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #253047;
+      border-radius: 4px;
+    }
+    .kinetic-glow {
+      box-shadow: 0px 0px 24px -4px rgba(204, 255, 0, 0.18);
+    }
+  </style>
+</head>
+<body class="bg-background text-text-primary min-h-screen flex antialiased selection:bg-session-fartlek selection:text-surface-base font-body-md overflow-x-hidden">
+<!-- ==================== SHARED COMPONENT: SideNavBar ==================== -->
+<aside class="fixed top-0 left-0 h-screen w-64 flex flex-col justify-between bg-surface-elevated border-r border-border-subtle z-50 shrink-0">
+<!-- Header Athlete Profile & Brand -->
+<div class="p-4 border-b border-border-subtle">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-8 h-8 rounded-lg bg-session-fartlek flex items-center justify-center text-surface-base font-bold font-headline-md tracking-tighter">
+          ⚡
+        </div>
+<div>
+<span class="text-headline-md font-headline-md font-bold tracking-tight text-text-primary block leading-none">VOLT RC</span>
+<span class="text-label-caps font-label-caps text-text-muted text-[10px] uppercase tracking-wider block mt-1">High Performance</span>
+</div>
+</div>
+<!-- Current Athlete Pill -->
+<div class="flex items-center gap-3 p-2 rounded-lg bg-surface-overlay border border-border-subtle">
+<img alt="Foto de perfil del atleta de fondo" class="w-10 h-10 rounded-full object-cover border border-session-fartlek" data-alt="Close up athletic portrait of Marcos Soler, male marathon runner with focused intense gaze, wearing a dark technical running singlet with subtle volt yellow details against a moody high-contrast dark gym locker backdrop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBz0lbEXy7FMfRku0BnOrvOkCbiTWw_5SDD3eQUCa4-NDIdU8T4moMacuwRyN_h-3PyK5igZ_OeOdpOCk-vOSvnbI5SWOD_tHU4Gxypc4SvU7y7K6MpmTdGEEmepcayYpG8XUrDgE8bjWjQsOJk_DP9swr7Zg8iKCh3ndMKTiTn7ebjU67eL39YgTSMO2rx3x0mzlquVdZFk9QWAWk2TFFRk7Q7uK3YmrQ3vtUJdNO1qWHPhOfkFFcJvg"/>
+<div class="min-w-0">
+<p class="text-headline-sm font-headline-sm text-text-primary truncate leading-tight">Marcos Soler</p>
+<p class="text-label-caps font-label-caps text-session-fartlek truncate text-[10px]">Sub-3:30 Grupo Avanzado</p>
+</div>
+</div>
+</div>
+<!-- Navigation Tab Links (Active tab: Eventos & Quedadas) -->
+<nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+<!-- Tab 0: Dashboard / Hoy -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md group" href="#">
+<span class="material-symbols-outlined group-hover:text-session-fartlek transition-colors">dashboard</span>
+<span>Dashboard / Hoy</span>
+</a>
+<!-- Tab 1: Mi Club -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md group" href="#">
+<span class="material-symbols-outlined group-hover:text-session-fartlek transition-colors">groups</span>
+<span>Mi Club</span>
+</a>
+<!-- Tab 2: Historial -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md group" href="#">
+<span class="material-symbols-outlined group-hover:text-session-fartlek transition-colors">history</span>
+<span>Historial</span>
+</a>
+<!-- Tab 3: Eventos & Quedadas (ACTIVE STATE via JSON) -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-overlay text-session-fartlek border-l-2 border-session-fartlek font-headline-sm" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">event_upcoming</span>
+<span>Eventos &amp; Quedadas</span>
+</a>
+<!-- Tab 4: Perfil de Club -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md group" href="#">
+<span class="material-symbols-outlined group-hover:text-session-fartlek transition-colors">badge</span>
+<span>Perfil de Club</span>
+</a>
+<!-- Tab 5: Ajustes -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md group" href="#">
+<span class="material-symbols-outlined group-hover:text-session-fartlek transition-colors">settings</span>
+<span>Ajustes</span>
+</a>
+<!-- Quick CTA Button -->
+<div class="pt-4">
+<button class="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border-strong text-text-primary text-label-badge font-label-badge hover:border-session-fartlek hover:text-session-fartlek hover:bg-session-fartlek/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">add_circle</span>
+<span>Registrar Sesión Libre</span>
+</button>
+</div>
+</nav>
+<!-- Footer Controls -->
+<div class="p-3 border-t border-border-subtle space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay text-body-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">help</span>
+<span>Soporte Club</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-secondary hover:text-error hover:bg-surface-overlay text-body-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">logout</span>
+<span>Cerrar Sesión</span>
+</a>
+</div>
+</aside>
+<!-- ==================== MAIN CONTENT WRAPPER ==================== -->
+<div class="pl-64 flex-1 flex flex-col min-h-screen bg-surface-base">
+<!-- ==================== SHARED COMPONENT: TopNavBar ==================== -->
+<header class="docked full-width top-0 sticky z-40 bg-surface-base border-b border-border-subtle flex justify-between items-center w-full px-6 py-3.5 backdrop-blur-md bg-opacity-95">
+<!-- Left side: Breadcrumb & Context Search -->
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 text-body-sm">
+<span class="text-text-muted">Eventos &amp; Quedadas</span>
+<span class="text-text-muted">/</span>
+<span class="text-session-fartlek font-headline-sm">Quedada Presencial #42</span>
+</div>
+</div>
+<!-- Center navigation links -->
+<nav class="hidden lg:flex items-center gap-6">
+<a class="text-text-secondary hover:text-text-primary font-body-sm pb-1 transition-colors" href="#">Semana Actual</a>
+<a class="text-session-fartlek border-b-2 border-session-fartlek pb-1 font-headline-sm" href="#">Macrociclo</a>
+<a class="text-text-secondary hover:text-text-primary font-body-sm pb-1 transition-colors" href="#">Métricas Club</a>
+</nav>
+<!-- Right actions -->
+<div class="flex items-center gap-3">
+<div class="relative">
+<button class="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors">
+<span class="material-symbols-outlined">chat</span>
+</button>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-session-fartlek"></span>
+</div>
+<button class="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="h-5 w-px bg-border-subtle mx-1"></div>
+<div class="flex items-center gap-2 pl-1">
+<img alt="Avatar de Marcos Soler atleta avanzado" class="w-8 h-8 rounded-full object-cover border border-border-strong" data-alt="Athletic runner Marcos Soler portrait thumbnail, sharp profile lighting highlighting jawline and racing bib collar in deep obsidian environment with subtle lime rim reflection." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwT7Eon-Lg15xf9Vy8KfJgU4hLUuwHTyimuhw2L_bv5PfaaryAKEg1UF2sj08x0ml6iKAk4V1ooCukQC3PDBkpTze305JVgp-kaZVOK8LbKFaRh76thrEhD2KDFPXnDkifi-w-2zkSv322eTIco5jcTheWsiiL16-GQs3V8Vku7mOZwwwEPAiIc97s9Vp7eDMa97LFRQrBUZWrfTc9ci-WjiVgmlVV7H2vXyhUYsp92zGlc-KNnoRYqg"/>
+<span class="text-body-sm font-headline-sm text-text-primary hidden sm:inline">Marcos S.</span>
+</div>
+</div>
+</header>
+<!-- ==================== MAIN CONTENT AREA ==================== -->
+<main class="flex-1 p-6 lg:p-8 space-y-6 max-w-[1600px] w-full mx-auto">
+<!-- ==================== TOP HERO / FICHA DEL EVENTO ==================== -->
+<section class="rounded-xl bg-surface-elevated border border-border-subtle p-6 lg:p-7 relative overflow-hidden kinetic-glow">
+<!-- Visual Accent Stripe denoting Session Type (Cuestas = #FF8800) -->
+<div class="absolute top-0 left-0 bottom-0 w-1.5 bg-session-cuestas"></div>
+<div class="flex flex-col lg:flex-row lg:items-start justify-between gap-6 pl-2">
+<!-- Main Event Info -->
+<div class="space-y-4 max-w-3xl">
+<!-- Badges Bar -->
+<div class="flex flex-wrap items-center gap-2.5">
+<!-- Session Type -->
+<span class="px-2.5 py-1 rounded-full text-label-caps font-label-caps bg-session-cuestas/15 text-session-cuestas border border-session-cuestas uppercase tracking-wider flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px]">landscape</span>
+                Cuestas &amp; Potencia
+              </span>
+<!-- Origin Template Session -->
+<span class="px-2.5 py-1 rounded-full text-label-caps font-label-caps bg-surface-overlay text-text-secondary border border-border-subtle flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px]">assignment</span>
+                Plantilla: Plan Maratón Sub-3:30 (Semana 8)
+              </span>
+<!-- Spot Status Badge -->
+<span class="px-2.5 py-1 rounded-full text-label-caps font-label-caps bg-session-fartlek/15 text-session-fartlek border border-session-fartlek flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                Spot Confirmado / Plaza Concedida
+              </span>
+<!-- Live Indicator -->
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps uppercase bg-volume-alert/15 text-volume-alert border border-volume-alert flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-volume-alert animate-ping"></span>
+                Quedada Presencial
+              </span>
+</div>
+<!-- Title & Club -->
+<div>
+<p class="text-label-caps font-label-caps text-text-muted uppercase tracking-wider mb-1">Club Atletismo Retiro Volt · Sede Central Madrid</p>
+<h1 class="text-headline-lg font-headline-lg text-text-primary tracking-tight">
+                Quedada Cuestas &amp; Potencia — Series Ángel Caído
+              </h1>
+</div>
+<!-- Key Logistics Row -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
+<div class="flex items-start gap-2.5 text-body-sm">
+<span class="material-symbols-outlined text-session-fartlek mt-0.5">calendar_month</span>
+<div>
+<p class="font-headline-sm text-text-primary">Jueves, 17 de Octubre</p>
+<p class="text-text-muted">19:30h (Convocatoria puntual)</p>
+</div>
+</div>
+<div class="flex items-start gap-2.5 text-body-sm">
+<span class="material-symbols-outlined text-session-rodaje mt-0.5">pin_drop</span>
+<div>
+<p class="font-headline-sm text-text-primary">Estatua del Ángel Caído</p>
+<p class="text-text-muted">Parque del Retiro, Madrid</p>
+</div>
+</div>
+<div class="flex items-start gap-2.5 text-body-sm">
+<span class="material-symbols-outlined text-session-tirada-larga mt-0.5">sports</span>
+<div>
+<p class="font-headline-sm text-text-primary">Coach Carlos Méndez</p>
+<p class="text-text-muted">Head Coach · Nivel 3 RFEA</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Spot Capacity & Action Widget -->
+<div class="lg:w-80 shrink-0 bg-surface-overlay rounded-lg p-5 border border-border-strong flex flex-col justify-between space-y-4">
+<div>
+<div class="flex justify-between items-baseline mb-2">
+<span class="text-label-caps font-label-caps text-text-muted">Aforo del Evento</span>
+<span class="text-headline-sm font-headline-sm text-session-fartlek">18 / 20 <span class="text-body-sm text-text-secondary font-normal">plazas</span></span>
+</div>
+<!-- Progress bar -->
+<div class="w-full h-2 rounded-full bg-surface-elevated overflow-hidden p-0.5 border border-border-subtle">
+<div class="h-full bg-session-fartlek rounded-full" style="width: 90%;"></div>
+</div>
+<p class="text-label-caps font-label-caps text-volume-alert mt-1.5 flex items-center gap-1 text-[10px]">
+<span class="material-symbols-outlined text-[13px]">info</span>
+                Solo quedan 2 plazas libres disponibles
+              </p>
+</div>
+<!-- Primary Buttons -->
+<div class="space-y-2">
+<button class="w-full py-2.5 px-4 rounded-lg bg-session-fartlek text-surface-base font-headline-sm text-body-sm font-bold flex items-center justify-center gap-2 hover:scale-[1.01] transition-transform shadow-lg shadow-session-fartlek/10">
+<span class="material-symbols-outlined text-[18px]">download</span>
+<span>Descargar Track GPS (.GPX)</span>
+</button>
+<button class="w-full py-2 px-3 rounded-lg border border-border-subtle bg-surface-elevated text-text-secondary font-body-sm hover:border-error hover:text-error transition-colors flex items-center justify-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">person_remove</span>
+<span>Cancelar Asistencia (Liberar Plaza)</span>
+</button>
+</div>
+<!-- Private post-session notice -->
+<div class="pt-2 border-t border-border-subtle/60 flex items-center gap-2 text-text-muted text-[11px] font-label-badge">
+<span class="material-symbols-outlined text-session-rodaje text-[15px]">verified_user</span>
+<span>Feedback individual del Manager disponible post-evento</span>
+</div>
+</div>
+</div>
+<!-- Metric Target HUD Ribbon -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-border-subtle pl-2">
+<div class="bg-surface-base/60 p-3 rounded-lg border border-border-subtle">
+<span class="text-label-caps font-label-caps text-text-muted block">Volumen Estimado</span>
+<span class="text-headline-md font-headline-md text-text-primary font-bold">10.5 <span class="text-body-sm font-normal text-text-secondary">km</span></span>
+</div>
+<div class="bg-surface-base/60 p-3 rounded-lg border border-border-subtle">
+<span class="text-label-caps font-label-caps text-text-muted block">Bloque Principal</span>
+<span class="text-headline-md font-headline-md text-session-cuestas font-bold">8 × 150m <span class="text-body-sm font-normal text-text-secondary">al 6-8%</span></span>
+</div>
+<div class="bg-surface-base/60 p-3 rounded-lg border border-border-subtle">
+<span class="text-label-caps font-label-caps text-text-muted block">Ritmo Base Enfriamiento</span>
+<span class="text-headline-md font-headline-md text-text-primary font-bold">3:40 - 3:55 <span class="text-body-sm font-normal text-text-secondary">/km</span></span>
+</div>
+<div class="bg-surface-base/60 p-3 rounded-lg border border-border-subtle">
+<span class="text-label-caps font-label-caps text-text-muted block">RPE Objetivo Pautado</span>
+<div class="flex items-center gap-2">
+<span class="text-headline-md font-headline-md text-rpe-hard font-bold">8 / 10</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-label-caps uppercase bg-rpe-hard/20 text-rpe-hard border border-rpe-hard">Muy Duro</span>
+</div>
+</div>
+</div>
+</section>
+<!-- ==================== 3-COLUMN HIGH DENSITY GRID ==================== -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+<!-- ==================== LEFT / MAIN COLUMN (5 cols): Sesión, Mapa & Feedback ==================== -->
+<div class="lg:col-span-5 space-y-6">
+<!-- Tactical Session Breakdown -->
+<div class="rounded-xl bg-surface-elevated border border-border-subtle p-5">
+<div class="flex items-center justify-between mb-4 pb-3 border-b border-border-subtle">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-session-cuestas">alt_route</span>
+<h2 class="text-headline-sm font-headline-sm text-text-primary">Plan Táctico de la Sesión</h2>
+</div>
+<span class="text-label-caps font-label-caps text-text-muted">65 min duración total</span>
+</div>
+<!-- Segmented Timeline -->
+<div class="space-y-4">
+<!-- Phase 1: Warmup -->
+<div class="flex items-start gap-3">
+<div class="w-7 h-7 rounded bg-surface-overlay border border-border-subtle flex items-center justify-center text-text-secondary text-body-sm font-bold shrink-0">
+                  01
+                </div>
+<div class="flex-1">
+<div class="flex items-center justify-between">
+<h3 class="text-body-md font-headline-sm text-text-primary">Calentamiento &amp; Activación</h3>
+<span class="text-label-caps font-label-caps text-session-rodaje">3.5 km @ 4:25/km</span>
+</div>
+<p class="text-body-sm text-text-secondary mt-1">
+                    Rodaje continuo desde Plaza de la Independencia bordeando el Paseo de Coches hasta el Ángel Caído. Movilidad articular de tobillos y cadera con el Coach Carlos.
+                  </p>
+</div>
+</div>
+<!-- Phase 2: Technical Drills -->
+<div class="flex items-start gap-3">
+<div class="w-7 h-7 rounded bg-surface-overlay border border-border-subtle flex items-center justify-center text-text-secondary text-body-sm font-bold shrink-0">
+                  02
+                </div>
+<div class="flex-1">
+<div class="flex items-center justify-between">
+<h3 class="text-body-md font-headline-sm text-text-primary">Técnica de Carrera &amp; Salidas</h3>
+<span class="text-label-caps font-label-caps text-session-fartlek">10 minutos</span>
+</div>
+<p class="text-body-sm text-text-secondary mt-1">
+                    4 rectas progresivas de 60m con zancada circular amplia y skipping bajo. Trabajo de bracing de core y oscilación de brazos en rampa.
+                  </p>
+</div>
+</div>
+<!-- Phase 3: Main Set -->
+<div class="flex items-start gap-3 p-3 rounded-lg bg-surface-overlay border border-session-cuestas/30 relative">
+<div class="w-7 h-7 rounded bg-session-cuestas text-surface-base flex items-center justify-center text-body-sm font-bold shrink-0">
+                  03
+                </div>
+<div class="flex-1">
+<div class="flex items-center justify-between">
+<h3 class="text-body-md font-headline-sm text-session-cuestas">Bloque Específico de Cuestas</h3>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps uppercase bg-session-cuestas/20 text-session-cuestas border border-session-cuestas">
+                      RPE 8-9
+                    </span>
+</div>
+<p class="text-body-sm text-text-primary mt-1 font-medium">
+                    8 repeticiones de 150m en Cuesta del Ángel Caído (pendiente 7.2%).
+                  </p>
+<p class="text-body-sm text-text-secondary mt-0.5">
+                    Subida a ritmo anaeróbico pico (3:15–3:25/km equivalente llano). Bajada al trote suave de recuperación activa de 1'30" controlando el impacto.
+                  </p>
+</div>
+</div>
+<!-- Phase 4: Cool Down -->
+<div class="flex items-start gap-3">
+<div class="w-7 h-7 rounded bg-surface-overlay border border-border-subtle flex items-center justify-center text-text-secondary text-body-sm font-bold shrink-0">
+                  04
+                </div>
+<div class="flex-1">
+<div class="flex items-center justify-between">
+<h3 class="text-body-md font-headline-sm text-text-primary">Enfriamiento Regenerativo</h3>
+<span class="text-label-caps font-label-caps text-session-tirada-larga">2.5 km @ 4:45/km</span>
+</div>
+<p class="text-body-sm text-text-secondary mt-1">
+                    Trote en superficie de tierra y estiramientos pasivos guiados frente al Palacio de Cristal.
+                  </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Meeting Point & Map Graphic -->
+<div class="rounded-xl bg-surface-elevated border border-border-subtle p-5 space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-session-fartlek">location_on</span>
+<h2 class="text-headline-sm font-headline-sm text-text-primary">Punto de Encuentro &amp; Logística</h2>
+</div>
+<span class="text-label-badge font-label-badge text-text-secondary flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-rpe-low"></span> Consigna Club Activa
+              </span>
+</div>
+<!-- Stylized Tactical Map Container -->
+<div class="relative w-full h-48 rounded-lg overflow-hidden border border-border-strong group" data-location="Madrid" style="">
+<img alt="Mapa del circuito de cuestas en El Retiro" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Stylized top down satellite perspective athletic running course map inside El Retiro Park Madrid in high contrast obsidian night mode with glowing volt green and amber neon GPS track routes traversing tree-lined alleys." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAe4qrLS0gVkwLBJvkZ7wqo_RtZzSl_xI7_Qm10kJZfFENouZpzHtIXpUw7sfNh1ZC0DqrCqWovKndhKbIO90QI2I_xVqYGc7DAIfb0yJXjxm7AU9TdBrIOKF6xMSHPTJT6f81uLskUeazxRJqomouVwkzzpxBoIdJsOI1Uymk81ao9UXaNd26upgjA6H4yafdYrTuEkvjjo9UNVuGE7hVr2zcieCllvB3II7YkvRPyR98ItjCISItnmw"/>
+<!-- Map Overlay Pins -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface-base/90 via-surface-base/30 to-transparent flex flex-col justify-end p-4">
+<div class="flex items-center justify-between">
+<div class="bg-surface-elevated/90 backdrop-blur-md px-3 py-1.5 rounded border border-border-strong flex items-center gap-2">
+<span class="material-symbols-outlined text-session-cuestas text-[18px]">flag</span>
+<span class="text-body-sm font-headline-sm text-text-primary">Estatua del Ángel Caído (Glorieta)</span>
+</div>
+<a class="px-2.5 py-1 rounded bg-session-fartlek text-surface-base text-label-badge font-label-badge flex items-center gap-1 hover:brightness-110" href="https://maps.google.com" target="_blank">
+<span>Abrir Maps</span>
+<span class="material-symbols-outlined text-[14px]">open_in_new</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Logistic Instructions Grid -->
+<div class="grid grid-cols-2 gap-3 text-body-sm">
+<div class="bg-surface-overlay p-3 rounded-lg border border-border-subtle">
+<p class="font-headline-sm text-text-primary flex items-center gap-1.5 mb-1">
+<span class="material-symbols-outlined text-[16px] text-text-muted">local_parking</span> Aparcamiento
+                </p>
+<p class="text-text-secondary text-[12px]">Parking Alfonso XII o Metro Atocha (L1) a 7 min a pie.</p>
+</div>
+<div class="bg-surface-overlay p-3 rounded-lg border border-border-subtle">
+<p class="font-headline-sm text-text-primary flex items-center gap-1.5 mb-1">
+<span class="material-symbols-outlined text-[16px] text-text-muted">backpack</span> Furgoneta Club
+                </p>
+<p class="text-text-secondary text-[12px]">Custodia de mochilas y cortavientos hasta las 21:00h.</p>
+</div>
+</div>
+</div>
+<!-- Coach Feedback Private Module (Exclusivo Events) -->
+<div class="rounded-xl bg-surface-elevated border border-border-subtle p-5 space-y-3 relative">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-session-rodaje">rate_review</span>
+<h3 class="text-headline-sm font-headline-sm text-text-primary">Feedback Post-Evento (Manager)</h3>
+</div>
+<span class="text-label-caps font-label-caps px-2 py-0.5 rounded bg-surface-overlay text-text-muted border border-border-subtle">
+                Privado con Coach Carlos
+              </span>
+</div>
+<p class="text-body-sm text-text-secondary">
+              Al concluir la sesión, el Head Coach evaluará tu cadencia, postura en pendiente y RPE percibido para sincronizarlo con tu Macrociclo.
+            </p>
+<div class="p-3 rounded-lg bg-surface-overlay border border-border-subtle flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-volume-alert text-[22px]">hourglass_empty</span>
+<div>
+<p class="text-body-sm font-headline-sm text-text-primary">Pendiente de ejecución física</p>
+<p class="text-[12px] text-text-muted">Se desbloqueará tras el check-in presencial en la carpa Volt</p>
+</div>
+</div>
+<button class="px-3 py-1.5 rounded bg-surface-elevated text-text-muted text-label-badge font-label-badge cursor-not-allowed border border-border-subtle" disabled="">
+                Formulario Inactivo
+              </button>
+</div>
+</div>
+</div>
+<!-- ==================== CENTER COLUMN (4 cols): Moderated Event Chat ==================== -->
+<div class="lg:col-span-4 flex flex-col h-[750px] rounded-xl bg-surface-elevated border border-border-subtle overflow-hidden">
+<!-- Chat Header -->
+<div class="p-4 bg-surface-overlay border-b border-border-subtle shrink-0">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="relative">
+<span class="material-symbols-outlined text-session-fartlek">forum</span>
+<span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-rpe-low border-2 border-surface-overlay"></span>
+</div>
+<div>
+<h2 class="text-headline-sm font-headline-sm text-text-primary leading-tight">Chat de la Quedada</h2>
+<p class="text-label-caps font-label-caps text-text-muted text-[10px]">Moderado por Carlos Méndez</p>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps uppercase bg-session-fartlek/10 text-session-fartlek border border-session-fartlek/40">
+                Solo con Plaza
+              </span>
+</div>
+<!-- Pinned Notice by Head Coach -->
+<div class="mt-3 p-2.5 rounded bg-surface-elevated border-l-2 border-session-fartlek border-border-subtle text-[12px] text-text-secondary flex items-start gap-2">
+<span class="material-symbols-outlined text-session-fartlek text-[16px] shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">push_pin</span>
+<p>
+<strong class="text-text-primary font-headline-sm">Nota del Coach:</strong> Traed zapatillas mixtas o de asfalto con buen grip; el firme del Ángel Caído tiene gravilla compacta húmeda.
+              </p>
+</div>
+</div>
+<!-- Chat Messages Body -->
+<div class="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
+<!-- Message 1: Head Coach -->
+<div class="flex items-start gap-2.5">
+<img alt="Avatar de Carlos Méndez Head Coach" class="w-8 h-8 rounded-full object-cover border border-session-fartlek shrink-0" data-alt="Head coach Carlos Mendez male running instructor in dark athletic Volt jacket smiling confidently against sunset track training background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMILqMQvlDMTr123qsMDMZb7r7nZymwpSZtW4wM3q8r-qcw-Rt3pp3MW22DDmdoDyVceZ6PukxqjNVDTKZQDsBM0ciGRQhDFFj6vd36K6cymb8R7hbHnr1VKW4ueXgTJ6ZeASwzLNJjGR4v-KzHoTtSuxJSgI_nikVVm21ImWxLO_BZ9pt4bz31Hdw7iY6L6Vk59urFlz9_qwMsIfl_S_FR_xcXsX6-d3yNsegd1iQGav77rjy57TbTA"/>
+<div class="space-y-1 max-w-[85%]">
+<div class="flex items-center gap-2">
+<span class="text-body-sm font-headline-sm text-text-primary">Carlos Méndez</span>
+<span class="px-1.5 py-0.2 rounded text-[9px] font-label-caps bg-session-fartlek text-surface-base font-bold">COACH</span>
+<span class="text-[11px] text-text-muted">14:15</span>
+</div>
+<div class="p-3 rounded-lg rounded-tl-none bg-surface-overlay border border-border-subtle text-body-sm text-text-primary">
+                  Buenas tardes equipo. Temperatura prevista de 16°C a las 19:30. Haremos 2 grupos de subida según ritmos de serie. ¡Sed rigurosos con la puntualidad!
+                </div>
+</div>
+</div>
+<!-- Message 2: Lucia Ramos -->
+<div class="flex items-start gap-2.5">
+<img alt="Avatar de Lucía Ramos atleta" class="w-8 h-8 rounded-full object-cover border border-border-strong shrink-0" data-alt="Female long distance runner Lucía Ramos wearing running headband in dark gym aesthetic looking motivated and athletic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYYifRniWmhHpw_4ImbuZJcnMn5Bpvn7jd2JnAnB-T5O8ATYLc9qIABLc02X10Of4djlyB1tAVfb0DbHgyBNZqEfDFDsRHJm4qXTaGo4j_I8cfEb864IbU8wnnS3dSeegW0An0izy4IUbqMCB4rLUUjr5fviPNsfU8YYrW1NQp3Bmrsw2R31dDBv6JdA4l2qbV9QN_G-OB4T4MSouqZLh7e5M8fB2fWkv37R5CNIuZnDR1NW4d4HBeBA"/>
+<div class="space-y-1 max-w-[85%]">
+<div class="flex items-center gap-2">
+<span class="text-body-sm font-headline-sm text-text-primary">Lucía Ramos</span>
+<span class="text-[10px] font-label-caps text-text-muted">Sub-3:30</span>
+<span class="text-[11px] text-text-muted">15:02</span>
+</div>
+<div class="p-3 rounded-lg rounded-tl-none bg-surface-overlay border border-border-subtle text-body-sm text-text-primary">
+                  ¿Alguien saldrá rodando desde Nuevos Ministerios para hacer el calentamiento juntos? Paso a las 18:50 por la glorieta.
+                </div>
+</div>
+</div>
+<!-- Message 3: Javier Ortiz -->
+<div class="flex items-start gap-2.5">
+<img alt="Avatar de Javier Ortiz atleta" class="w-8 h-8 rounded-full object-cover border border-border-strong shrink-0" data-alt="Javier Ortiz male athlete wearing neon cap and technical sports vest with intense runner expression." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBRli3cvmRCZpzai-dR8-NkRpMEJTkFYIxTEmB5uqSeS7AObau3HKajqG6sGKE9AUzRn3BGNE1rttw-g7VO4lAjbZoUywIMP1WJHJ56xMbbNtmvVcoSQ4Q4tqCzHvlotp1vua49Up1VZAJ_Ml3ao5_OD_vaZIaXqUiOoFO79cxoEqWvq8dFRktPmyR49e8aKMpCKoP1X5mr7vxazidrPeLfaOtU99aW8_NNIo_Jx1bzVZifwAGVuY3FZA"/>
+<div class="space-y-1 max-w-[85%]">
+<div class="flex items-center gap-2">
+<span class="text-body-sm font-headline-sm text-text-primary">Javier Ortiz</span>
+<span class="text-[10px] font-label-caps text-text-muted">Sub-3:15</span>
+<span class="text-[11px] text-text-muted">15:18</span>
+</div>
+<div class="p-3 rounded-lg rounded-tl-none bg-surface-overlay border border-border-subtle text-body-sm text-text-primary">
+                  Yo me apunto Lucía, te escribo por directo. Llevo bidón de sales para dejarlo en la consigna del club.
+                </div>
+</div>
+</div>
+<!-- Message 4: Marcos Soler (Active User Self Message) -->
+<div class="flex items-start justify-end gap-2.5">
+<div class="space-y-1 max-w-[85%] text-right">
+<div class="flex items-center justify-end gap-2">
+<span class="text-[11px] text-text-muted">16:40</span>
+<span class="text-body-sm font-headline-sm text-session-fartlek">Tú (Marcos Soler)</span>
+</div>
+<div class="p-3 rounded-lg rounded-tr-none bg-surface-container-high border border-session-fartlek/30 text-body-sm text-text-primary text-left">
+                  Perfecto. Carlos, ¿las recuperaciones se caminan o se trotan suave? Vengo de tirada el martes y tengo los sóleos algo cargados.
+                </div>
+</div>
+<img alt="Avatar de Marcos Soler" class="w-8 h-8 rounded-full object-cover border border-session-fartlek shrink-0" data-alt="Athletic runner Marcos Soler close up portrait with determined expression in dark sporty setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKLVwbv5M_VQrbiwmsAhPhQvUipzk30zq_TxALw_s1ASS3C2sZEyFIikPOqiKPxV9_lefoqILVeMSbnV3di-NnbYsoEPzM2kD6l6fxex00p5-0GKrvGwu5HeI-4qrRvq-HT-sAe1DgXsJFEs91et9eaZgz8q7CtP9ujVAzjcl74OAzP0v6999sBDbJdjufkogBIF_EMg9jMV99BB2z1UUAY5zQVU4HicIfQueBBaIvcbHhpzpmdB-7iQ"/>
+</div>
+<!-- Message 5: Coach Reply -->
+<div class="flex items-start gap-2.5">
+<img alt="Avatar de Carlos Méndez Head Coach" class="w-8 h-8 rounded-full object-cover border border-session-fartlek shrink-0" data-alt="Head coach Carlos Mendez male running instructor in dark athletic Volt jacket smiling confidently against sunset track training background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCd3Coq9Clnx67oFZcbVWjC0j9qfE3hUhr4dLuvz4l2JbUzY0oaw0gSyRaL-3a1RNinEPpXMuLsNMtytTpeXMZuZwc3cXlZQ-m4BQGr7ExGKF8y0W2NLD4ayHSj_d8853YZ7LlOd-u5uNKkHhpOsz3P1IosvqSTWo2r-I8vriRG3XrL8nbwewNwZg6xuSJbQKPQj_HLRpcUste78rqOGiR-qDcgSrykP30kvkB-wcVMQWWynHl-8_WJ1A"/>
+<div class="space-y-1 max-w-[85%]">
+<div class="flex items-center gap-2">
+<span class="text-body-sm font-headline-sm text-text-primary">Carlos Méndez</span>
+<span class="px-1.5 py-0.2 rounded text-[9px] font-label-caps bg-session-fartlek text-surface-base font-bold">COACH</span>
+<span class="text-[11px] text-text-muted">16:48</span>
+</div>
+<div class="p-3 rounded-lg rounded-tl-none bg-surface-overlay border border-border-subtle text-body-sm text-text-primary">
+                  @Marcos Soler camina los primeros 30 segundos y trote bajísimo el resto. Te vigilaré la pisada en la tercera repetición.
+                </div>
+</div>
+</div>
+</div>
+<!-- Chat Input -->
+<div class="p-3 bg-surface-overlay border-t border-border-subtle shrink-0">
+<form class="flex items-center gap-2" onsubmit="event.preventDefault();">
+<button class="p-2 text-text-secondary hover:text-text-primary hover:bg-surface-elevated rounded-lg transition-colors" type="button">
+<span class="material-symbols-outlined text-[20px]">alternate_email</span>
+</button>
+<input class="flex-1 bg-surface-base border border-border-subtle rounded-lg px-3 py-2 text-body-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-session-fartlek transition-colors" placeholder="Escribe al grupo de la quedada..." type="text"/>
+<button class="p-2 rounded-lg bg-session-fartlek text-surface-base hover:brightness-110 transition-all font-bold" type="submit">
+<span class="material-symbols-outlined text-[20px]">send</span>
+</button>
+</form>
+</div>
+</div>
+<!-- ==================== RIGHT COLUMN (3 cols): Roster & Contact Management ==================== -->
+<div class="lg:col-span-3 space-y-6">
+<!-- Roster Card -->
+<div class="rounded-xl bg-surface-elevated border border-border-subtle p-5">
+<div class="flex items-center justify-between pb-3 border-b border-border-subtle">
+<div>
+<h2 class="text-headline-sm font-headline-sm text-text-primary">Atletas Confirmados</h2>
+<p class="text-label-caps font-label-caps text-text-muted">18 / 20 Participantes</p>
+</div>
+<span class="w-3 h-3 rounded-full bg-session-fartlek animate-pulse"></span>
+</div>
+<!-- Section 1: Staff / Coaches Present -->
+<div class="mt-4 space-y-3">
+<span class="text-label-caps font-label-caps text-text-muted uppercase text-[10px]">Cuerpo Técnico Presente</span>
+<!-- Coach 1 -->
+<div class="flex items-center justify-between p-2 rounded-lg bg-surface-overlay border border-border-subtle">
+<div class="flex items-center gap-2.5">
+<img alt="Coach Carlos Méndez" class="w-8 h-8 rounded-full object-cover border border-session-fartlek" data-alt="Carlos Mendez athletic head coach portrait in dark club apparel with serious professional gaze." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDabZm0w7bjXlM4z0mdwo1rFraqNHZK40MqRzI7Mkz-7hj9VJc7SuViDsUTwMgjSaYfIf-iluwkrXCjHjd0DH8RjRaSqWW0ByoHJl-iu-nid0Pl4AlMcN3kGubQiNBQoAW5lm4FCCKWNHgkqLMYe_iWB4yhVBWAjjgCJAWbm3JFhxHc2eq3PesxEnljMmUTN6cOHcVEZ49RYpNZSZ6k2v0C_0u0gZjHDXy0agfhvD-EIcgmNIGcg51oFQ"/>
+<div>
+<p class="text-body-sm font-headline-sm text-text-primary leading-none">Carlos Méndez</p>
+<span class="text-[10px] text-session-fartlek font-label-caps">Head Coach</span>
+</div>
+</div>
+<button class="text-text-secondary hover:text-session-fartlek p-1" title="Contacto Directo">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+</button>
+</div>
+<!-- Coach 2 -->
+<div class="flex items-center justify-between p-2 rounded-lg bg-surface-overlay border border-border-subtle">
+<div class="flex items-center gap-2.5">
+<img alt="Elena Vega Coach Asistente" class="w-8 h-8 rounded-full object-cover border border-border-strong" data-alt="Elena Vega assistant running trainer portrait wearing athletic visor and high visibility volt whistle cord." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZVhT8M3R7KSmgb-ulxX0ftwbIFZi3OPQrhUA07hPiNBlUcdxjm_qx9LfObzXpDmqgblkYpBgcE-EOiVFLjRj0qCHDs09gLwI8VPRGIKR9_3DnmPp5i-NyS5jePmSv8IL2sgC_igPjwtQJk_lKdowXuyCtoJ_Ab1ReWz6jmRM72IR0ZaZOgDIwuqZ-P7Km8RSt4l9GJVjFpKpvEEywVt2J3Y0_hj4mGAaajY93fOLskxNCYSGAziHXhg"/>
+<div>
+<p class="text-body-sm font-headline-sm text-text-primary leading-none">Elena Vega</p>
+<span class="text-[10px] text-text-secondary font-label-caps">Coach Asistente</span>
+</div>
+</div>
+<button class="text-text-secondary hover:text-session-fartlek p-1" title="Contacto Directo">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+</button>
+</div>
+</div>
+<!-- Section 2: Athletes Roster with Contact Actions -->
+<div class="mt-5 space-y-2.5">
+<span class="text-label-caps font-label-caps text-text-muted uppercase text-[10px]">Atletas con Plaza Concedida</span>
+<!-- Athlete 1: Lucía -->
+<div class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-overlay transition-colors">
+<div class="flex items-center gap-2.5">
+<img alt="Lucía Ramos" class="w-7 h-7 rounded-full object-cover" data-alt="Runner Lucía Ramos athletic female athlete portrait in monochrome lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGpWJPkRUotWeeURrLijuFRvfv1RXn-D36OjKqbc5TCc0oz-C8mwukX75JOBvg6k7trEKErN775-MVcN0I2ntMwO6PJtSQv-zDECHrkknJ_rsp8ePYopzP8BmRQCYx33afh_YU0vsbRVdatk_HoTEreoxw97THU4foMjzk5Qw4vD_RoPVkoNedhGltxND2NQrxjcQIz7eEUfRNbw1d4XBSP2Imj_32yR78znT2t-fna95ZkuZLfou3XA"/>
+<div>
+<p class="text-body-sm font-headline-sm text-text-primary leading-none">Lucía Ramos</p>
+<p class="text-[11px] text-text-muted">@luciarun · Sub-3:30</p>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-badge bg-surface-base text-text-secondary border border-border-subtle">
+                  Contacto
+                </span>
+</div>
+<!-- Athlete 2: Javier -->
+<div class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-overlay transition-colors">
+<div class="flex items-center gap-2.5">
+<img alt="Javier Ortiz" class="w-7 h-7 rounded-full object-cover" data-alt="Runner Javier Ortiz male marathon runner profile picture with sports glasses." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB13FcNsdWRNqxdi1N527mb9LLSnJsoAxT1W_Aq4Sotwx8k6ETE0-Ylg-SUjhiW32ADwynRptgzM3ez2_wvQu8280VMSzXMCU2s82SNzQQFXAYeb2ktp7S75b0qNH1ckhJDYL0Q-8UqrvOEl2BMtst7qxeGQ7FstRwffqgHgLU8opHmDIDFq6-vwLDSMUflY4qAEBescBRCV3qa47s0G2MQzK8RPLXsOLp1WprjpMT_lvCmPcJ9CrccHQ"/>
+<div>
+<p class="text-body-sm font-headline-sm text-text-primary leading-none">Javier Ortiz</p>
+<p class="text-[11px] text-text-muted">@javi_ortiz · Sub-3:15</p>
+</div>
+</div>
+<button class="px-2 py-0.5 rounded text-[10px] font-label-badge bg-session-fartlek/10 text-session-fartlek hover:bg-session-fartlek hover:text-surface-base transition-colors border border-session-fartlek/30">
+                  + Contacto
+                </button>
+</div>
+<!-- Athlete 3: Marta Beltrán -->
+<div class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-overlay transition-colors">
+<div class="flex items-center gap-2.5">
+<img alt="Marta Beltrán" class="w-7 h-7 rounded-full object-cover" data-alt="Marta Beltran female athlete wearing technical Volt running cap portrait in dramatic dark background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTBpQoIEfsTvT0VS0Xx_zq1ZXFJNHI0V85wWLPDMDtxgFyd5Ub10Cozk22baVuS6_XGR7FI22hkYh_cLRela9e19cKzH3oQVnuvdWVAzrEQtV5BeaibejGFAOnLhHEHChTlXdj7uvhAACiwSShRxVs3MYGtAJGvIDgBTmA8RaEeb3NWck1EYtpWFbnFjNQ1k2-ZAQRc0vb-BljHly3DZPbkh6FCeoo9navrxTxCBn2a-1Sm1FqACYiUg"/>
+<div>
+<p class="text-body-sm font-headline-sm text-text-primary leading-none">Marta Beltrán</p>
+<p class="text-[11px] text-text-muted">@marta_b · Sub-3:30</p>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-badge bg-surface-base text-text-secondary border border-border-subtle">
+                  Contacto
+                </span>
+</div>
+<!-- Athlete 4: Sergio Pardo -->
+<div class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-overlay transition-colors">
+<div class="flex items-center gap-2.5">
+<img alt="Sergio Pardo" class="w-7 h-7 rounded-full object-cover" data-alt="Sergio Pardo male cross country runner portrait smiling slightly in dark running apparel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC935tRw8zCo81tL6E6jjBVNGM_iPrZVceA9OIKPk3RL0sTt5e5TpgNnGsecu83cItxVetLoLQOvk9E97h0K38nEO7WGL92FFy1ZyyPWh6BNr5uSzi_ka6IkluFYR8b-5RVlKD8rE0ChKko-_FJ1u2dJbKWfGZP_WZiSALdU7EwGClN11GrszDYKgCDGfkK_YbZqgKGcf2idHFVsmpAcl1RZeJl6QHbjWeNzTeSsnKvqx5pfp0KVXomKg"/>
+<div>
+<p class="text-body-sm font-headline-sm text-text-primary leading-none">Sergio Pardo</p>
+<p class="text-[11px] text-text-muted">@spardo · Sub-3:45</p>
+</div>
+</div>
+<span class="text-[10px] font-label-badge text-volume-alert bg-volume-alert/10 px-1.5 py-0.5 rounded">
+                  Solicitud enviada
+                </span>
+</div>
+<!-- Athlete 5: Marcos Soler (Self) -->
+<div class="flex items-center justify-between p-2 rounded-lg bg-surface-overlay/80 border border-session-fartlek/40">
+<div class="flex items-center gap-2.5">
+<img alt="Marcos Soler" class="w-7 h-7 rounded-full object-cover border border-session-fartlek" data-alt="Marcos Soler runner portrait photo with volt highlight rim." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZoqFfHg1zwQiJO2kGoB-pK_cHvQKRydGm6XbSwhMDJdZ_EfcJ-Uj5zY-NwL5Bh0tzGu5dHwmxoIwqUgD_QXIRtmky8y1V-I7C4VgtNs3BTJSlCn4iYrJUxvhj5UvJKfwmx5ZLsGu2u6J7nQEJG42QReSGODcAEe8CMXWZVotnSnpnxx3faJbLtoFiFHwxATQLYzU6wzRHnLT9bhMWHv-6kTw0GT1VpQewdTtlROhyq3EYwXv0p3izRg"/>
+<div>
+<p class="text-body-sm font-headline-sm text-session-fartlek leading-none">Tú (Marcos Soler)</p>
+<p class="text-[11px] text-text-muted">Asistencia Confirmada</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-session-fartlek text-[18px]">verified</span>
+</div>
+</div>
+<!-- Show more participants toggle -->
+<button class="w-full mt-3 py-2 text-center text-[12px] font-label-badge text-text-secondary hover:text-text-primary transition-colors border-t border-border-subtle pt-3">
+              Ver los 18 confirmados ↓
+            </button>
+</div>
+<!-- Spot Requests Queue / Lista de Espera (Glosario Dominio: Spot Requests) -->
+<div class="rounded-xl bg-surface-elevated border border-border-subtle p-5 space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-volume-alert text-[18px]">pending</span>
+<h3 class="text-headline-sm font-headline-sm text-text-primary">Solicitudes de Plaza</h3>
+</div>
+<span class="text-[11px] font-label-badge bg-surface-overlay px-2 py-0.5 rounded text-volume-alert border border-volume-alert/30">
+                4 en espera
+              </span>
+</div>
+<p class="text-[12px] text-text-secondary">
+              Atletas en lista de espera aguardando aprobación del Head Coach para liberar plaza si hay bajas.
+            </p>
+<div class="space-y-2 pt-1">
+<div class="flex items-center justify-between p-2 rounded bg-surface-overlay text-[12px]">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-border-subtle flex items-center justify-center text-[10px] font-bold text-text-secondary">
+                    AR
+                  </div>
+<span class="text-text-primary">Álvaro Ruiz</span>
+</div>
+<span class="text-[10px] font-label-caps text-text-muted">Turno #1</span>
+</div>
+<div class="flex items-center justify-between p-2 rounded bg-surface-overlay text-[12px]">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-border-subtle flex items-center justify-center text-[10px] font-bold text-text-secondary">
+                    CP
+                  </div>
+<span class="text-text-primary">Carmen Posadas</span>
+</div>
+<span class="text-[10px] font-label-caps text-text-muted">Turno #2</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Global Footer Minimal Anchor -->
+<footer class="p-6 border-t border-border-subtle bg-surface-base text-text-muted text-body-sm flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-session-fartlek"></span>
+<span>Volt Run Club Engine v4.8 · Periodización Avanzada &amp; Quedadas Oficiales</span>
+</div>
+<div class="flex items-center gap-4 text-[12px]">
+<span>Retiro District, Madrid</span>
+<span>•</span>
+<span>Protocolo de Seguridad RFEA Activo</span>
+</div>
+</footer>
+</div>
+</body></html>
