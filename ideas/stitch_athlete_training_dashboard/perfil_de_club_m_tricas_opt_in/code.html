@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Perfil de Club - Marcos Soler | STRIDE VOLT RC</title>
+<!-- Google Fonts: Space Grotesk & Hanken Grotesk -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&amp;family=Space+Grotesk:wght@300..700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Design System Tailwind Configuration -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-error": "#690005",
+            "rpe-max": "#EF4444",
+            "session-tirada-larga": "#A855F7",
+            "background": "#10141a",
+            "border-subtle": "#253047",
+            "secondary-fixed-dim": "#00dbe9",
+            "primary-fixed": "#c3f400",
+            "on-error-container": "#ffdad6",
+            "surface": "#10141a",
+            "on-secondary-fixed": "#002022",
+            "tertiary-fixed-dim": "#4edea3",
+            "text-muted": "#64748B",
+            "surface-container-low": "#181c22",
+            "inverse-on-surface": "#2d3137",
+            "inverse-surface": "#dfe2eb",
+            "surface-bright": "#353940",
+            "on-background": "#dfe2eb",
+            "tertiary": "#ffffff",
+            "outline-variant": "#444933",
+            "error-container": "#93000a",
+            "text-secondary": "#94A3B8",
+            "border-strong": "#374563",
+            "on-primary-fixed-variant": "#3c4d00",
+            "surface-tint": "#abd600",
+            "on-secondary-container": "#00686f",
+            "rpe-hard": "#F97316",
+            "surface-dim": "#10141a",
+            "on-tertiary": "#003824",
+            "on-primary-fixed": "#161e00",
+            "surface-container-highest": "#31353c",
+            "primary-container": "#c3f400",
+            "surface-elevated": "#131923",
+            "session-rodaje": "#00F0FF",
+            "rpe-low": "#10B981",
+            "secondary-container": "#00eefc",
+            "on-surface": "#dfe2eb",
+            "text-primary": "#F8FAFC",
+            "on-secondary": "#00363a",
+            "surface-base": "#090D12",
+            "surface-variant": "#31353c",
+            "tertiary-container": "#6ffbbe",
+            "on-primary": "#283500",
+            "surface-container-lowest": "#0a0e14",
+            "session-fartlek": "#CCFF00",
+            "primary": "#ffffff",
+            "primary-fixed-dim": "#abd600",
+            "on-surface-variant": "#c4c9ac",
+            "tertiary-fixed": "#6ffbbe",
+            "on-primary-container": "#556d00",
+            "volume-alert": "#FFB800",
+            "secondary-fixed": "#7df4ff",
+            "on-tertiary-fixed": "#002113",
+            "on-tertiary-fixed-variant": "#005236",
+            "session-intervalos": "#FF3366",
+            "surface-container": "#1c2026",
+            "on-tertiary-container": "#00734e",
+            "surface-overlay": "#1E2638",
+            "surface-container-high": "#262a31",
+            "secondary": "#d3fbff",
+            "inverse-primary": "#506600",
+            "rpe-moderate": "#EAB308",
+            "outline": "#8e9379",
+            "on-secondary-fixed-variant": "#004f54",
+            "session-cuestas": "#FF8800",
+            "error": "#ffb4ab"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-lg": "1.5rem",
+            "margin": "1rem",
+            "margin-tablet": "2rem",
+            "space-xl": "2.5rem",
+            "space-xs": "0.25rem",
+            "margin-desktop": "3rem",
+            "gutter": "1.25rem",
+            "gutter-desktop": "1.75rem",
+            "space-md": "1rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "body-sm": ["Hanken Grotesk"],
+            "metric-huge": ["Space Grotesk"],
+            "display-hero-mobile": ["Space Grotesk"],
+            "headline-md": ["Space Grotesk"],
+            "headline-sm": ["Space Grotesk"],
+            "body-lg": ["Hanken Grotesk"],
+            "headline-lg": ["Space Grotesk"],
+            "label-caps": ["Space Grotesk"],
+            "body-md": ["Hanken Grotesk"],
+            "label-badge": ["Space Grotesk"],
+            "display-hero": ["Space Grotesk"],
+            "headline-lg-mobile": ["Space Grotesk"]
+          },
+          "fontSize": {
+            "body-sm": ["13px", { "lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400" }],
+            "metric-huge": ["44px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+            "display-hero-mobile": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+            "body-lg": ["17px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "400" }],
+            "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "label-caps": ["11px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+            "body-md": ["15px", { "lineHeight": "22px", "letterSpacing": "0", "fontWeight": "400" }],
+            "label-badge": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+            "display-hero": ["56px", { "lineHeight": "64px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+            "headline-lg-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #090D12;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #253047;
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #374563;
+    }
+  </style>
+</head>
+<body class="bg-surface-base text-text-primary antialiased min-h-screen flex selection:bg-session-fartlek selection:text-surface-base font-body-md text-body-md overflow-x-hidden">
+<!-- ========================================================================= -->
+<!-- 1. LEFT RAIL NAVIGATION (SideNavBar Shared Component)                    -->
+<!-- ========================================================================= -->
+<aside class="fixed top-0 left-0 h-screen w-64 flex flex-col justify-between bg-surface-elevated dark:bg-surface-elevated border-r border-border-subtle dark:border-border-subtle z-50 shrink-0">
+<!-- Top Block: Brand Header & Athlete Info -->
+<div class="p-4 flex flex-col gap-6">
+<!-- Brand Logo Anchor -->
+<div class="flex items-center gap-3 px-2 pt-1">
+<div class="w-8 h-8 rounded-lg bg-session-fartlek flex items-center justify-center text-surface-base shadow-[0px_0px_16px_rgba(204,255,0,0.3)]">
+<span class="material-symbols-outlined font-bold text-[20px]" data-icon="bolt">bolt</span>
+</div>
+<div class="flex flex-col">
+<span class="text-headline-md font-headline-md font-bold tracking-tight text-text-primary dark:text-text-primary leading-none">STRIDE VOLT</span>
+<span class="text-label-caps font-label-caps text-session-fartlek tracking-widest mt-0.5">PERFORMANCE RC</span>
+</div>
+</div>
+<!-- Athlete Mini-Card / Header -->
+<div class="p-3 rounded-xl bg-surface-overlay border border-border-subtle flex items-center gap-3">
+<div class="relative w-11 h-11 rounded-full overflow-hidden shrink-0 ring-2 ring-session-fartlek/40">
+<img alt="Foto de perfil del atleta de fondo" class="w-full h-full object-cover" data-alt="Athletic high-contrast close-up portrait of Marcos Soler, an elite endurance runner with focused eyes, wearing a dark technical running jersey with neon volt accents, set against a low-key nocturnal track backdrop illuminated by cool cyan and warm amber stadium rim lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6j4vNIZjRE4GTRV6F8KBS8Vw1xRqFwpCDoJniQ4qNmpaULAnNnzbRCPSFjy1N5JjKulWE1vc7uYbRlVfS2fh5KYU7_qJBX0EAm9eCvSSB34BAadYbElSfClrpambBkJrqhskvx8XQd5XbnoEO0Uecuero_yy8L9qKjLqRbz0xz2J_rF5c0Lnox9lOzsMoEZPp6_nVnnYDWY10Ni8OStFtV4jzkLnYwmekES2Ap6wmGouvRK-LrJJnLA"/>
+<span class="absolute bottom-0 right-0 w-3 h-3 bg-session-fartlek rounded-full ring-2 ring-surface-base"></span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="text-headline-sm font-headline-sm text-text-primary truncate">Marcos Soler</span>
+<span class="text-label-caps font-label-caps text-text-secondary truncate mt-0.5">Sub-3:30 Grupo Avanzado</span>
+</div>
+</div>
+<!-- Primary In-App Nav Tabs -->
+<nav class="flex flex-col gap-1">
+<!-- 1. Dashboard / Hoy -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="dashboard">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard / Hoy</span>
+</a>
+<!-- 2. Mi Club -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="groups">groups</span>
+<span class="font-body-md text-body-md">Mi Club</span>
+</a>
+<!-- 3. Historial -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="history">history</span>
+<span class="font-body-md text-body-md">Historial</span>
+</a>
+<!-- 4. Eventos & Quedadas -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="event_upcoming">event_upcoming</span>
+<span class="font-body-md text-body-md">Eventos &amp; Quedadas</span>
+<span class="ml-auto px-1.5 py-0.5 rounded text-[10px] font-label-caps bg-session-intervalos/15 text-session-intervalos border border-session-intervalos/30">2</span>
+</a>
+<!-- 5. Perfil de Club (ACTIVE ITEM) -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-overlay text-session-fartlek border-l-2 border-session-fartlek font-headline-sm active:scale-[0.99] shadow-[0px_0px_20px_-4px_rgba(204,255,0,0.15)]" href="#">
+<span class="material-symbols-outlined text-[20px] text-session-fartlek" data-icon="badge">badge</span>
+<span class="font-headline-sm text-headline-sm">Perfil de Club</span>
+</a>
+<!-- 6. Ajustes -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-md active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">Ajustes</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Block: CTA & Secondary Links -->
+<div class="p-4 border-t border-border-subtle flex flex-col gap-3">
+<!-- CTA: Registrar Sesión Libre -->
+<button class="w-full py-2.5 px-3 rounded-lg bg-session-fartlek text-surface-base font-headline-sm text-headline-sm flex items-center justify-center gap-2 hover:shadow-[0px_0px_18px_rgba(204,255,0,0.35)] transition-all duration-150 active:scale-95">
+<span class="material-symbols-outlined text-[20px] font-bold" data-icon="add">add</span>
+<span>Registrar Sesión Libre</span>
+</button>
+<!-- Footer Tabs -->
+<div class="flex flex-col gap-1 pt-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-overlay transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="help">help</span>
+<span>Soporte Club</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted hover:text-rpe-max hover:bg-surface-overlay transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="logout">logout</span>
+<span>Cerrar Sesión</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- MAIN WORKSPACE / CONTENT CANVAS                                          -->
+<!-- ========================================================================= -->
+<main class="ml-64 flex-1 flex flex-col min-h-screen bg-surface-base custom-scrollbar pb-16">
+<!-- TOP HEADER BAR: Sticky System Header (Conforming to TopNavBar JSON Anchor) -->
+<header class="docked full-width top-0 sticky z-40 bg-surface-base border-b border-border-subtle px-8 py-3.5 flex justify-between items-center backdrop-blur-md bg-opacity-95">
+<!-- Search on left -->
+<div class="flex items-center gap-6">
+<div class="relative w-80">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-[18px]" data-icon="search">search</span>
+<input class="w-full bg-surface-elevated border border-border-subtle rounded-lg pl-9 pr-4 py-1.5 text-body-sm font-body-sm text-text-primary placeholder:text-text-muted focus:border-session-fartlek focus:ring-0 focus:outline-none transition-colors" placeholder="Buscar corredores, grupos o rutas en Retiro..." type="text"/>
+</div>
+<!-- Global Quick Nav Cluster -->
+<nav class="hidden xl:flex items-center gap-6">
+<a class="text-text-secondary hover:text-text-primary font-body-sm text-body-sm pb-1 transition-colors" href="#">Semana Actual</a>
+<a class="text-text-secondary hover:text-text-primary font-body-sm text-body-sm pb-1 transition-colors" href="#">Macrociclo</a>
+<a class="text-text-secondary hover:text-text-primary font-body-sm text-body-sm pb-1 transition-colors" href="#">Métricas Club</a>
+</nav>
+</div>
+<!-- Trailing Action Icons & Primary CTA -->
+<div class="flex items-center gap-4">
+<!-- Notifications button -->
+<button class="relative p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors" title="Notificaciones">
+<span class="material-symbols-outlined text-[20px]" data-icon="notifications">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-session-fartlek"></span>
+</button>
+<!-- Club Chat button -->
+<button class="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-overlay transition-colors" title="Chat de Equipo">
+<span class="material-symbols-outlined text-[20px]" data-icon="chat">chat</span>
+</button>
+<div class="h-5 w-px bg-border-subtle mx-1"></div>
+<!-- Mini profile avatar indicator -->
+<div class="flex items-center gap-2.5 pl-1 cursor-pointer">
+<img alt="Avatar de Marcos Soler atleta avanzado" class="w-8 h-8 rounded-full object-cover ring-1 ring-border-strong" data-alt="Editorial close-up athletic portrait of Spanish marathon runner Marcos Soler, wearing a high-performance headband with intense focused gaze, surrounded by soft atmospheric stadium lights under a dark night sky." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBO61rE8rJO2X1G1XxyirdLMYFsYYHXb2g5GwDwOp_Qd9UjXEbHHmGQO8s6CkQJG7cae7DX4HSYjKojSXjF42QUtNKbeTl2wVf1mAnyCx2Ree8YPWMOA1zxPrc_qm9rDUwJj8Hnd8303HKnyd7FOQgLe8pWNEdPJqVBviDvwNMSOkORxwuTC-k8r1JkB3_9ITzw3vGGvJSieWpIFD7aapschwyHCgFFeu5dY_U0UV9KYv01oPS44BLJBQ"/>
+<span class="font-headline-sm text-body-sm text-text-primary hidden md:inline">Marcos S.</span>
+</div>
+</div>
+</header>
+<!-- CONTENT WRAPPER -->
+<div class="px-8 pt-8 pb-12 max-w-[1440px] w-full mx-auto flex flex-col gap-8">
+<!-- ===================================================================== -->
+<!-- 2. CABECERA PRINCIPAL: TÍTULO, SUBTÍTULO, PRIVACIDAD & TABS            -->
+<!-- ===================================================================== -->
+<div class="flex flex-col gap-4 border-b border-border-subtle pb-6">
+<div class="flex flex-wrap items-center justify-between gap-4">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-3">
+<h1 class="text-headline-lg font-headline-lg text-text-primary tracking-tight">Mi Perfil de Club</h1>
+<span class="px-2.5 py-1 rounded-full text-label-caps font-label-caps bg-session-rodaje/15 text-session-rodaje border border-session-rodaje/30 flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-session-rodaje animate-pulse"></span>
+                CONECTADO AL CLUB
+              </span>
+</div>
+<p class="text-body-lg font-body-lg text-text-secondary">
+              Visibilidad e identidad compartida dentro de <strong class="text-text-primary font-headline-sm">Club Atletismo Retiro Volt</strong>
+</p>
+</div>
+<!-- Badge indicador de Privacidad Colectiva -->
+<div class="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-surface-elevated border border-border-strong/70 shadow-sm">
+<span class="material-symbols-outlined text-session-fartlek text-[20px]" data-icon="shield">shield</span>
+<div class="flex flex-col">
+<span class="text-label-caps font-label-caps text-text-muted">ÁMBITO DE VISIBILIDAD</span>
+<span class="text-body-sm font-body-sm text-text-primary font-medium">Solo Miembros de Retiro Volt</span>
+</div>
+<span class="material-symbols-outlined text-text-muted text-[16px] ml-1" data-icon="lock">lock</span>
+</div>
+</div>
+<!-- Sub-navigation tabs: Configuración vs Vista previa pública en el Club -->
+<div class="flex items-center gap-6 mt-2">
+<button class="text-session-fartlek border-b-2 border-session-fartlek pb-2 font-headline-sm text-headline-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="tune">tune</span>
+            Configuración &amp; Privacidad
+          </button>
+<button class="text-text-secondary hover:text-text-primary font-body-md text-body-md pb-2 flex items-center gap-2 transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="visibility">visibility</span>
+            Vista previa pública en el Club
+            <span class="px-1.5 py-0.2 rounded text-[10px] font-label-caps bg-surface-overlay text-text-muted border border-border-subtle">Simulación</span>
+</button>
+</div>
+</div>
+<!-- ===================================================================== -->
+<!-- 3. IDENTIDAD BASE (Siempre visible para compañeros del Club)          -->
+<!-- ===================================================================== -->
+<section class="bg-surface-elevated border border-border-subtle rounded-2xl p-6 relative overflow-hidden">
+<!-- Subtle Neon Glow Spine -->
+<div class="absolute top-0 left-0 bottom-0 w-1.5 bg-session-rodaje"></div>
+<div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+<!-- Athlete Identity Cluster -->
+<div class="flex items-center gap-5">
+<div class="relative w-24 h-24 rounded-2xl overflow-hidden ring-2 ring-border-strong shrink-0 bg-surface-overlay">
+<img alt="Avatar ampliado de Marcos Soler" class="w-full h-full object-cover" data-alt="Intense high-performance portrait of Spanish runner Marcos Soler in a black technical athletics singlets with lime-green piping, droplets of sweat on forehead, standing under the crisp architectural canopy of Parque del Retiro at sunrise with high-contrast sharp lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbgOz-Z-BP3ggvBKPq1WufwDTs_d223P0_HuvEH1jUKXVkjiRxn0plAXyX0dQXkjtSwgvevAUWBR2T-XHpXFBmiSa79ZuvrDt3Y8b-JediiCijRAVlPmtVHuLvDtjpN7dHF1AliEkupQahc_d7ZdKCHhhMyH6XuG7kAC5gpAUX6sQErWW_DqdwOOKYU8mnmkXRnDNfXcOdYUQTUmvXGi27t5D5qq--qYe-6QaAA-9HMBC4KyC4gr_Jcw"/>
+<div class="absolute bottom-1 right-1 bg-surface-base/90 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] font-label-caps text-session-rodaje border border-session-rodaje/40">
+                PRO
+              </div>
+</div>
+<div class="flex flex-col gap-1.5">
+<div class="flex flex-wrap items-center gap-3">
+<h2 class="text-headline-md font-headline-md text-text-primary font-bold">Marcos Soler</h2>
+<span class="text-body-sm font-body-sm text-session-rodaje bg-session-rodaje/10 px-2.5 py-0.5 rounded-full border border-session-rodaje/30 font-medium">@marcos_runner</span>
+<span class="text-label-caps font-label-caps text-text-muted flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="calendar_today">calendar_today</span>
+                  Miembro desde Enero 2024
+                </span>
+</div>
+<div class="flex items-center gap-2 text-body-sm font-body-sm text-text-secondary">
+<span class="material-symbols-outlined text-session-fartlek text-[16px]" data-icon="apartment">apartment</span>
+<span class="text-text-primary font-medium">Club Atletismo Retiro Volt</span>
+<span class="text-border-strong">•</span>
+<span>Madrid, España</span>
+</div>
+<!-- Bio corta -->
+<p class="text-body-sm font-body-sm text-text-secondary max-w-2xl mt-0.5">
+                “Entrenando para bajar de 3h15 en Valencia. Series los martes en pista y tiradas largas domingueras en Casa de Campo. Siempre abierto a rodar con el grupo avanzado.”
+              </p>
+<!-- Grupos Activos en el Club -->
+<div class="flex flex-wrap items-center gap-2 mt-1">
+<span class="text-label-caps font-label-caps text-text-muted mr-1">GRUPOS ACTIVOS:</span>
+<span class="px-2.5 py-1 rounded-md text-label-badge font-label-badge bg-surface-overlay border border-border-strong text-text-primary flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-session-tirada-larga"></span>
+                  Maratón Sub-3:30 (Avanzado)
+                </span>
+<span class="px-2.5 py-1 rounded-md text-label-badge font-label-badge bg-surface-overlay border border-border-strong text-text-primary flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-session-fartlek"></span>
+                  Fartlek &amp; Pista Martes
+                </span>
+<span class="px-2.5 py-1 rounded-md text-label-badge font-label-badge bg-surface-overlay border border-border-strong text-text-secondary flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-session-rodaje"></span>
+                  Rodajes Matutinos Retiro
+                </span>
+</div>
+</div>
+</div>
+<!-- Inmutable Privacy Notice Pill -->
+<div class="lg:w-72 p-4 rounded-xl bg-surface-overlay border border-border-subtle flex flex-col gap-2 shrink-0">
+<div class="flex items-center gap-2 text-session-rodaje">
+<span class="material-symbols-outlined text-[18px]" data-icon="info">info</span>
+<span class="text-label-caps font-label-caps">IDENTIDAD BÁSICA</span>
+</div>
+<p class="text-body-sm font-body-sm text-text-secondary leading-snug">
+              Foto, nombre, nick y pertenencia a grupos son siempre visibles para entrenadores y compañeros autorizados del club.
+            </p>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- 4. MÓDULO CENTRAL DE CONFIGURACIÓN OPT-IN & REGLAS DE PRIVACIDAD      -->
+<!-- ===================================================================== -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+<!-- Columna Izquierda (7 Cols): Toggles y Configuración Opt-In -->
+<div class="xl:col-span-7 flex flex-col gap-6">
+<!-- Card de Garantía Estricta de Privacidad (RPE & Feedback Jamás Compartidos) -->
+<div class="bg-surface-elevated border-2 border-session-fartlek/30 rounded-2xl p-6 relative overflow-hidden shadow-[0px_0px_24px_-4px_rgba(204,255,0,0.08)]">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-xl bg-session-fartlek/10 border border-session-fartlek/30 flex items-center justify-center shrink-0 text-session-fartlek">
+<span class="material-symbols-outlined text-[26px]" data-icon="verified_user">verified_user</span>
+</div>
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center gap-2">
+<span class="text-label-caps font-label-caps text-session-fartlek">GARANTÍA DE PRIVACIDAD STRIDE VOLT</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek font-bold">REGLA ESTRICTA</span>
+</div>
+<h3 class="text-headline-sm font-headline-sm text-text-primary">Tu RPE y Feedback son estrictamente confidenciales por diseño</h3>
+<p class="text-body-md font-body-md text-text-secondary">
+                  Tu Percepción de Esfuerzo (RPE 1-10), notas personales de fatiga y las devoluciones tácticas privadas de tus entrenadores <strong class="text-text-primary">NUNCA serán compartidas</strong> con tus compañeros de club. Solo se consideran métricas volumétricas agregadas.
+                </p>
+</div>
+</div>
+</div>
+<!-- Master Switch Container -->
+<div class="bg-surface-elevated border border-border-subtle rounded-2xl p-6 flex flex-col gap-6">
+<div class="flex items-center justify-between pb-4 border-b border-border-subtle">
+<div class="flex flex-col gap-1 pr-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-session-fartlek text-[22px]" data-icon="hub">hub</span>
+<span class="text-headline-sm font-headline-sm text-text-primary">Compartir Estadísticas Agregadas con el Club</span>
+</div>
+<p class="text-body-sm font-body-sm text-text-secondary">
+                  Permite que otros atletas del club vean tus totales acumulados y logros de equipo en el Leaderboard interno.
+                </p>
+</div>
+<!-- Main Master Toggle -->
+<label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+<input checked="" class="sr-only peer" id="masterToggle" type="checkbox"/>
+<div class="w-14 h-7 bg-surface-overlay peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-7 peer-checked:after:border-surface-base after:content-[''] after:absolute after:top-[2px] after:left-[3px] after:bg-text-secondary after:border-border-subtle after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-session-fartlek peer-checked:after:bg-surface-base peer-checked:after:font-bold"></div>
+</label>
+</div>
+<!-- Granular Metric Toggles Grid -->
+<div class="flex flex-col gap-4">
+<span class="text-label-caps font-label-caps text-text-muted">CONFIGURACIÓN GRANULAR DE MÉTRICAS (OPT-IN)</span>
+<!-- Toggle Item 1: Volumen y Kilómetros -->
+<div class="p-4 rounded-xl bg-surface-overlay border border-border-subtle flex items-center justify-between hover:border-border-strong transition-colors">
+<div class="flex items-start gap-3.5">
+<div class="w-9 h-9 rounded-lg bg-session-rodaje/10 border border-session-rodaje/20 flex items-center justify-center text-session-rodaje shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]" data-icon="straighten">straighten</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-body-md text-text-primary">Volumen Acumulado y Kilómetros de Temporada</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek">482.5 km actual</span>
+</div>
+<span class="text-body-sm font-body-sm text-text-secondary">Permite mostrar tu kilometraje total mensual y del macrociclo en curso.</span>
+</div>
+</div>
+<input checked="" class="rounded bg-surface-elevated border-border-strong text-session-fartlek focus:ring-0 focus:ring-offset-0 w-5 h-5 cursor-pointer accent-[#CCFF00]" type="checkbox"/>
+</div>
+<!-- Toggle Item 2: Sesiones Completadas -->
+<div class="p-4 rounded-xl bg-surface-overlay border border-border-subtle flex items-center justify-between hover:border-border-strong transition-colors">
+<div class="flex items-start gap-3.5">
+<div class="w-9 h-9 rounded-lg bg-session-tirada-larga/10 border border-session-tirada-larga/20 flex items-center justify-center text-session-tirada-larga shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]" data-icon="task_alt">task_alt</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-body-md text-text-primary">Sesiones Totales Completadas</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek">42 sesiones</span>
+</div>
+<span class="text-body-sm font-body-sm text-text-secondary">Refleja la suma de entrenamientos finalizados sin revelar ritmos parciales ni RPE.</span>
+</div>
+</div>
+<input checked="" class="rounded bg-surface-elevated border-border-strong text-session-fartlek focus:ring-0 focus:ring-offset-0 w-5 h-5 cursor-pointer accent-[#CCFF00]" type="checkbox"/>
+</div>
+<!-- Toggle Item 3: Frecuencia y Constancia Semanal -->
+<div class="p-4 rounded-xl bg-surface-overlay border border-border-subtle flex items-center justify-between hover:border-border-strong transition-colors">
+<div class="flex items-start gap-3.5">
+<div class="w-9 h-9 rounded-lg bg-session-cuestas/10 border border-session-cuestas/20 flex items-center justify-center text-session-cuestas shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]" data-icon="repeat">repeat</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-body-md text-text-primary">Frecuencia y Constancia Semanal</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek">4.2 días/sem</span>
+</div>
+<span class="text-body-sm font-body-sm text-text-secondary">Calcula tu índice de consistencia semanal para inspirar a otros miembros.</span>
+</div>
+</div>
+<input checked="" class="rounded bg-surface-elevated border-border-strong text-session-fartlek focus:ring-0 focus:ring-offset-0 w-5 h-5 cursor-pointer accent-[#CCFF00]" type="checkbox"/>
+</div>
+<!-- Toggle Item 4: Medallas y Retos de Club -->
+<div class="p-4 rounded-xl bg-surface-overlay border border-border-subtle flex items-center justify-between hover:border-border-strong transition-colors">
+<div class="flex items-start gap-3.5">
+<div class="w-9 h-9 rounded-lg bg-session-intervalos/10 border border-session-intervalos/20 flex items-center justify-center text-session-intervalos shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[18px]" data-icon="military_tech">military_tech</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-body-md text-text-primary">Medallas y Retos de Club</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek">6 insignias</span>
+</div>
+<span class="text-body-sm font-body-sm text-text-secondary">Insignias colectivas de participación en eventos presenciales y quedadas del Retiro.</span>
+</div>
+</div>
+<input checked="" class="rounded bg-surface-elevated border-border-strong text-session-fartlek focus:ring-0 focus:ring-offset-0 w-5 h-5 cursor-pointer accent-[#CCFF00]" type="checkbox"/>
+</div>
+</div>
+<!-- Botones de Acción de Preferencias -->
+<div class="pt-4 border-t border-border-subtle flex flex-wrap items-center justify-between gap-4">
+<button class="px-5 py-3 rounded-lg bg-session-fartlek text-surface-base font-headline-sm text-headline-sm font-bold flex items-center gap-2 hover:scale-[1.01] hover:shadow-[0px_0px_18px_rgba(204,255,0,0.35)] transition-all active:scale-95">
+<span class="material-symbols-outlined text-[20px]" data-icon="check_circle">check_circle</span>
+                Guardar Preferencias de Privacidad
+              </button>
+<button class="px-4 py-3 rounded-lg bg-transparent border border-border-strong text-text-secondary hover:text-text-primary hover:border-session-fartlek hover:bg-session-fartlek/5 transition-all text-body-sm font-body-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="restart_alt">restart_alt</span>
+                Restablecer a valores por defecto (Ocultar todo)
+              </button>
+</div>
+</div>
+</div>
+<!-- Columna Derecha (5 Cols): Previsualización "Cómo te ven tus compañeros" -->
+<div class="xl:col-span-5 flex flex-col gap-4">
+<!-- Card Header de la Vista Previa -->
+<div class="flex items-center justify-between px-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-session-rodaje text-[20px]" data-icon="preview">preview</span>
+<span class="font-headline-sm text-headline-sm text-text-primary">Cómo te ven tus compañeros en el Club</span>
+</div>
+<span class="text-label-caps font-label-caps text-session-fartlek flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-session-fartlek"></span>
+              VISTA EN VIVO
+            </span>
+</div>
+<!-- LA TARJETA DE PREVISUALIZACIÓN PÚBLICA -->
+<div class="bg-surface-elevated border-2 border-border-strong rounded-2xl overflow-hidden shadow-2xl relative">
+<!-- Simulated Member View Top Bar -->
+<div class="bg-surface-overlay px-5 py-2.5 border-b border-border-subtle flex items-center justify-between">
+<span class="text-label-caps font-label-caps text-text-muted">FICHA DE ATLETA EN RETIRO VOLT</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek border border-session-fartlek/30">
+                MIEMBRO ACTIVO
+              </span>
+</div>
+<!-- Profile Info Body -->
+<div class="p-6 flex flex-col gap-6">
+<!-- Head & Actions -->
+<div class="flex items-center justify-between gap-4">
+<div class="flex items-center gap-3.5">
+<div class="relative w-16 h-16 rounded-full overflow-hidden ring-2 ring-session-rodaje">
+<img alt="Avatar público de Marcos Soler" class="w-full h-full object-cover" data-alt="Photorealistic athletic portrait of Marcos Soler, outdoor dusk lighting in Parque del Retiro, Madrid, wearing high-visibility carbon sunglasses and dark jersey with neon green trims." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBEiL_Z-Sz8_nOPk6h07kqlTXGo04SQudjyau5WR5eUbJc4OJVWvd-3lJpn80CGgKG6qqbZjMRKDv4Yv9oZXtLieguCgsu__2m_8f977jH9FkXH5Yzc31J62JCWNaeZcCn8nG1kM43KLu0mNQ8vfpA1jAqp1Ot6JqZD0RagPrTvY_h3Vf9IRaU7oVmAqX9sVVCyNzD88F0LK2UyWr1eypVRj91aukbKzZegAz9pGNeetAxbIDuSYW_aGw"/>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-text-primary">Marcos Soler</span>
+<span class="material-symbols-outlined text-session-rodaje text-[18px]" data-icon="verified" title="Atleta Verificado">verified</span>
+</div>
+<span class="text-body-sm font-body-sm text-text-secondary">@marcos_runner</span>
+<span class="text-label-caps font-label-caps text-session-tirada-larga mt-0.5">Maratón Sub-3:30</span>
+</div>
+</div>
+<!-- Simulación botón compañero -->
+<button class="px-3 py-1.5 rounded-lg bg-surface-overlay border border-border-strong text-text-primary text-body-sm font-body-sm flex items-center gap-1.5 hover:border-session-fartlek transition-colors">
+<span class="material-symbols-outlined text-[16px] text-session-fartlek" data-icon="person_add">person_add</span>
+<span>Compañero</span>
+</button>
+</div>
+<!-- Bio pública -->
+<div class="p-3.5 rounded-xl bg-surface-base border border-border-subtle text-body-sm font-body-sm text-text-secondary italic">
+                “Entrenando para bajar de 3h15 en Valencia. Series los martes y tiradas largas en Casa de Campo.”
+              </div>
+<!-- Estadísticas Agregadas Compartidas (Grid 2x2) -->
+<div class="flex flex-col gap-2">
+<span class="text-label-caps font-label-caps text-text-muted">ESTADÍSTICAS COMPARTIDAS (TEMPORADA ACTUAL)</span>
+<div class="grid grid-cols-2 gap-3">
+<!-- Stat 1: Km Totales -->
+<div class="p-3.5 rounded-xl bg-surface-base border border-border-subtle flex flex-col">
+<span class="text-label-caps font-label-caps text-text-muted">DISTANCIA TOTAL</span>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="font-metric-huge text-[28px] leading-tight text-text-primary font-bold">482.5</span>
+<span class="text-body-sm text-session-fartlek font-semibold">km</span>
+</div>
+<span class="text-[11px] text-session-rodaje mt-0.5 flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[12px]" data-icon="trending_up">trending_up</span>
+                      +12% este mes
+                    </span>
+</div>
+<!-- Stat 2: Sesiones Totales -->
+<div class="p-3.5 rounded-xl bg-surface-base border border-border-subtle flex flex-col">
+<span class="text-label-caps font-label-caps text-text-muted">ENTRENAMIENTOS</span>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="font-metric-huge text-[28px] leading-tight text-text-primary font-bold">42</span>
+<span class="text-body-sm text-text-secondary">completos</span>
+</div>
+<span class="text-[11px] text-text-muted mt-0.5">100% de cumplimiento</span>
+</div>
+<!-- Stat 3: Frecuencia -->
+<div class="p-3.5 rounded-xl bg-surface-base border border-border-subtle flex flex-col">
+<span class="text-label-caps font-label-caps text-text-muted">FRECUENCIA</span>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="font-metric-huge text-[28px] leading-tight text-text-primary font-bold">4.2</span>
+<span class="text-body-sm text-text-secondary">días/sem</span>
+</div>
+<span class="text-[11px] text-session-fartlek mt-0.5">Constancia nivel Alto</span>
+</div>
+<!-- Stat 4: Asistencia Presencial -->
+<div class="p-3.5 rounded-xl bg-surface-base border border-border-subtle flex flex-col">
+<span class="text-label-caps font-label-caps text-text-muted">ASISTENCIA CLUB</span>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="font-metric-huge text-[28px] leading-tight text-text-primary font-bold">92%</span>
+<span class="text-body-sm text-text-secondary">quedadas</span>
+</div>
+<span class="text-[11px] text-session-fartlek mt-0.5">11 de 12 quedadas</span>
+</div>
+</div>
+</div>
+<!-- Próximos Eventos y Quedadas a las que asistirá Marcos -->
+<div class="flex flex-col gap-2.5">
+<span class="text-label-caps font-label-caps text-text-muted">EVENTOS CONFIRMADOS DE MARCOS</span>
+<div class="flex flex-col gap-2">
+<!-- Evento 1 -->
+<div class="p-3 rounded-xl bg-surface-base border border-border-subtle flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-session-cuestas/10 border border-session-cuestas/30 flex items-center justify-center text-session-cuestas">
+<span class="material-symbols-outlined text-[18px]" data-icon="terrain">terrain</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-body-sm text-text-primary">Quedada Cuestas &amp; Potencia</span>
+<span class="text-[11px] text-text-muted">Jueves 19:30 • Cuesta del Ángel Caído</span>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek border border-session-fartlek/30">
+                      CONFIRMADO
+                    </span>
+</div>
+<!-- Evento 2 -->
+<div class="p-3 rounded-xl bg-surface-base border border-border-subtle flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-session-tirada-larga/10 border border-session-tirada-larga/30 flex items-center justify-center text-session-tirada-larga">
+<span class="material-symbols-outlined text-[18px]" data-icon="directions_run">directions_run</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-body-sm text-text-primary">Tirada Larga Casa de Campo 24k</span>
+<span class="text-[11px] text-text-muted">Domingo 08:30 • Entrada Lago</span>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-session-fartlek/15 text-session-fartlek border border-session-fartlek/30">
+                      CONFIRMADO
+                    </span>
+</div>
+</div>
+</div>
+<!-- Medallas ganadas visibles -->
+<div class="flex flex-col gap-2">
+<span class="text-label-caps font-label-caps text-text-muted">INSIGNIAS COLECTIVAS DE CLUB</span>
+<div class="flex items-center gap-2">
+<span class="w-8 h-8 rounded-full bg-surface-overlay border border-session-fartlek/40 flex items-center justify-center text-session-fartlek text-[14px]" title="Reto Fartlek 50k">
+<span class="material-symbols-outlined text-[16px]" data-icon="bolt">bolt</span>
+</span>
+<span class="w-8 h-8 rounded-full bg-surface-overlay border border-session-rodaje/40 flex items-center justify-center text-session-rodaje text-[14px]" title="Asistencia Invierno">
+<span class="material-symbols-outlined text-[16px]" data-icon="ac_unit">ac_unit</span>
+</span>
+<span class="w-8 h-8 rounded-full bg-surface-overlay border border-session-tirada-larga/40 flex items-center justify-center text-session-tirada-larga text-[14px]" title="Capitán de Quedada">
+<span class="material-symbols-outlined text-[16px]" data-icon="military_tech">military_tech</span>
+</span>
+<span class="w-8 h-8 rounded-full bg-surface-overlay border border-session-cuestas/40 flex items-center justify-center text-session-cuestas text-[14px]" title="Rey de Cuestas Retiro">
+<span class="material-symbols-outlined text-[16px]" data-icon="landscape">landscape</span>
+</span>
+<span class="text-[12px] text-text-muted font-body-sm ml-1">+2 más</span>
+</div>
+</div>
+<!-- Pie de Tarjeta de Previsualización: Nota de Protección -->
+<div class="p-3 rounded-lg bg-surface-overlay border border-border-subtle flex items-center gap-2 text-text-muted text-[11px]">
+<span class="material-symbols-outlined text-session-fartlek text-[16px] shrink-0" data-icon="lock">lock</span>
+<span>Métricas protegidas: RPE personal, pulsaciones basales y feedback táctico ocultos según la directiva del club.</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- ========================================================================= -->
+<!-- LIGHTWEIGHT INTERACTIVITY FOR DEMONSTRATION                              -->
+<!-- ========================================================================= -->
+<script>
+    // Micro-interacción sencilla para simular el toggle maestro de opt-in
+    const masterToggle = document.getElementById('masterToggle');
+    if (masterToggle) {
+      masterToggle.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:not(#masterToggle)');
+        checkboxes.forEach(cb => {
+          cb.checked = e.target.checked;
+          cb.disabled = !e.target.checked;
+        });
+      });
+    }
+  </script>
+</body></html>
