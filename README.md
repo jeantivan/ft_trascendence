@@ -19,6 +19,9 @@ Key Features:
 
 ### Setup
 
+### Conventions
+- **Frontend tests**: automated frontend tests live in `web/tests/`, grouped by component or feature. Component tests go in `web/tests/components/` and import the code through the `@/` alias.
+
 ## Resources
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Prisma ORM](https://www.prisma.io/)

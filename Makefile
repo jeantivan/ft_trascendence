@@ -16,6 +16,16 @@ dev: .env
 .env:
 	cp .env.example .env
 
+# Create a migration from the changes in web/prisma/schema.prisma and apply it.
+# Needs make dev running (the app container has the Prisma CLI and ./web mounted,
+# so the new file lands in web/prisma/migrations/). Usage: make migrate name=add_users
+# Prisma 7 no longer regenerates the client after migrate dev, so we do it here.
+# WARNING: if migrate dev finds the database out of step with the migrations,
+# it offers to RESET it (all data lost). Answer "n" unless losing the data is fine.
+migrate:
+	$(COMPOSE_DEV) exec app npx prisma migrate dev $(if $(name),--name $(name))
+	$(COMPOSE_DEV) exec app npx prisma generate
+
 logs:
 	$(COMPOSE) logs -f
 
@@ -38,4 +48,4 @@ fclean:
 re: clean
 	$(MAKE) all
 
-.PHONY: all dev down logs ps clean fclean re
+.PHONY: all dev migrate down logs ps clean fclean re
