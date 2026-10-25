@@ -37,11 +37,15 @@ done
 
 # AUTH_SECRET cannot live in the template (it would be public): generate it if empty.
 # sed writes to a temporary file because "sed -i" differs between Linux and macOS.
-if grep -q '^AUTH_SECRET=$' .env; then
+# The line may end in a carriage return if .env was saved on Windows; "\r" is not
+# portable in grep or sed, so the character is kept in a variable.
+cr=$(printf '\r')
+empty_secret="^AUTH_SECRET=$cr*\$"
+if grep -q "$empty_secret" .env; then
   if ! secret=$(openssl rand -base64 33) || [ -z "$secret" ]; then
     echo "env-sync: could not generate AUTH_SECRET. Is openssl installed?" >&2
     exit 1
   fi
-  sed "s|^AUTH_SECRET=\$|AUTH_SECRET=$secret|" .env > .env.tmp
+  sed "s|$empty_secret|AUTH_SECRET=$secret|" .env > .env.tmp
   mv .env.tmp .env
 fi

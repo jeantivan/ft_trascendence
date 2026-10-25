@@ -64,6 +64,30 @@ test_generates_empty_auth_secret() {
   teardown
 }
 
+test_generates_empty_auth_secret_with_windows_line_ending() {
+  setup
+  printf 'AUTH_SECRET=\n' > .env.example
+  # An editor on Windows may save .env with CRLF line endings
+  printf 'AUTH_SECRET=\r\n' > .env
+  sh "$SCRIPT"
+  if ! grep -Eq '^AUTH_SECRET=[A-Za-z0-9+/]{44}$' .env; then
+    fail "fills an empty AUTH_SECRET saved with a Windows line ending"
+  fi
+  teardown
+}
+
+test_keeps_existing_auth_secret_with_windows_line_ending() {
+  setup
+  printf 'AUTH_SECRET=\n' > .env.example
+  printf 'AUTH_SECRET=mykey\r\n' > .env
+  cp .env before
+  sh "$SCRIPT"
+  if ! cmp -s .env before; then
+    fail "never regenerates an AUTH_SECRET with a value and a Windows line ending"
+  fi
+  teardown
+}
+
 test_keeps_existing_auth_secret() {
   setup
   printf 'AUTH_SECRET=\n' > .env.example
@@ -167,7 +191,9 @@ test_creates_env_from_example_when_missing
 test_adds_missing_variables
 test_keeps_existing_values
 test_generates_empty_auth_secret
+test_generates_empty_auth_secret_with_windows_line_ending
 test_keeps_existing_auth_secret
+test_keeps_existing_auth_secret_with_windows_line_ending
 test_second_run_changes_nothing
 test_adds_on_new_line_when_last_line_has_no_newline
 test_fails_when_secret_cannot_be_generated
