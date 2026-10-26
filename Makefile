@@ -2,19 +2,20 @@ COMPOSE     = docker compose
 COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 
 # Production: build the images and start everything in the background
-all: .env
+all: env
 	$(COMPOSE) up --build -d
 
 # Development: hot reload without rebuilding (make logs to see the output)
 # Removing the old app container with its anonymous node_modules volume gives
 # a fresh install every time (new dependencies) without leaving orphan volumes
-dev: .env
+dev: env
 	$(COMPOSE_DEV) rm --stop --force --volumes app
 	$(COMPOSE_DEV) up --build -d
 
-# Create .env from the template only if it does not exist yet
-.env:
-	cp .env.example .env
+# Create .env or add the variables it is missing, and generate AUTH_SECRET if empty.
+# Runs every time (not only when .env is missing) so new variables reach everyone.
+env:
+	sh scripts/env-sync.sh
 
 # Create a migration from the changes in web/prisma/schema.prisma and apply it.
 # Needs make dev running (the app container has the Prisma CLI and ./web mounted,
@@ -48,4 +49,4 @@ fclean:
 re: clean
 	$(MAKE) all
 
-.PHONY: all dev migrate down logs ps clean fclean re
+.PHONY: all dev env migrate down logs ps clean fclean re

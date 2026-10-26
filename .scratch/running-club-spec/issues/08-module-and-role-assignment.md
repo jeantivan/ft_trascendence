@@ -1,4 +1,4 @@
-# Reparto de módulos y roles entre las 4 personas
+# Reparto de módulos y roles entre las 5 personas
 
 Type: task
 Status: resolved
@@ -6,37 +6,40 @@ Blocked by: 02, 03
 
 ## Question
 
-Con los módulos cerrados y los criterios claros, repartir módulos y funcionalidades entre jtivan-r (PO), jmateo-v (PM), rebgarci (Tech Lead) y mvigara-. Todos deben contribuir a la parte obligatoria y a módulos. Resultado: tabla persona→módulos para el README (Team Information, Individual Contributions).
+Con los módulos cerrados y los criterios claros, repartir módulos y funcionalidades entre jtivan-r (PO), jmateo-v (PM), rebgarci (Tech Lead), mvigara- (Dev) y Furiosso (Dev). Todos deben contribuir a la parte obligatoria y a módulos. Resultado: tabla persona→módulos para el README (Team Information, Individual Contributions).
 
 ## Answer
 
 | Persona | Rol | Módulos | Puntos |
 |---|---|---|---|
-| **rebgarci** | Tech Lead | ORM, SSR, Advanced permissions, File upload; base técnica (Docker Compose, NGINX con HTTPS, `.env.example`, esquema Prisma y migraciones) | 5 |
-| **jtivan-r** | PO | Standard user management, OAuth, 2FA; núcleo de entrenamiento | 4 |
-| **mvigara-** | Dev | Web (framework), Organization system, Advanced analytics dashboard, GDPR; Privacy Policy y Terms of Service | 7 |
-| **jmateo-v** | PM | Real-time, User interaction (chat, perfil, Contacts), Notification | 5 |
+| **rebgarci** | Tech Lead | ORM, SSR, Advanced permissions; base técnica (Docker Compose, NGINX con HTTPS, `.env.example`, esquema Prisma y migraciones) | 4 |
+| **jtivan-r** | PO | Standard user management, OAuth, 2FA; núcleo de entrenamiento (Templates y Session Logs con RPE) | 4 |
+| **mvigara-** | Dev (Web & Legal) | Web (framework), Organization system, GDPR; Privacy Policy, Terms of Service y Club Profile (opt-in) | 5 |
+| **jmateo-v** | PM | Real-time (SSE), User interaction (chat de Event y DM, Contacts), Notification | 5 |
+| **Furiosso** | Dev | Advanced analytics dashboard, File upload; Events, reservas (Spot Requests) y Feedback privado | 3 |
 
 Total: 21 puntos (14 Major + 7 Minor). Cuentan como máximo 19 por el tope del bonus.
 
 ### Reparto de partes no ligadas a un módulo
 
-- **Núcleo de entrenamiento** (plantillas, `sessions`, `session_logs`, Events, reservas y Feedback): jtivan-r.
-- **Privacy Policy y Terms of Service:** mvigara-.
-- **File upload:** rebgarci (movido desde jtivan-r para equilibrar la carga; encaja con el almacenamiento en volumen y NGINX).
-- **Base técnica** (Docker, NGINX con HTTPS, `.env.example`, Prisma): rebgarci.
-- **README** (secciones obligatorias del subject): pendiente de decidir quién lo coordina; cada persona rellena la sección de sus módulos y su contribución individual.
-- **Demo de la evaluación:** cada persona demuestra y explica sus propios módulos.
+- **Entrenamiento (Templates, sesiones y logs):** jtivan-r.
+- **Eventos, reservas (Spot Requests) y Feedback privado:** Furiosso.
+- **Privacy Policy, Terms of Service y Club Profile:** mvigara-.
+- **File upload:** Furiosso (volumen Docker `/data/uploads`, validación MIME y endpoints protegidos).
+- **Base técnica (Docker, NGINX con HTTPS, `.env.example`, Prisma):** rebgarci.
+- **README (secciones obligatorias del subject):** jmateo-v coordina el documento general y Project Management; cada persona rellena la sección de sus módulos y su contribución individual.
+- **Demo de la evaluación:** cada persona demuestra y explica sus propios módulos y funcionalidades lideradas.
 
 ### Dependencias entre personas a vigilar
 
-- El **dashboard** (mvigara-) lee `session_logs`, que construye jtivan-r: hay que acordar pronto el contrato de datos y datos de prueba.
-- **Notification** (jmateo-v) debe ofrecer el mecanismo central que llaman todas las mutaciones del resto de módulos; los demás solo lo invocan.
-- **Events, reservas y Feedback** (jtivan-r) dependen del chat y de SSE (jmateo-v), y de los permisos (rebgarci).
-- **Organization** (mvigara-) depende de la capa de permisos de rebgarci; la identidad (jtivan-r) es la base de todo.
+- **Analytics y datos de prueba:** Furiosso genera 6 semanas de datos simulados en `prisma/seed/session-logs.ts` (Fase 1) para desarrollar el dashboard sin esperar al formulario de `session_logs` de jtivan-r.
+- **Volume Alert:** Furiosso exporta la función `calculateVolumeTrend(athleteId, date)`, que jtivan-r invoca al guardar sesiones para disparar la notificación central de jmateo-v.
+- **Reservas y Chat de Eventos:** Furiosso gestiona la Server Action de `spot_requests` (aprobación, creación de participante de chat y broadcast SSE/notificación); jmateo-v provee el componente de `<EventChat />` y el helper `publish()`.
+- **Notification:** jmateo-v ofrece el mecanismo central que llaman todas las mutaciones del resto de módulos; los demás solo lo invocan.
+- **Organization y permisos:** mvigara- depende de la capa de permisos en BD de rebgarci; la identidad (jtivan-r) es la base de todo.
 
-### Supuestos a confirmar con el equipo
+### Acuerdos de equipo confirmados
 
-- La base técnica (Docker, NGINX, Prisma) sigue con rebgarci; solo se movió a mvigara- el módulo Web.
-- "Núcleo" se entendió como todo el entrenamiento, no dividido con jmateo-v.
-- Carga desigual: mvigara- lleva 7 puntos más el apartado legal, y jtivan-r 5 más el núcleo. Reevaluar a mitad del proyecto, por ejemplo moviendo GDPR.
+- mvigara- asume el paquete legal completo (GDPR + Términos + Privacidad) además de Web y Organization.
+- Furiosso asume el Dashboard analítico, File upload y el liderazgo funcional de Events/Reservas/Feedback.
+- El balance de carga queda equilibrado entre 3 y 5 puntos por persona, eliminando cuellos de botella.
