@@ -5,6 +5,8 @@ services:
     image: transcendence-app-dev
     build:
       target: dev
+    environment:
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD}
     volumes:
       - ./web:/app
       # Keep the container's node_modules (Linux/Alpine binaries) instead of the host's
