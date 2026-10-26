@@ -1,0 +1,6 @@
+# Files read by sh, make or the env-sync script: always LF line endings, also
+# when cloned with Git for Windows (core.autocrlf=true would turn them into CRLF
+# and break them).
+*.sh          text eol=lf
+Makefile      text eol=lf
+.env.example  text eol=lf
