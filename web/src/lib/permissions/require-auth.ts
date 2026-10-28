@@ -6,7 +6,9 @@ import {
 } from "./current-user";
 
 // Always through /auth/signed-out: it clears the JWT, so the proxy cannot
-// bounce a blocked or deleted user from /login back to the page in a loop
+// bounce a blocked or deleted user from /login back to the page in a loop.
+// Call it outside try/catch: redirect() throws, and a catch would swallow it
+// (eslint.config.mjs rejects it inside a try block)
 export async function requireAuth(
   getUser: () => Promise<CurrentUserResult> = getCurrentUser
 ): Promise<CurrentUser> {
