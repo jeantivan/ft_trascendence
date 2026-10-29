@@ -49,7 +49,7 @@ Esta política describe cómo trata tus datos personales **[NOMBRE DE LA PLATAFO
 | Prestarte el servicio: cuenta, entrenamientos, eventos, mensajes | Cuenta, entrenamientos, eventos, relaciones | Ejecución del contrato (art. 6.1.b) |
 | Mostrar tu nick y foto a tu club | Perfil básico | Ejecución del contrato (art. 6.1.b) |
 | Mostrar tus estadísticas a tu club | Estadísticas de Club Profile | Tu consentimiento (art. 6.1.a), que puedes retirar cuando quieras |
-| Enviarte notificaciones opcionales | Preferencias de notificación | Tu consentimiento (art. 6.1.a) |
+| Enviarte notificaciones del servicio (reservas, alertas de volumen, gestión del club) | Preferencias de notificación | Ejecución del contrato (art. 6.1.b). Puedes silenciarlas en Ajustes |
 | Tratar tu RPE y tu Feedback cuando puedan revelar información de salud | RPE, Feedback, campos opcionales | Tu consentimiento explícito (art. 9.2.a), separado de aceptar esta política |
 | Seguridad, prevención de fraude y atención de denuncias | Datos técnicos, registro de auditoría, contenido denunciado | Interés legítimo (art. 6.1.f) |
 
@@ -102,7 +102,8 @@ Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ej
 | Situación | Qué ocurre |
 |---|---|
 | Mientras eres miembro | Conservamos tus datos activos |
-| Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. No se borra tu cuenta |
+| Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. Tus Contacts ya aceptados se conservan, con sus mensajes privados y tu estado online. Las solicitudes de Contact pendientes con quienes ya no compartas grupo se cancelan, y mientras no tengas club no puedes solicitar Contacts nuevos. No se borra tu cuenta |
+| Vuelves a un club que dejaste | Recuperas tu historial en ese club. Los Managers vuelven a ver tus sesiones, métricas y RPE, y el Manager que escribió un Feedback vuelve a verlo, siempre que mantengas el consentimiento de datos de salud |
 | Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts |
 | El Admin borra un club | Te avisamos por email con al menos 30 días de antelación y puedes descargar tus datos antes. Después se borran el club, sus sesiones y tu historial de entrenamiento en él. Tu cuenta no se borra |
 | Después de borrar tu cuenta | Los registros técnicos (IP, navegador, accesos) se conservan como máximo 3 meses |
@@ -132,7 +133,7 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | **Limitación del tratamiento** (art. 18) | Escríbenos a [EMAIL DE CONTACTO] |
 | **Portabilidad** (art. 20) | La descarga incluye los datos en JSON y CSV |
 | **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a [EMAIL DE CONTACTO] |
-| **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile, notificaciones y datos de salud (RPE y Feedback) |
+| **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile y datos de salud (RPE y Feedback). Las notificaciones del servicio no dependen de un consentimiento: puedes silenciarlas en Ajustes |
 
 La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
 
