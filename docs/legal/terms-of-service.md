@@ -6,13 +6,13 @@
 
 ## 1. Quiénes somos y qué aceptas
 
-Estos términos regulan el uso de **stridesync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Estos términos regulan el uso de **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
 - **Responsable del servicio:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242
 - **Domicilio:** Calle De La Trancendencia, 42. 28042 Madrid, España
 - **Representante:** Marvin Gaye, NIF 42424242A
 - **Teléfono:** +34 642 42 42 42
-- **Contacto:** legal@transcendence.42school.com
+- **Contacto:** legal@stridesync.fit
 
 Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la plataforma. Antes de crear la cuenta podrás leerlos, guardarlos y aceptarlos de forma expresa.
 
@@ -24,7 +24,7 @@ Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la
 
 - Eres responsable de tu contraseña y de la actividad que se realice desde tu cuenta.
 - No compartas tus credenciales ni tu segundo factor de verificación.
-- Avísanos sin demora si sospechas de un acceso no autorizado: legal@transcendence.42school.com.
+- Avísanos sin demora si sospechas de un acceso no autorizado: legal@stridesync.fit.
 - Los datos que das al registrarte (email, nick) deben ser tuyos y veraces.
 
 ## 3. Roles y clubes
@@ -55,7 +55,7 @@ Nada de lo anterior excluye ni limita la responsabilidad que la ley no permite e
 
 ## 5. Privacidad de tus datos
 
-El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a legal@transcendence.42school.com para que la corrijamos en los dos. En resumen:
+El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a legal@stridesync.fit para que la corrijamos en los dos. En resumen:
 
 - El RPE lo ven tú y los Managers de tu club. El Feedback, solo tú y el Manager que lo escribió.
 - Para registrar RPE o recibir Feedback te pedimos un consentimiento explícito aparte, que no se da al aceptar estos términos. Puedes retirarlo en Ajustes > Privacidad.
@@ -92,7 +92,7 @@ Eres responsable de lo que escribes en chats de Events y mensajes privados. No e
 Hay dos canales:
 
 - **Dentro de la plataforma:** cualquier usuario con sesión iniciada puede denunciar contenido que ya puede ver: mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts y perfiles a los que tiene acceso. Antes de registrar la denuncia, la plataforma comprueba en el servidor que tienes acceso a ese contenido.
-- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a abuse@transcendence.42school.com.
+- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a abuse@stridesync.fit.
 
 Una vez recibida una denuncia, el Admin revisa los mensajes afectados, tanto los del denunciante como los del usuario denunciado, y solo esos.
 
@@ -123,7 +123,7 @@ Podemos retrasar o limitar esta comunicación solo si la ley o la seguridad de o
 
 ### Cómo recurrir
 
-Escribe a legal@transcendence.42school.com indicando la decisión y tus motivos. Una persona revisa tu caso y te responde en un máximo de **72 horas laborables** (de lunes a viernes). Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
+Escribe a legal@stridesync.fit indicando la decisión y tus motivos. Una persona revisa tu caso y te responde en un máximo de **72 horas laborables** (de lunes a viernes). Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
 
 ## 9. Disponibilidad y responsabilidad
 
@@ -143,4 +143,4 @@ Se respetan las normas imperativas y el foro que corresponda al consumidor. Esto
 
 ## 12. Contacto
 
-legal@transcendence.42school.com
+legal@stridesync.fit
