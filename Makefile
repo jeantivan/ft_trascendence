@@ -17,6 +17,11 @@ dev: env
 env:
 	sh scripts/env-sync.sh
 
+# Check that both compose setups parse (the CI runs this too)
+check-compose: env
+	$(COMPOSE) config --quiet
+	$(COMPOSE_DEV) config --quiet
+
 # Create a migration from the changes in web/prisma/schema.prisma and apply it.
 # Needs make dev running (the app container has the Prisma CLI and ./web mounted,
 # so the new file lands in web/prisma/migrations/). Usage: make migrate name=add_users
@@ -49,4 +54,4 @@ fclean:
 re: clean
 	$(MAKE) all
 
-.PHONY: all dev env migrate down logs ps clean fclean re
+.PHONY: all dev env check-compose migrate down logs ps clean fclean re
