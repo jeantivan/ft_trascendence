@@ -6,10 +6,10 @@
 
 ## 1. Quiénes somos
 
-Esta política describe cómo trata tus datos personales **stridesync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Esta política describe cómo trata tus datos personales **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
 - **Responsable del tratamiento:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242. Calle De La Trancendencia, 42. 28042 Madrid, España. Teléfono +34 642 42 42 42
-- **Contacto de privacidad:** legal@transcendence.42school.com
+- **Contacto de privacidad:** legal@stridesync.fit
 
 ## 2. Qué datos tratamos
 
@@ -81,7 +81,7 @@ Los usuarios sin club solo ven la lista de clubes (nombre y número de miembros)
 
 ## 6. Denuncias
 
-Cualquier usuario con sesión iniciada puede denunciar un contenido que ya puede ver (mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts o perfiles a los que tiene acceso). Quien no tiene cuenta, o quiere enviar una notificación legal, puede escribir a abuse@transcendence.42school.com.
+Cualquier usuario con sesión iniciada puede denunciar un contenido que ya puede ver (mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts o perfiles a los que tiene acceso). Quien no tiene cuenta, o quiere enviar una notificación legal, puede escribir a abuse@stridesync.fit.
 
 Cuando hay una denuncia, el Admin puede ver los **mensajes afectados por la denuncia**, tanto los de quien denuncia como los de la persona denunciada, y solo esos. Esta consulta queda registrada en el registro de auditoría (sección 7).
 
@@ -130,9 +130,9 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días. El archivo se guarda en almacenamiento privado, solo se descarga con tu sesión y se borra a los 7 días o antes si borras tu cuenta |
 | **Rectificación** (art. 16) | Ajustes > Perfil: email, foto y nick |
 | **Supresión** (art. 17) | Ajustes > Privacidad > Borrar cuenta. Confirmas con un código enviado a tu email, que caduca en 10 minutos. **Es permanente y no tiene marcha atrás** |
-| **Limitación del tratamiento** (art. 18) | Escríbenos a legal@transcendence.42school.com |
+| **Limitación del tratamiento** (art. 18) | Escríbenos a legal@stridesync.fit |
 | **Portabilidad** (art. 20) | La descarga incluye los datos en JSON y CSV |
-| **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a legal@transcendence.42school.com |
+| **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a legal@stridesync.fit |
 | **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile, notificaciones y datos de salud (RPE y Feedback) |
 
 La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
@@ -165,4 +165,4 @@ Si la modificamos de forma relevante, te avisaremos por email con al menos 30 d�
 
 ## 14. Contacto
 
-legal@transcendence.42school.com
+legal@stridesync.fit
