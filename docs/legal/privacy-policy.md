@@ -1,15 +1,15 @@
 # Política de Privacidad
 
-> **Borrador para revisión del equipo (sub-issue #26, parte de #8).** Los textos entre `[CORCHETES]` son datos que el equipo debe confirmar antes de publicar; no se han inventado.
+> **Borrador para revisión del equipo (sub-issue #26, parte de #8).** Los datos del responsable, el nombre de la plataforma y el CIF son **ficticios, de ejercicio**. Los textos entre `[CORCHETES]` son datos que el equipo debe confirmar antes de publicar; no se han inventado.
 
-**Última actualización:** [FECHA DE PUBLICACIÓN]
+**Última actualización:** 24 de octubre de 2026
 
 ## 1. Quiénes somos
 
-Esta política describe cómo trata tus datos personales **[NOMBRE DE LA PLATAFORMA]** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Esta política describe cómo trata tus datos personales **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
-- **Responsable del tratamiento:** [IDENTIDAD DEL RESPONSABLE: persona o entidad y dirección]
-- **Contacto de privacidad:** [EMAIL DE CONTACTO]
+- **Responsable del tratamiento:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242. Calle De La Trancendencia, 42. 28042 Madrid, España. Teléfono +34 642 42 42 42
+- **Contacto de privacidad:** legal@stridesync.fit
 
 ## 2. Qué datos tratamos
 
@@ -49,7 +49,7 @@ Esta política describe cómo trata tus datos personales **[NOMBRE DE LA PLATAFO
 | Prestarte el servicio: cuenta, entrenamientos, eventos, mensajes | Cuenta, entrenamientos, eventos, relaciones | Ejecución del contrato (art. 6.1.b) |
 | Mostrar tu nick y foto a tu club | Perfil básico | Ejecución del contrato (art. 6.1.b) |
 | Mostrar tus estadísticas a tu club | Estadísticas de Club Profile | Tu consentimiento (art. 6.1.a), que puedes retirar cuando quieras |
-| Enviarte notificaciones opcionales | Preferencias de notificación | Tu consentimiento (art. 6.1.a) |
+| Enviarte notificaciones del servicio (reservas, alertas de volumen, gestión del club) | Preferencias de notificación | Ejecución del contrato (art. 6.1.b). Puedes silenciarlas en Ajustes |
 | Tratar tu RPE y tu Feedback cuando puedan revelar información de salud | RPE, Feedback, campos opcionales | Tu consentimiento explícito (art. 9.2.a), separado de aceptar esta política |
 | Seguridad, prevención de fraude y atención de denuncias | Datos técnicos, registro de auditoría, contenido denunciado | Interés legítimo (art. 6.1.f) |
 
@@ -81,7 +81,7 @@ Los usuarios sin club solo ven la lista de clubes (nombre y número de miembros)
 
 ## 6. Denuncias
 
-Cualquier usuario con sesión iniciada puede denunciar un contenido que ya puede ver (mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts o perfiles a los que tiene acceso). Quien no tiene cuenta, o quiere enviar una notificación legal, puede escribir a [EMAIL DE DENUNCIAS Y NOTIFICACIONES LEGALES: pendiente de decidir el dominio].
+Cualquier usuario con sesión iniciada puede denunciar un contenido que ya puede ver (mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts o perfiles a los que tiene acceso). Quien no tiene cuenta, o quiere enviar una notificación legal, puede escribir a abuse@stridesync.fit.
 
 Cuando hay una denuncia, el Admin puede ver los **mensajes afectados por la denuncia**, tanto los de quien denuncia como los de la persona denunciada, y solo esos. Esta consulta queda registrada en el registro de auditoría (sección 7).
 
@@ -102,8 +102,9 @@ Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ej
 | Situación | Qué ocurre |
 |---|---|
 | Mientras eres miembro | Conservamos tus datos activos |
-| Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. No se borra tu cuenta |
-| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts |
+| Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. Tus Contacts ya aceptados se conservan, con sus mensajes privados y tu estado online. Las solicitudes de Contact pendientes con quienes ya no compartas grupo se cancelan, y mientras no tengas club no puedes solicitar Contacts nuevos. No se borra tu cuenta |
+| Vuelves a un club que dejaste | Recuperas tu historial en ese club. Los Managers vuelven a ver tus sesiones, métricas y RPE, y el Manager que escribió un Feedback vuelve a verlo, siempre que mantengas el consentimiento de datos de salud |
+| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts. Tus mensajes privados no se borran: se conservan sin tu nombre para que la otra persona mantenga el hilo (ver tabla siguiente) |
 | El Admin borra un club | Te avisamos por email con al menos 30 días de antelación y puedes descargar tus datos antes. Después se borran el club, sus sesiones y tu historial de entrenamiento en él. Tu cuenta no se borra |
 | Después de borrar tu cuenta | Los registros técnicos (IP, navegador, accesos) se conservan como máximo 3 meses |
 
@@ -113,7 +114,8 @@ Tu nombre se desvincula de estos datos, pero no es una anonimización garantizad
 
 | Dato | Finalidad | Fundamento | Plazo |
 |---|---|---|---|
-| Mensajes en chats de Events y mensajes privados, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | [PLAZO: mientras exista la conversación u otro criterio] |
+| Mensajes en chats de Events, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | Mientras exista el chat del Event; se borran con él |
+| Mensajes privados (DMs), sin autor | Que la otra persona mantenga el hilo de la conversación | Interés legítimo (art. 6.1.f) | Hasta que la otra persona borre la conversación o su cuenta |
 | Events, plantillas de entrenamiento e invitaciones que creaste como Manager, sin autor | Que otros Athletes del club sigan usándolos | Interés legítimo (art. 6.1.f). No contienen tu identidad tras la desvinculación | Mientras el club los mantenga |
 | Feedback que escribiste como Manager, sin tu nombre | Que el Athlete conserve su historial | Ejecución del contrato con el Athlete (art. 6.1.b) | Mientras el Athlete mantenga su cuenta |
 | Registro de auditoría (solo identificadores) | Seguridad y defensa ante reclamaciones | Interés legítimo (art. 6.1.f) y art. 17.3.e | 12 meses |
@@ -129,16 +131,16 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días. El archivo se guarda en almacenamiento privado, solo se descarga con tu sesión y se borra a los 7 días o antes si borras tu cuenta |
 | **Rectificación** (art. 16) | Ajustes > Perfil: email, foto y nick |
 | **Supresión** (art. 17) | Ajustes > Privacidad > Borrar cuenta. Confirmas con un código enviado a tu email, que caduca en 10 minutos. **Es permanente y no tiene marcha atrás** |
-| **Limitación del tratamiento** (art. 18) | Escríbenos a [EMAIL DE CONTACTO] |
+| **Limitación del tratamiento** (art. 18) | Escríbenos a legal@stridesync.fit |
 | **Portabilidad** (art. 20) | La descarga incluye los datos en JSON y CSV |
-| **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a [EMAIL DE CONTACTO] |
-| **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile, notificaciones y datos de salud (RPE y Feedback) |
+| **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a legal@stridesync.fit |
+| **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile y datos de salud (RPE y Feedback). Las notificaciones del servicio no dependen de un consentimiento: puedes silenciarlas en Ajustes |
 
 La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
 
 Respondemos **sin dilación indebida y, como máximo, en un mes**. En casos complejos o con muchas solicitudes podemos prorrogarlo **dos meses más**, y te avisaremos del motivo.
 
-Si crees que tratamos tus datos de forma incorrecta, tienes derecho a reclamar ante la autoridad de control de protección de datos [AUTORIDAD COMPETENTE SEGÚN LA JURISDICCIÓN].
+Si crees que tratamos tus datos de forma incorrecta, tienes derecho a reclamar ante la autoridad de control de protección de datos (en España, la Agencia Española de Protección de Datos, aepd.es).
 
 ## 10. Destinatarios y transferencias
 
@@ -156,7 +158,7 @@ Aplicamos medidas técnicas y organizativas para proteger tus datos: conexión c
 
 ## 12. Menores
 
-[EDAD MÍNIMA DE USO: pendiente de decidir según la jurisdicción]
+La edad mínima de uso es de **16 años**.
 
 ## 13. Cambios en esta política
 
@@ -164,4 +166,4 @@ Si la modificamos de forma relevante, te avisaremos por email con al menos 30 d�
 
 ## 14. Contacto
 
-[EMAIL DE CONTACTO]
+legal@stridesync.fit
