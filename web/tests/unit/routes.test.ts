@@ -54,6 +54,20 @@ describe("checkRouteAccess - Route Protection", () => {
     ).toEqual({ allowed: true });
   });
 
+  it("allows anyone to access /auth/signed-out", () => {
+    expect(
+      checkRouteAccess({ pathname: "/auth/signed-out", isLoggedIn: false })
+    ).toEqual({ allowed: true });
+
+    expect(
+      checkRouteAccess({ pathname: "/auth/signed-out/", isLoggedIn: false })
+    ).toEqual({ allowed: true });
+
+    expect(
+      checkRouteAccess({ pathname: "/auth/signed-out", isLoggedIn: true })
+    ).toEqual({ allowed: true });
+  });
+
   it("handles paths with trailing slashes gracefully", () => {
     expect(
       checkRouteAccess({ pathname: "/login/", isLoggedIn: false })

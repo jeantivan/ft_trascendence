@@ -9,9 +9,10 @@ const initialState: AuthActionResult = { success: true };
 
 interface LoginFormProps {
   callbackUrl?: string;
+  notice?: string;
 }
 
-export function LoginForm({ callbackUrl }: LoginFormProps = {}) {
+export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
 
   return (
@@ -22,7 +23,8 @@ export function LoginForm({ callbackUrl }: LoginFormProps = {}) {
         <input type="hidden" name="callbackUrl" value={callbackUrl} />
       )}
 
-      {!state.success && <AuthErrorBanner error={state.error} />}
+      {/* A failed login attempt replaces the notice that came with the page */}
+      <AuthErrorBanner error={state.success ? notice : state.error} />
 
       <div className="flex flex-col gap-1">
         <label htmlFor="email" className="text-sm font-medium">
