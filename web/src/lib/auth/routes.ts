@@ -8,7 +8,10 @@ export type RouteAccessResult =
   | { allowed: false; redirectTo: string }
   | { allowed: false; status: 401 };
 
-const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register"];
+// /auth/signed-out must stay public: otherwise the proxy would drop
+// ?reason=blocked, or store it in callbackUrl and sign the user out again
+// right after login
+const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register", "/auth/signed-out"];
 
 export function checkRouteAccess({
   pathname,
