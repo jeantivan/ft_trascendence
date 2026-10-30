@@ -5,6 +5,19 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "TryStatement[handler] > BlockStatement.block CallExpression[callee.name='requireAuth']",
+          message:
+            "Call requireAuth() outside try/catch: redirect() throws, and a catch would swallow it.",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

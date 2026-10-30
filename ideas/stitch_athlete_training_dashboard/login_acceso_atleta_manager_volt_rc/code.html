@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>STRIDE / VOLT RC - Acceso al Club</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Space Grotesk & Hanken Grotesk -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&amp;family=Space+Grotesk:wght@300..700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "inverse-primary": "#506600",
+            "rpe-moderate": "#EAB308",
+            "surface-container-highest": "#31353c",
+            "on-error": "#690005",
+            "session-cuestas": "#FF8800",
+            "surface-elevated": "#131923",
+            "outline": "#8e9379",
+            "primary-container": "#c3f400",
+            "on-primary-fixed": "#161e00",
+            "surface-overlay": "#1E2638",
+            "secondary": "#d3fbff",
+            "on-surface-variant": "#c4c9ac",
+            "volume-alert": "#FFB800",
+            "secondary-fixed": "#7df4ff",
+            "on-secondary-container": "#00686f",
+            "surface-bright": "#353940",
+            "session-intervalos": "#FF3366",
+            "session-fartlek": "#CCFF00",
+            "surface-container-lowest": "#0a0e14",
+            "on-tertiary-container": "#00734e",
+            "tertiary": "#ffffff",
+            "on-secondary": "#00363a",
+            "surface-base": "#090D12",
+            "primary": "#ffffff",
+            "text-secondary": "#94A3B8",
+            "surface-variant": "#31353c",
+            "session-tirada-larga": "#A855F7",
+            "text-muted": "#64748B",
+            "surface-dim": "#10141a",
+            "on-tertiary": "#003824",
+            "rpe-hard": "#F97316",
+            "error": "#ffb4ab",
+            "secondary-container": "#00eefc",
+            "text-primary": "#F8FAFC",
+            "background": "#10141a",
+            "session-rodaje": "#00F0FF",
+            "tertiary-container": "#6ffbbe",
+            "surface-container": "#1c2026",
+            "on-primary-container": "#556d00",
+            "rpe-low": "#10B981",
+            "surface-tint": "#abd600",
+            "surface-container-low": "#181c22",
+            "on-secondary-fixed-variant": "#004f54",
+            "error-container": "#93000a",
+            "outline-variant": "#444933",
+            "on-background": "#dfe2eb",
+            "on-tertiary-fixed-variant": "#005236",
+            "surface-container-high": "#262a31",
+            "on-primary-fixed-variant": "#3c4d00",
+            "border-strong": "#374563",
+            "on-tertiary-fixed": "#002113",
+            "tertiary-fixed-dim": "#4edea3",
+            "on-secondary-fixed": "#002022",
+            "inverse-surface": "#dfe2eb",
+            "on-error-container": "#ffdad6",
+            "tertiary-fixed": "#6ffbbe",
+            "on-primary": "#283500",
+            "primary-fixed-dim": "#abd600",
+            "rpe-max": "#EF4444",
+            "secondary-fixed-dim": "#00dbe9",
+            "border-subtle": "#253047",
+            "inverse-on-surface": "#2d3137",
+            "primary-fixed": "#c3f400",
+            "surface": "#10141a",
+            "on-surface": "#dfe2eb"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-sm": "0.5rem",
+            "space-md": "1rem",
+            "margin": "1rem",
+            "margin-tablet": "2rem",
+            "gutter-desktop": "1.75rem",
+            "space-xs": "0.25rem",
+            "gutter": "1.25rem",
+            "space-xl": "2.5rem",
+            "margin-desktop": "3rem",
+            "space-lg": "1.5rem"
+          },
+          "fontFamily": {
+            "body-lg": ["Hanken Grotesk"],
+            "label-caps": ["Space Grotesk"],
+            "body-sm": ["Hanken Grotesk"],
+            "label-badge": ["Space Grotesk"],
+            "display-hero-mobile": ["Space Grotesk"],
+            "headline-lg": ["Space Grotesk"],
+            "display-hero": ["Space Grotesk"],
+            "body-md": ["Hanken Grotesk"],
+            "headline-sm": ["Space Grotesk"],
+            "headline-md": ["Space Grotesk"],
+            "metric-huge": ["Space Grotesk"],
+            "headline-lg-mobile": ["Space Grotesk"]
+          },
+          "fontSize": {
+            "body-lg": ["17px", {"lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+            "label-caps": ["11px", {"lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "700"}],
+            "body-sm": ["13px", {"lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400"}],
+            "label-badge": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+            "display-hero-mobile": ["36px", {"lineHeight": "42px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+            "display-hero": ["56px", {"lineHeight": "64px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+            "body-md": ["15px", {"lineHeight": "22px", "letterSpacing": "0", "fontWeight": "400"}],
+            "headline-sm": ["18px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600"}],
+            "headline-md": ["22px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+            "metric-huge": ["44px", {"lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+            "headline-lg-mobile": ["26px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-surface-base text-text-primary min-h-screen antialiased selection:bg-session-fartlek selection:text-surface-base overflow-x-hidden">
+<!-- Main Container: Linear Task-Focused Screen (Automatic Navigation Shell Suppression) -->
+<div class="min-h-screen w-full flex flex-col lg:flex-row relative">
+<!-- COLUMNA IZQUIERDA / HERO VISUAL DE MARCA -->
+<section class="relative w-full lg:w-7/12 xl:w-3/5 bg-surface-elevated p-6 md:p-10 lg:p-16 flex flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-border-subtle">
+<!-- Fondo Atmosférico Fotográfico con Overlay Obsidiana y Destellos Volt -->
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-cover bg-center opacity-30 transform scale-105" data-alt="High-contrast athletic photography of long-distance endurance marathon runners training on wet asphalt at night under moody streetlamps. Deep obsidian shadows and slate textures dominate the atmospheric scene, punctuated by sharp electric neon lime and cyan race course marker reflections on the ground. Ultra sharp editorial sports capture with cinematic shallow depth of field." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAkRSSKQ5yDNKRnMRXf_jdcPeJTMrhU5LSzaZjoXQPiOOM06Rr3RqV7k5bXDZZe3pud93a8rlAPSLALqJgwyhbbwWPYGmiTQffNoKBB5V98thwAZ2QquEZTmF0fsgBeQ0L-9eZP0JXVuEeetLaCyvqOnHnK9CwYJ0xza9SuPPTTZ8uzreA8x6p20yhc_fhxGr5tk26mRUqeARZdOS2bsMrM5i2_Oc2c7r7wQogC2wgUNTeXr56V7-NrSQ')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-elevated via-surface-elevated/85 to-surface-base/90"></div>
+<div class="absolute -top-32 -left-32 w-96 h-96 bg-session-fartlek/10 rounded-full blur-3xl pointer-events-none"></div>
+<div class="absolute bottom-10 right-10 w-80 h-80 bg-session-rodaje/10 rounded-full blur-3xl pointer-events-none"></div>
+</div>
+<!-- Contenido Superior: Identidad & Badge -->
+<div class="relative z-10">
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 rounded-lg bg-session-fartlek flex items-center justify-center text-surface-base font-headline-md font-bold shadow-[0_0_20px_rgba(204,255,0,0.3)]">
+<span class="material-symbols-outlined text-surface-base" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md tracking-tight font-bold text-text-primary">STRIDE</span>
+<span class="font-headline-md text-headline-md tracking-tight font-bold text-session-fartlek">VOLT RC</span>
+</div>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-session-fartlek/15 border border-session-fartlek text-session-fartlek font-label-caps text-label-caps tracking-wider">
+                ECOSISTEMA DE RENDIMIENTO Y CLUBES
+              </span>
+<span class="w-1.5 h-1.5 rounded-full bg-session-rodaje animate-pulse"></span>
+</div>
+</div>
+</div>
+<!-- Titular Aspiracional -->
+<div class="mt-12 md:mt-16 max-w-xl">
+<h1 class="hidden lg:block font-display-hero text-display-hero text-text-primary tracking-tight font-bold leading-tight">
+            Entrena con propósito. <br/>
+<span class="text-transparent bg-clip-text bg-gradient-to-r from-session-fartlek via-primary to-session-rodaje">
+              Conecta con tu club.
+            </span>
+</h1>
+<h1 class="lg:hidden font-display-hero-mobile text-display-hero-mobile text-text-primary tracking-tight font-bold leading-tight">
+            Entrena con propósito. <br/>
+<span class="text-transparent bg-clip-text bg-gradient-to-r from-session-fartlek to-session-rodaje">
+              Conecta con tu club.
+            </span>
+</h1>
+<p class="mt-4 font-body-lg text-body-lg text-text-secondary">
+            La infraestructura digital para atletas de fondo, entrenadores tácticos y directivas de clubes que exigen precisión cronométrica y cohesión de equipo.
+          </p>
+</div>
+<!-- Bento Grid: Tres Roles del Ecosistema -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-8 md:mt-10">
+<!-- Atletas -->
+<div class="p-4 rounded-xl bg-surface-overlay/80 border border-border-subtle backdrop-blur-sm relative group hover:border-session-fartlek transition-colors">
+<div class="w-2 h-2 rounded-full bg-session-fartlek mb-3 shadow-[0_0_8px_rgba(204,255,0,0.6)]"></div>
+<p class="font-headline-sm text-headline-sm text-text-primary">Atletas</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-1">
+              Registro RPE privado por sesión, sincronización de pulsos y reserva de plazas en quedadas presenciales.
+            </p>
+<div class="mt-3 flex items-center gap-1.5 text-session-fartlek font-label-caps text-label-caps">
+<span class="material-symbols-outlined text-[14px]">speed</span>
+<span>SUB-3:00 / AVANZADO</span>
+</div>
+</div>
+<!-- Entrenadores -->
+<div class="p-4 rounded-xl bg-surface-overlay/80 border border-border-subtle backdrop-blur-sm relative group hover:border-session-rodaje transition-colors">
+<div class="w-2 h-2 rounded-full bg-session-rodaje mb-3 shadow-[0_0_8px_rgba(0,240,255,0.6)]"></div>
+<p class="font-headline-sm text-headline-sm text-text-primary">Managers &amp; Coaches</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-1">
+              Periodización macrociclo, control de carga de fatiga aguda/crónica y distribución de ritmos de fartlek.
+            </p>
+<div class="mt-3 flex items-center gap-1.5 text-session-rodaje font-label-caps text-label-caps">
+<span class="material-symbols-outlined text-[14px]">calendar_month</span>
+<span>PERIODIZACIÓN DINÁMICA</span>
+</div>
+</div>
+<!-- Clubes -->
+<div class="p-4 rounded-xl bg-surface-overlay/80 border border-border-subtle backdrop-blur-sm relative group hover:border-session-tirada-larga transition-colors">
+<div class="w-2 h-2 rounded-full bg-session-tirada-larga mb-3 shadow-[0_0_8px_rgba(168,85,247,0.6)]"></div>
+<p class="font-headline-sm text-headline-sm text-text-primary">Directiva de Club</p>
+<p class="font-body-sm text-body-sm text-text-secondary mt-1">
+              Gestión centralizada de licencias, convocatorias de competición y analíticas de asistencia colectiva.
+            </p>
+<div class="mt-3 flex items-center gap-1.5 text-session-tirada-larga font-label-caps text-label-caps">
+<span class="material-symbols-outlined text-[14px]">diversity_3</span>
+<span>COMUNIDAD OFICIAL</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Contenido Inferior: Métricas Sociales de Alto Rendimiento -->
+<div class="relative z-10 pt-10 mt-8 border-t border-border-subtle">
+<div class="grid grid-cols-3 gap-4">
+<div>
+<div class="flex items-baseline gap-1">
+<span class="font-metric-huge text-metric-huge font-bold text-session-fartlek tracking-tight">+1,200</span>
+</div>
+<p class="font-label-caps text-label-caps text-text-muted mt-1 uppercase tracking-wider">Atletas Activos</p>
+</div>
+<div>
+<div class="flex items-baseline gap-1">
+<span class="font-metric-huge text-metric-huge font-bold text-text-primary tracking-tight">48</span>
+<span class="text-session-rodaje font-headline-sm font-bold">RC</span>
+</div>
+<p class="font-label-caps text-label-caps text-text-muted mt-1 uppercase tracking-wider">Clubes Conectados</p>
+</div>
+<div>
+<div class="flex items-baseline gap-1">
+<span class="font-metric-huge text-metric-huge font-bold text-session-fartlek tracking-tight">98%</span>
+</div>
+<p class="font-label-caps text-label-caps text-text-muted mt-1 uppercase tracking-wider">Asistencia a Quedadas</p>
+</div>
+</div>
+<!-- Social Proof Preview Strip -->
+<div class="mt-6 flex items-center justify-between text-text-secondary font-body-sm text-body-sm">
+<div class="flex items-center gap-3">
+<div class="flex -space-x-2">
+<div class="w-7 h-7 rounded-full bg-surface-overlay border-2 border-surface-elevated flex items-center justify-center text-[11px] font-bold text-session-fartlek">MS</div>
+<div class="w-7 h-7 rounded-full bg-surface-overlay border-2 border-surface-elevated flex items-center justify-center text-[11px] font-bold text-session-rodaje">EG</div>
+<div class="w-7 h-7 rounded-full bg-surface-overlay border-2 border-surface-elevated flex items-center justify-center text-[11px] font-bold text-session-tirada-larga">LR</div>
+</div>
+<span>Validado por atletas en Madrid, Barcelona, Valencia y Donostia.</span>
+</div>
+<div class="flex items-center gap-1 text-session-fartlek font-label-caps text-label-caps">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span>PLATAFORMA VERIFICADA</span>
+</div>
+</div>
+</div>
+</section>
+<!-- COLUMNA DERECHA / FORMULARIO DE INICIO DE SESIÓN -->
+<section class="w-full lg:w-5/12 xl:w-2/5 bg-surface-base p-6 sm:p-10 lg:p-12 xl:p-16 flex flex-col justify-between relative">
+<!-- Glow superior derecho -->
+<div class="absolute top-0 right-0 w-64 h-64 bg-session-fartlek/5 rounded-full blur-3xl pointer-events-none"></div>
+<!-- Encabezado superior / Selector de Idioma -->
+<div class="flex justify-between items-center mb-8 relative z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-overlay text-text-secondary font-label-caps text-label-caps border border-border-subtle">
+<span class="w-1.5 h-1.5 rounded-full bg-session-fartlek"></span>
+          AUTH.GATEWAY.V2
+        </span>
+<!-- Selector de Idioma -->
+<div class="relative inline-block text-left">
+<button class="flex items-center gap-1.5 text-text-secondary hover:text-text-primary font-body-sm text-body-sm transition-colors py-1 px-2 rounded hover:bg-surface-overlay" type="button">
+<span class="material-symbols-outlined text-[16px]">language</span>
+<span>Español (ES)</span>
+<span class="material-symbols-outlined text-[14px]">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Contenedor Principal del Formulario -->
+<div class="max-w-md w-full mx-auto relative z-10 my-auto">
+<!-- Encabezado de Sesión -->
+<div>
+<h2 class="font-headline-lg text-headline-lg font-bold text-text-primary tracking-tight">Iniciar Sesión</h2>
+<p class="font-body-md text-body-md text-text-secondary mt-1.5">
+            Introduce tus credenciales para acceder a tu plan de entrenamiento y quedadas de club.
+          </p>
+</div>
+<!-- Selector de Rol / Acceso Rápido Segmentado -->
+<div class="mt-6 p-1 bg-surface-overlay rounded-lg border border-border-subtle flex gap-1">
+<button class="role-btn flex-1 py-2 text-center rounded-md font-label-badge text-label-badge bg-surface-elevated text-session-fartlek border border-session-fartlek shadow-sm transition-all duration-150" id="role-atleta" type="button">
+            Soy Atleta
+          </button>
+<button class="role-btn flex-1 py-2 text-center rounded-md font-label-badge text-label-badge text-text-secondary hover:text-text-primary hover:bg-surface-elevated/50 transition-all duration-150" id="role-coach" type="button">
+            Entrenador
+          </button>
+<button class="role-btn flex-1 py-2 text-center rounded-md font-label-badge text-label-badge text-text-secondary hover:text-text-primary hover:bg-surface-elevated/50 transition-all duration-150" id="role-admin" type="button">
+            Club Admin
+          </button>
+</div>
+<!-- Botones SSO Deportivos (Garmin & Strava/Google) -->
+<div class="mt-6 space-y-2.5">
+<!-- Garmin Connect SSO -->
+<button class="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-surface-overlay hover:bg-surface-elevated border border-border-strong hover:border-session-fartlek/60 text-text-primary transition-all duration-150 group active:scale-[0.99]" type="button">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-session-rodaje group-hover:text-session-fartlek transition-colors" style="font-variation-settings: 'FILL' 1;">watch</span>
+<span class="font-body-md text-body-md font-medium">Continuar con Garmin Connect</span>
+</div>
+<span class="font-label-caps text-label-caps text-session-rodaje px-1.5 py-0.5 rounded bg-session-rodaje/10 border border-session-rodaje/30">SYNC</span>
+</button>
+<!-- Strava / Google SSO -->
+<div class="grid grid-cols-2 gap-2.5">
+<button class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-surface-overlay hover:bg-surface-elevated border border-border-subtle hover:border-border-strong text-text-primary transition-all duration-150 active:scale-[0.99]" type="button">
+<span class="material-symbols-outlined text-session-cuestas text-[18px]" style="font-variation-settings: 'FILL' 1;">directions_run</span>
+<span class="font-body-sm text-body-sm font-medium">Strava</span>
+</button>
+<button class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-surface-overlay hover:bg-surface-elevated border border-border-subtle hover:border-border-strong text-text-primary transition-all duration-150 active:scale-[0.99]" type="button">
+<span class="material-symbols-outlined text-text-secondary text-[18px]">account_circle</span>
+<span class="font-body-sm text-body-sm font-medium">Google SSO</span>
+</button>
+</div>
+</div>
+<!-- Separador -->
+<div class="relative my-6 flex items-center justify-center">
+<div class="border-t border-border-subtle w-full"></div>
+<span class="bg-surface-base px-3 font-label-caps text-label-caps text-text-muted tracking-wider uppercase">
+            o accede con tu correo de atleta
+          </span>
+</div>
+<!-- Formulario Principal -->
+<form class="space-y-4" onsubmit="event.preventDefault();">
+<!-- Campo: Correo Electrónico / ID -->
+<div>
+<label class="block font-label-badge text-label-badge text-text-secondary mb-1.5" for="athlete-email">
+              CORREO ELECTRÓNICO O ID DE ATLETA
+            </label>
+<div class="relative rounded-lg">
+<div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
+<span class="material-symbols-outlined text-[18px]">alternate_email</span>
+</div>
+<input class="w-full bg-surface-overlay border border-border-subtle rounded-lg pl-10 pr-4 py-3 text-text-primary font-body-md text-body-md focus:border-session-fartlek focus:ring-0 focus:outline-none transition-colors placeholder:text-text-muted" id="athlete-email" placeholder="marcos.soler@retirovolt.es" required="" type="email" value="marcos.soler@retirovolt.es"/>
+</div>
+</div>
+<!-- Campo: Contraseña -->
+<div>
+<div class="flex justify-between items-center mb-1.5">
+<label class="block font-label-badge text-label-badge text-text-secondary" for="athlete-password">
+                CONTRASEÑA DEL CLUB
+              </label>
+<a class="font-body-sm text-body-sm text-session-fartlek hover:underline" href="#">
+                ¿Olvidaste tu contraseña?
+              </a>
+</div>
+<div class="relative rounded-lg">
+<div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+</div>
+<input class="w-full bg-surface-overlay border border-border-subtle rounded-lg pl-10 pr-11 py-3 text-text-primary font-body-md text-body-md focus:border-session-fartlek focus:ring-0 focus:outline-none transition-colors placeholder:text-text-muted" id="athlete-password" required="" type="password" value="••••••••••••"/>
+<button aria-label="Mostrar u ocultar contraseña" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-text-muted hover:text-text-primary transition-colors focus:outline-none" id="toggle-pwd-btn" type="button">
+<span class="material-symbols-outlined text-[18px]" id="toggle-pwd-icon">visibility</span>
+</button>
+</div>
+</div>
+<!-- Checkbox: Mantener Sesión Iniciada -->
+<div class="flex items-center justify-between pt-1">
+<label class="flex items-center gap-2.5 cursor-pointer select-none">
+<input checked="" class="w-4 h-4 rounded bg-surface-overlay border border-border-strong text-session-fartlek focus:ring-0 focus:ring-offset-0 focus:outline-none cursor-pointer" type="checkbox"/>
+<span class="font-body-sm text-body-sm text-text-secondary">
+                Mantener sesión iniciada en este dispositivo
+              </span>
+</label>
+<span class="font-label-caps text-label-caps text-text-muted">30 DÍAS</span>
+</div>
+<!-- Botón CTA Principal Volt Lime -->
+<button class="w-full h-12 mt-2 rounded-lg bg-session-fartlek hover:bg-session-fartlek/90 text-surface-base font-label-caps text-label-badge font-bold tracking-tight uppercase flex items-center justify-center gap-2 shadow-[0_0_24px_-4px_rgba(204,255,0,0.35)] hover:shadow-[0_0_28px_rgba(204,255,0,0.5)] transition-all duration-150 active:scale-[0.99]" type="submit">
+<span>Entrar a mi Club</span>
+<span class="material-symbols-outlined font-bold text-[18px]">arrow_forward</span>
+</button>
+</form>
+<!-- Bloque Aviso de Acceso Exclusivo / Invitación -->
+<div class="mt-6 p-3.5 rounded-lg bg-surface-elevated border border-border-subtle flex items-start gap-3">
+<span class="material-symbols-outlined text-volume-alert shrink-0 text-[20px] mt-0.5">key</span>
+<div class="font-body-sm text-body-sm text-text-secondary">
+<span class="font-semibold text-text-primary">¿Nuevo en el club?</span> 
+            El acceso es exclusivo por invitación del Manager de tu club de running. 
+            <a class="text-session-fartlek hover:underline font-medium ml-1 inline-flex items-center" href="#">
+              Introduce el código de invitación o solicita unirte →
+            </a>
+</div>
+</div>
+</div>
+<!-- Pie de Formulario: Privacidad RPE, Términos y Soporte -->
+<div class="mt-8 pt-6 border-t border-border-subtle relative z-10">
+<div class="flex flex-wrap items-center justify-between gap-y-2 text-text-muted font-body-sm text-body-sm">
+<div class="flex items-center gap-4">
+<a class="hover:text-text-secondary transition-colors" href="#">
+              Política de Privacidad y confidencialidad RPE
+            </a>
+<span class="w-1 h-1 rounded-full bg-border-strong"></span>
+<a class="hover:text-text-secondary transition-colors" href="#">
+              Términos del Club
+            </a>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] text-rpe-low" style="font-variation-settings: 'FILL' 1;">shield</span>
+<span class="font-label-caps text-label-caps">ENCRIPTACIÓN DEPORTIVA TLS 1.3</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Micro-interacción: Toggle Contraseña & Selector de Roles -->
+<script>
+    // Selector de visibilidad de contraseña
+    const toggleBtn = document.getElementById('toggle-pwd-btn');
+    const pwdInput = document.getElementById('athlete-password');
+    const pwdIcon = document.getElementById('toggle-pwd-icon');
+
+    if (toggleBtn && pwdInput && pwdIcon) {
+      toggleBtn.addEventListener('click', () => {
+        const isPassword = pwdInput.getAttribute('type') === 'password';
+        pwdInput.setAttribute('type', isPassword ? 'text' : 'password');
+        pwdIcon.textContent = isPassword ? 'visibility_off' : 'visibility';
+      });
+    }
+
+    // Selector segmentado de rol de usuario
+    const roleButtons = document.querySelectorAll('.role-btn');
+    roleButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        roleButtons.forEach(b => {
+          b.className = 'role-btn flex-1 py-2 text-center rounded-md font-label-badge text-label-badge text-text-secondary hover:text-text-primary hover:bg-surface-elevated/50 transition-all duration-150';
+        });
+        btn.className = 'role-btn flex-1 py-2 text-center rounded-md font-label-badge text-label-badge bg-surface-elevated text-session-fartlek border border-session-fartlek shadow-sm transition-all duration-150';
+      });
+    });
+  </script>
+</body></html>
