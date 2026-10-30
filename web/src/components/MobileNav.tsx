@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { NAV_ITEMS } from "@/config/navigation";
+import { LogoutButton } from "./LogoutButton";
 import { NavLink } from "./NavLink";
 
 export function MobileNav() {
@@ -34,12 +35,17 @@ export function MobileNav() {
         <nav
           id="mobile-menu"
           aria-label="Principal"
-          onClick={() => setOpen(false)}
+          onClick={(e) => {
+            // Solo los enlaces cierran el menú: si se cierra al pulsar el
+            // botón de cerrar sesión, el formulario se desmonta antes de enviarse
+            if ((e.target as HTMLElement).closest("a")) setOpen(false);
+          }}
           className="flex flex-col gap-1 px-4 pb-4"
         >
           {NAV_ITEMS.map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} />
           ))}
+          <LogoutButton />
         </nav>
       )}
     </header>
