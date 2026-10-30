@@ -1,7 +1,11 @@
 # Stage 1: install dependencies (including dev dependencies, needed to build)
 FROM node:24.21.0-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+# Install as node, not root: the dev and migrate stages run as node, and tools
+# write caches inside node_modules (Vitest uses node_modules/.vitest-cache, #64)
+RUN chown node:node /app
+USER node
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci
 
 # Dev stage (make dev): no build, the source code is bind-mounted at runtime
