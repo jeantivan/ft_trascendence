@@ -93,3 +93,12 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
 
   return { sessions, logs };
 }
+
+// Monday 00:00 UTC of the 6 full weeks that end just before today's week
+export function historyStart(today: Date): Date {
+  // getUTCDay() starts on Sunday (0); this makes Monday 0 and Sunday 6
+  const daysSinceMonday = (today.getUTCDay() + 6) % 7;
+  // A negative day is fine: Date.UTC moves back the months, like mktime in C
+  const day = today.getUTCDate() - daysSinceMonday - WEEKS * 7;
+  return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), day));
+}

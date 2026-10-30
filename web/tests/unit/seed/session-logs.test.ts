@@ -6,7 +6,11 @@ import {
   GROUP_ADVANCED_ID,
   GROUP_BEGINNERS_ID,
 } from "../../../prisma/seed/ids";
-import { generateSessionHistory, type GeneratedLog } from "../../../prisma/seed/session-logs";
+import {
+  generateSessionHistory,
+  historyStart,
+  type GeneratedLog,
+} from "../../../prisma/seed/session-logs";
 import { SessionType } from "../../../src/generated/prisma/enums";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -180,5 +184,22 @@ describe("generateSessionHistory", () => {
     for (const session of advanced.sessions) {
       expect(beginnersIds.has(session.id)).toBe(false);
     }
+  });
+});
+
+describe("historyStart", () => {
+  // The 6 weeks before the week of today: Monday 14 Sep to Sunday 25 Oct 2026
+  const expected = new Date("2026-09-14T00:00:00.000Z");
+
+  it("returns the Monday 6 weeks before the current week", () => {
+    expect(historyStart(new Date("2026-10-29T15:30:00.000Z"))).toEqual(expected);
+  });
+
+  it("treats a Monday as the first day of the current week", () => {
+    expect(historyStart(new Date("2026-10-26T00:00:00.000Z"))).toEqual(expected);
+  });
+
+  it("treats a Sunday as the last day of the current week", () => {
+    expect(historyStart(new Date("2026-11-01T23:59:00.000Z"))).toEqual(expected);
   });
 });
