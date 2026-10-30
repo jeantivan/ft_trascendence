@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ATHLETE_1_ID, ATHLETE_2_ID, CLUB_ID, GROUP_BEGINNERS_ID } from "../../../prisma/seed/ids";
+import {
+  ATHLETE_1_ID,
+  ATHLETE_2_ID,
+  CLUB_ID,
+  GROUP_ADVANCED_ID,
+  GROUP_BEGINNERS_ID,
+} from "../../../prisma/seed/ids";
 import { generateSessionHistory, type GeneratedLog } from "../../../prisma/seed/session-logs";
 import { SessionType } from "../../../src/generated/prisma/enums";
 
@@ -16,6 +22,7 @@ function generateWith(random: () => number) {
     athleteIds: [ATHLETE_1_ID],
     orgId: CLUB_ID,
     groupId: GROUP_BEGINNERS_ID,
+    firstSessionNumber: 101,
     start,
     random,
   });
@@ -130,6 +137,7 @@ describe("generateSessionHistory", () => {
       groupId: GROUP_BEGINNERS_ID,
       start,
       random: () => 0.5,
+      firstSessionNumber: 101,
     });
 
     expect(group.logs.length).toBe(group.sessions.length * athleteIds.length);
@@ -155,6 +163,22 @@ describe("generateSessionHistory", () => {
   it("marks every log as completed", () => {
     for (const log of history.logs) {
       expect(log.completed).toBe(true);
+    }
+  });
+
+  it("gives two groups different session ids when their numbers do not overlap", () => {
+    const advanced = generateSessionHistory({
+      athleteIds: [ATHLETE_2_ID],
+      orgId: CLUB_ID,
+      groupId: GROUP_ADVANCED_ID,
+      firstSessionNumber: 201,
+      start,
+      random: () => 0.5,
+    });
+
+    const beginnersIds = new Set(history.sessions.map((session) => session.id));
+    for (const session of advanced.sessions) {
+      expect(beginnersIds.has(session.id)).toBe(false);
     }
   });
 });

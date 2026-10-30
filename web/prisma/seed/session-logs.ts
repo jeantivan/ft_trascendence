@@ -11,6 +11,9 @@ export interface SessionHistoryParams {
   start: Date;
   // Returns a number in [0, 1), like Math.random. Tests pass a fixed one.
   random: () => number;
+  // Ids are built from this number: give each group its own range
+  // (e.g. 101 and 201) or their sessions get the same ids.
+  firstSessionNumber: number;
 }
 
 export interface GeneratedSession {
@@ -43,10 +46,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKS = 6;
 // Monday, Wednesday and Saturday of each week
 const TRAINING_DAYS = [0, 2, 5];
-const FIRST_SESSION_NUMBER = 101;
 
 // Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
-// Group sessions are shared by all its Athletes, so ids never collide.
+// The Athletes of a group share its sessions, so ids only collide between
+// groups, if their firstSessionNumber ranges overlap.
 function sessionId(number: number): string {
   return "00000000-0000-4000-8000-" + String(number).padStart(12, "0");
 }
@@ -54,7 +57,7 @@ function sessionId(number: number): string {
 export function generateSessionHistory(params: SessionHistoryParams): SessionHistory {
   const sessions: GeneratedSession[] = [];
   const logs: GeneratedLog[] = [];
-  let number = FIRST_SESSION_NUMBER;
+  let number = params.firstSessionNumber;
 
   for (let week = 0; week < WEEKS; week++) {
     for (const day of TRAINING_DAYS) {
