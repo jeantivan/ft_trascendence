@@ -6,7 +6,10 @@ export interface OtpRecord {
   userId: string;
   purpose: OtpPurpose;
   codeHash: string;
+  expiresAt: Date;
 }
+
+const OTP_TTL_MS = 10 * 60 * 1000;
 
 export interface OtpRepository {
   create(record: OtpRecord): Promise<void>;
@@ -20,9 +23,11 @@ export async function issueOtp(
   userId: string,
   purpose: OtpPurpose,
   repo: OtpRepository,
+  now: Date = new Date(),
 ): Promise<string> {
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  await repo.create({ userId, purpose, codeHash: await hashPassword(code) });
+  const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
+  await repo.create({ userId, purpose, codeHash: await hashPassword(code), expiresAt });
   return code;
 }
 
@@ -31,9 +36,10 @@ export async function verifyOtp(
   purpose: OtpPurpose,
   code: string,
   repo: OtpRepository,
+  now: Date = new Date(),
 ): Promise<VerifyOtpResult> {
   const record = await repo.findLatest(userId, purpose);
-  if (!record || !(await verifyPassword(code, record.codeHash))) {
+  if (!record || now >= record.expiresAt || !(await verifyPassword(code, record.codeHash))) {
     return { success: false, reason: "invalid" };
   }
   return { success: true };
