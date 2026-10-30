@@ -37,6 +37,31 @@ describe("verifyOtp", () => {
     expect(result).toEqual({ success: false, reason: "invalid" });
   });
 
+  it("rechaza un código ya usado", async () => {
+    const code = await issueOtp(USER_ID, "delete_account", repo);
+
+    const first = await verifyOtp(USER_ID, "delete_account", code, repo);
+    const second = await verifyOtp(USER_ID, "delete_account", code, repo);
+
+    expect(first).toEqual({ success: true });
+    expect(second).toEqual({ success: false, reason: "invalid" });
+  });
+
+  it("rechaza un código válido si el repositorio no consigue consumirlo", async () => {
+    // Simula la carrera: otra petición consumió el código entre la lectura y el consumo
+    class LostRaceRepository extends InMemoryOtpRepository {
+      async consumeIfUnused(): Promise<boolean> {
+        return false;
+      }
+    }
+    const racedRepo = new LostRaceRepository();
+    const code = await issueOtp(USER_ID, "delete_account", racedRepo);
+
+    const result = await verifyOtp(USER_ID, "delete_account", code, racedRepo);
+
+    expect(result).toEqual({ success: false, reason: "invalid" });
+  });
+
   it("acepta un código un milisegundo antes de expirar", async () => {
     const issuedAt = new Date("2026-10-30T12:00:00Z");
     const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
