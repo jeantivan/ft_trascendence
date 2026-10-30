@@ -31,6 +31,7 @@ export interface GeneratedLog {
   rpe: number;
   distanceM: number;
   durationS: number;
+  completed: boolean;
 }
 
 export interface SessionHistory {
@@ -81,6 +82,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
           // 5 km at 6:00 min/km, an easy run
           distanceM: 5000,
           durationS: 1800,
+          completed: true,
         });
       }
     }

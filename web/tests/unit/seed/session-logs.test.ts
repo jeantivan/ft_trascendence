@@ -151,4 +151,10 @@ describe("generateSessionHistory", () => {
       expect(Object.values(SessionType)).toContain(session.sessionType);
     }
   });
+
+  it("marks every log as completed", () => {
+    for (const log of history.logs) {
+      expect(log.completed).toBe(true);
+    }
+  });
 });
