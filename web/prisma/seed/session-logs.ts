@@ -23,6 +23,8 @@ export interface GeneratedLog {
   performedAt: Date;
   // 1-10, like SessionLog.rpe
   rpe: number;
+  distanceM: number;
+  durationS: number;
 }
 
 export interface SessionHistory {
@@ -36,6 +38,16 @@ const FIRST_SESSION_ID = "00000000-0000-4000-8000-000000000101";
 export function generateSessionHistory(params: SessionHistoryParams): SessionHistory {
   return {
     sessions: [{ id: FIRST_SESSION_ID, scheduledAt: params.start }],
-    logs: [{ sessionId: FIRST_SESSION_ID, performedAt: params.start, rpe: 5 }],
+    // 5 km at 6:00 min/km, an easy run
+    logs: [
+      {
+        sessionId: FIRST_SESSION_ID,
+        performedAt: params.start,
+        // random() is in [0, 1), so this gives an integer from 1 to 10
+        rpe: 1 + Math.floor(params.random() * 10),
+        distanceM: 5000,
+        durationS: 1800,
+      },
+    ],
   };
 }
