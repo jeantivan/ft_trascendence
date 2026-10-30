@@ -1,6 +1,7 @@
 // Generates a simulated training history (TrainingSessions + SessionLogs) for
 // the demo seed, so analytics can be built before Athletes log real sessions.
 // Pure: it never touches the database; seed.ts saves what it returns.
+import { SessionOrigin, SessionType } from "../../src/generated/prisma/enums";
 
 export interface SessionHistoryParams {
   athleteIds: string[];
@@ -14,6 +15,10 @@ export interface SessionHistoryParams {
 
 export interface GeneratedSession {
   id: string;
+  orgId: string;
+  groupId: string;
+  origin: SessionOrigin;
+  sessionType: SessionType;
   scheduledAt: Date;
 }
 
@@ -56,7 +61,15 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       const date = new Date(params.start.getTime() + (week * 7 + day) * DAY_MS);
       number++;
 
-      sessions.push({ id, scheduledAt: date });
+      sessions.push({
+        id,
+        orgId: params.orgId,
+        groupId: params.groupId,
+        origin: "template",
+        // An easy run, like the 5 km at 6:00 min/km of the logs
+        sessionType: "rodaje",
+        scheduledAt: date,
+      });
       // One log per Athlete: each one rates the same session differently
       for (const athleteId of params.athleteIds) {
         logs.push({

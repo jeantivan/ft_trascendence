@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ATHLETE_1_ID, ATHLETE_2_ID, CLUB_ID, GROUP_BEGINNERS_ID } from "../../../prisma/seed/ids";
 import { generateSessionHistory, type GeneratedLog } from "../../../prisma/seed/session-logs";
+import { SessionType } from "../../../src/generated/prisma/enums";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Believable running paces: 2:30 to 10:00 min/km
@@ -140,5 +141,14 @@ describe("generateSessionHistory", () => {
       pairs.add(log.sessionId + "/" + log.athleteId);
     }
     expect(pairs.size).toBe(group.logs.length);
+  });
+
+  it("creates Template Sessions of the given club and group", () => {
+    for (const session of history.sessions) {
+      expect(session.orgId).toBe(CLUB_ID);
+      expect(session.groupId).toBe(GROUP_BEGINNERS_ID);
+      expect(session.origin).toBe("template");
+      expect(Object.values(SessionType)).toContain(session.sessionType);
+    }
   });
 });
