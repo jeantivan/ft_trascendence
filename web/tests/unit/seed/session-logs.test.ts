@@ -33,6 +33,17 @@ function averageRpe(logs: GeneratedLog[]): number {
   return total / logs.length;
 }
 
+function sequence(values: number[]): () => number {
+  let index = 0;
+
+  return () => {
+    const value = values[index];
+
+    index = (index + 1) % values.length;
+    return value;
+  };
+}
+
 describe("generateSessionHistory", () => {
   it("places every session and log inside the 6 weeks after start", () => {
     expect(history.sessions.length).toBeGreaterThan(0);
@@ -101,5 +112,12 @@ describe("generateSessionHistory", () => {
 
   it("gives a lower average RPE when random always returns low values", () => {
     expect(averageRpe(low.logs)).toBeLessThan(averageRpe(high.logs));
+  });
+
+  it("returns the same history for the same random sequence", () => {
+    const first = generateWith(sequence([0.1, 0.7, 0.3, 0.95]));
+    const second = generateWith(sequence([0.1, 0.7, 0.3, 0.95]));
+
+    expect(first).toEqual(second);
   });
 });
