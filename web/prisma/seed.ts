@@ -1,5 +1,6 @@
 // Development demo data (issue #19): 1 Admin, 1 Club with 1 Manager,
-// 2 Athletes and 2 Groups. Never run in production.
+// 2 Athletes and 2 Groups, plus 6 weeks of session history per Group (issue
+// #23, seed/session-logs.ts). Never run in production.
 // Safe to run many times: every write is an upsert ("create it if it does not
 // exist; if it exists, leave it as it is").
 // A database seeded before users had fixed ids fails here with a duplicate
@@ -19,6 +20,7 @@ import {
   GROUP_BEGINNERS_ID,
   MANAGER_ID,
 } from "./seed/ids";
+import { generateSessionHistory, historyStart } from "./seed/session-logs";
 
 async function main() {
   const seedPassword = process.env.SEED_USER_PASSWORD;
@@ -74,10 +76,16 @@ async function main() {
     });
   }
 
+  // firstSessionNumber: each group's session ids start there. The ranges must
+  // not overlap, or the upserts would silently skip the other group's sessions.
   const groups = [
-    { id: GROUP_BEGINNERS_ID, name: "Iniciación", level: "inicial", objective: "carrera corta", athleteId: ATHLETE_1_ID },
-    { id: GROUP_ADVANCED_ID, name: "Avanzado", level: "avanzado", objective: "maratón", athleteId: ATHLETE_2_ID },
+    { id: GROUP_BEGINNERS_ID, name: "Iniciación", level: "inicial", objective: "carrera corta", athleteId: ATHLETE_1_ID, firstSessionNumber: 101 },
+    { id: GROUP_ADVANCED_ID, name: "Avanzado", level: "avanzado", objective: "maratón", athleteId: ATHLETE_2_ID, firstSessionNumber: 201 },
   ];
+  // Session history: dates stay as they were on the first seed (upserts)
+  const start = historyStart(new Date());
+  let sessionCount = 0;
+  let logCount = 0;
   for (const group of groups) {
     await prisma.group.upsert({
       where: { id: group.id },
@@ -89,10 +97,38 @@ async function main() {
       update: {},
       create: { groupId: group.id, userId: group.athleteId },
     });
+
+    const history = generateSessionHistory({
+      athleteIds: [group.athleteId],
+      orgId: CLUB_ID,
+      groupId: group.id,
+      firstSessionNumber: group.firstSessionNumber,
+      start,
+      random: Math.random,
+    });
+    // Sessions first: every log points to one of them
+    for (const session of history.sessions) {
+      await prisma.trainingSession.upsert({
+        where: { id: session.id },
+        update: {},
+        create: { ...session },
+      });
+    }
+    for (const log of history.logs) {
+      await prisma.sessionLog.upsert({
+        where: { sessionId_athleteId: { sessionId: log.sessionId, athleteId: log.athleteId } },
+        update: {},
+        create: { ...log },
+      });
+    }
+    sessionCount += history.sessions.length;
+    logCount += history.logs.length;
   }
 
+  // Counts only: RPE is health data and never goes to logs
   console.log(
-    `Seed: ${users.length} users, 1 club, ${members.length} memberships, ${groups.length} groups ready`,
+    `Seed: ${users.length} users, 1 club, ${members.length} memberships, ${groups.length} groups, ` +
+      `${sessionCount} sessions, ${logCount} session logs ready`,
   );
 }
 
