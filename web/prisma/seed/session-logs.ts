@@ -3,7 +3,7 @@
 // Pure: it never touches the database; seed.ts saves what it returns.
 
 export interface SessionHistoryParams {
-  athleteId: string;
+  athleteIds: string[];
   orgId: string;
   groupId: string;
   // First day of the 6 weeks
@@ -20,6 +20,7 @@ export interface GeneratedSession {
 export interface GeneratedLog {
   // id of one of the generated sessions
   sessionId: string;
+  athleteId: string;
   performedAt: Date;
   // 1-10, like SessionLog.rpe
   rpe: number;
@@ -39,7 +40,7 @@ const TRAINING_DAYS = [0, 2, 5];
 const FIRST_SESSION_NUMBER = 101;
 
 // Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
-// TODO: two Athletes would get the same ids; fix before wiring into seed.ts.
+// Group sessions are shared by all its Athletes, so ids never collide.
 function sessionId(number: number): string {
   return "00000000-0000-4000-8000-" + String(number).padStart(12, "0");
 }
@@ -56,15 +57,19 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       number++;
 
       sessions.push({ id, scheduledAt: date });
-      logs.push({
-        sessionId: id,
-        performedAt: date,
-        // random() is in [0, 1), so this gives an integer from 1 to 10
-        rpe: 1 + Math.floor(params.random() * 10),
-        // 5 km at 6:00 min/km, an easy run
-        distanceM: 5000,
-        durationS: 1800,
-      });
+      // One log per Athlete: each one rates the same session differently
+      for (const athleteId of params.athleteIds) {
+        logs.push({
+          sessionId: id,
+          athleteId,
+          performedAt: date,
+          // random() is in [0, 1), so this gives an integer from 1 to 10
+          rpe: 1 + Math.floor(params.random() * 10),
+          // 5 km at 6:00 min/km, an easy run
+          distanceM: 5000,
+          durationS: 1800,
+        });
+      }
     }
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ATHLETE_1_ID, CLUB_ID, GROUP_BEGINNERS_ID } from "../../../prisma/seed/ids";
+import { ATHLETE_1_ID, ATHLETE_2_ID, CLUB_ID, GROUP_BEGINNERS_ID } from "../../../prisma/seed/ids";
 import { generateSessionHistory, type GeneratedLog } from "../../../prisma/seed/session-logs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -12,7 +12,7 @@ const end = new Date(start.getTime() + 42 * DAY_MS);
 // Same Athlete and dates every time; only the random source changes
 function generateWith(random: () => number) {
   return generateSessionHistory({
-    athleteId: ATHLETE_1_ID,
+    athleteIds: [ATHLETE_1_ID],
     orgId: CLUB_ID,
     groupId: GROUP_BEGINNERS_ID,
     start,
@@ -119,5 +119,26 @@ describe("generateSessionHistory", () => {
     const second = generateWith(sequence([0.1, 0.7, 0.3, 0.95]));
 
     expect(first).toEqual(second);
+  });
+
+  it("gives every Athlete of the group exactly one log per session", () => {
+    const athleteIds = [ATHLETE_1_ID, ATHLETE_2_ID];
+    const group = generateSessionHistory({
+      athleteIds,
+      orgId: CLUB_ID,
+      groupId: GROUP_BEGINNERS_ID,
+      start,
+      random: () => 0.5,
+    });
+
+    expect(group.logs.length).toBe(group.sessions.length * athleteIds.length);
+
+    // Same rule as @@unique([sessionId, athleteId]) in the schema
+    const pairs = new Set<string>();
+    for (const log of group.logs) {
+      expect(athleteIds).toContain(log.athleteId);
+      pairs.add(log.sessionId + "/" + log.athleteId);
+    }
+    expect(pairs.size).toBe(group.logs.length);
   });
 });
