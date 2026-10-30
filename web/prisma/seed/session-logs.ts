@@ -32,22 +32,41 @@ export interface SessionHistory {
   logs: GeneratedLog[];
 }
 
-// Same format as seed/ids.ts, because sessions.id is a Postgres uuid column
-const FIRST_SESSION_ID = "00000000-0000-4000-8000-000000000101";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKS = 6;
+// Monday, Wednesday and Saturday of each week
+const TRAINING_DAYS = [0, 2, 5];
+const FIRST_SESSION_NUMBER = 101;
+
+// Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
+// TODO: two Athletes would get the same ids; fix before wiring into seed.ts.
+function sessionId(number: number): string {
+  return "00000000-0000-4000-8000-" + String(number).padStart(12, "0");
+}
 
 export function generateSessionHistory(params: SessionHistoryParams): SessionHistory {
-  return {
-    sessions: [{ id: FIRST_SESSION_ID, scheduledAt: params.start }],
-    // 5 km at 6:00 min/km, an easy run
-    logs: [
-      {
-        sessionId: FIRST_SESSION_ID,
-        performedAt: params.start,
+  const sessions: GeneratedSession[] = [];
+  const logs: GeneratedLog[] = [];
+  let number = FIRST_SESSION_NUMBER;
+
+  for (let week = 0; week < WEEKS; week++) {
+    for (const day of TRAINING_DAYS) {
+      const id = sessionId(number);
+      const date = new Date(params.start.getTime() + (week * 7 + day) * DAY_MS);
+      number++;
+
+      sessions.push({ id, scheduledAt: date });
+      logs.push({
+        sessionId: id,
+        performedAt: date,
         // random() is in [0, 1), so this gives an integer from 1 to 10
         rpe: 1 + Math.floor(params.random() * 10),
+        // 5 km at 6:00 min/km, an easy run
         distanceM: 5000,
         durationS: 1800,
-      },
-    ],
-  };
+      });
+    }
+  }
+
+  return { sessions, logs };
 }

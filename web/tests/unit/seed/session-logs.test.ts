@@ -81,6 +81,24 @@ describe("generateSessionHistory", () => {
     }
   });
 
+  it("schedules at least one session in each of the 6 weeks", () => {
+    for (const generated of [low, history, high]) {
+      for (let week = 0; week < 6; week++) {
+        const weekStart = start.getTime() + week * 7 * DAY_MS;
+        const weekEnd = weekStart + 7 * DAY_MS;
+
+        let sessionsThisWeek = 0;
+        for (const session of generated.sessions) {
+          const time = session.scheduledAt.getTime();
+          if (time >= weekStart && time < weekEnd) {
+            sessionsThisWeek++;
+          }
+        }
+        expect(sessionsThisWeek).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it("gives a lower average RPE when random always returns low values", () => {
     expect(averageRpe(low.logs)).toBeLessThan(averageRpe(high.logs));
   });
