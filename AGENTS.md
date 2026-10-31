@@ -20,6 +20,12 @@ Usar siempre la skill 42-slow-mode al escribir, editar o revisar código y confi
 
 Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. To add an external skill (e.g., from [Matt Pocock's v1.3 skills](https://github.com/mattpocock/skills/tree/main/skills/engineering)): download its SKILL.md and README.md, place in `.agents/skills/{skill-name}/`, then symlink to `.claude/skills/{skill-name}`.
 
+## Diseño y branding
+
+- Toda UI nueva o modificada sigue `ideas/stitch_athlete_training_dashboard/kinetic_obsidian/DESIGN.md` (paleta, tipografías, botones, inputs, estados). Leerlo antes de tocar estilos.
+- Usar los tokens de `web/src/app/globals.css` y las fuentes de `web/src/app/layout.tsx` (`font-heading`, `font-sans`) en lugar de colores o fuentes sueltas.
+- Si algo no está en el documento de diseño, o el acento de marca y las tipografías siguen sin acordar (issue #79), preguntar; no decidirlo por cuenta propia. Esta regla prevalece sobre skills de diseño genéricas.
+
 ## Antes de tocar código
 
 - Leer `CONTEXT.md` y usar su vocabulario, leer el ticket en GitHub y leer los archivos que se van a modificar.
