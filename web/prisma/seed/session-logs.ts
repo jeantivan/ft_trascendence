@@ -85,6 +85,28 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
   const logs: GeneratedLog[] = [];
   let number = params.firstSessionNumber;
 
+  // A session of one Athlete (no group) and its only log, which is theirs
+  function addIndividualSession(
+    athleteId: string,
+    date: Date,
+    origin: SessionOrigin,
+    customizesSessionId: string | null,
+  ): void {
+    const id = sessionId(number);
+    number++;
+    sessions.push({
+      id,
+      athleteId,
+      orgId: params.orgId,
+      groupId: null,
+      customizesSessionId,
+      origin,
+      sessionType: "rodaje",
+      scheduledAt: date,
+    });
+    logs.push(makeLog(id, athleteId, date, params.random));
+  }
+
   for (let week = 0; week < WEEKS; week++) {
     for (const day of TRAINING_DAYS) {
       const id = sessionId(number);
@@ -107,19 +129,8 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
         // Sometimes the Manager adapts this session for one Athlete. The copy
         // replaces it for them (#68), so their log goes on the copy instead.
         if (params.random() < CUSTOMIZE_CHANCE) {
-          const copyId = sessionId(number);
-          number++;
-          sessions.push({
-            id: copyId,
-            athleteId,
-            orgId: params.orgId,
-            groupId: null,
-            customizesSessionId: id,
-            origin: "customized",
-            sessionType: "rodaje",
-            scheduledAt: date,
-          });
-          logs.push(makeLog(copyId, athleteId, date, params.random));        } else {
+          addIndividualSession(athleteId, date, "customized", id);
+        } else {
           logs.push(makeLog(id, athleteId, date, params.random));
         }
       }
@@ -130,22 +141,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       const count = Math.floor(params.random() * 3);
       for (let i = 0; i < count; i++) {
         const day = Math.floor(params.random() * 7);
-        const id = sessionId(number);
-        const date = sessionDate(params.start, week, day);
-        number++;
-
-        sessions.push({
-          id,
-          athleteId,
-          orgId: params.orgId,
-          groupId: null,
-          customizesSessionId: null,
-          origin: "free",
-          sessionType: "rodaje",
-          scheduledAt: date,
-        });
-        // Only its owner logs a Free Session
-        logs.push(makeLog(id, athleteId, date, params.random));
+        addIndividualSession(athleteId, sessionDate(params.start, week, day), "free", null);
       }
     }
 
@@ -155,21 +151,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       for (let i = 0; i < 2; i++) {
         if (params.random() < PRESCRIBE_CHANCE) {
           const day = Math.floor(params.random() * 7);
-          const id = sessionId(number);
-          const date = sessionDate(params.start, week, day);
-          number++;
-
-          sessions.push({
-            id,
-            athleteId,
-            orgId: params.orgId,
-            groupId: null,
-            customizesSessionId: null,
-            origin: "customized",
-            sessionType: "rodaje",
-            scheduledAt: date,
-          });
-          logs.push(makeLog(id, athleteId, date, params.random));
+          addIndividualSession(athleteId, sessionDate(params.start, week, day), "customized", null);
         }
       }
     }
