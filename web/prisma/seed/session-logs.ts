@@ -21,6 +21,7 @@ export interface GeneratedSession {
   athleteId: string | null;
   orgId: string;
   groupId: string | null;
+  customizesSessionId: string | null;
   origin: SessionOrigin;
   sessionType: SessionType;
   scheduledAt: Date;
@@ -47,6 +48,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKS = 6;
 // Monday, Wednesday and Saturday of each week
 const TRAINING_DAYS = [0, 2, 5];
+// How often the Manager adapts a group session for one Athlete
+const CUSTOMIZE_CHANCE = 0.1;
 
 // Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
 // The Athletes of a group share its sessions, so ids only collide between
@@ -91,6 +94,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
         athleteId: null,
         orgId: params.orgId,
         groupId: params.groupId,
+        customizesSessionId: null,
         origin: "template",
         // An easy run, like the 5 km at 6:00 min/km of the logs
         sessionType: "rodaje",
@@ -98,7 +102,24 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       });
       // One log per Athlete: each one rates the same session differently
       for (const athleteId of params.athleteIds) {
-        logs.push(makeLog(id, athleteId, date, params.random));
+        // Sometimes the Manager adapts this session for one Athlete. The copy
+        // replaces it for them (#68), so their log goes on the copy instead.
+        if (params.random() < CUSTOMIZE_CHANCE) {
+          const copyId = sessionId(number);
+          number++;
+          sessions.push({
+            id: copyId,
+            athleteId,
+            orgId: params.orgId,
+            groupId: null,
+            customizesSessionId: id,
+            origin: "customized",
+            sessionType: "rodaje",
+            scheduledAt: date,
+          });
+          logs.push(makeLog(copyId, athleteId, date, params.random));        } else {
+          logs.push(makeLog(id, athleteId, date, params.random));
+        }
       }
     }
 
@@ -116,6 +137,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
           athleteId,
           orgId: params.orgId,
           groupId: null,
+          customizesSessionId: null,
           origin: "free",
           sessionType: "rodaje",
           scheduledAt: date,

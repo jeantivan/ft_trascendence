@@ -11,6 +11,7 @@ import {
   historyStart,
   type GeneratedLog,
 } from "../../../prisma/seed/session-logs";
+import { seededRandom } from "../../../prisma/seed/random";
 import { SessionType } from "../../../src/generated/prisma/enums";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -36,6 +37,16 @@ const history = generateWith(() => 0.5);
 // Edges of random's range [0, 1): range bugs show up here, not in the middle
 const low = generateWith(() => 0);
 const high = generateWith(() => 0.99);
+
+// A group with two Athletes; add random to call generateSessionHistory
+const bothAthletes = [ATHLETE_1_ID, ATHLETE_2_ID];
+const groupOfTwo = {
+  athleteIds: bothAthletes,
+  orgId: CLUB_ID,
+  groupId: GROUP_BEGINNERS_ID,
+  start,
+  firstSessionNumber: 101,
+};
 
 function averageRpe(logs: GeneratedLog[]): number {
   let total = 0;
@@ -207,6 +218,55 @@ describe("generateSessionHistory", () => {
       const logs = twoAWeek.logs.filter((log) => log.sessionId === session.id);
       expect(logs).toHaveLength(1);
       expect(logs[0].athleteId).toBe(session.athleteId);
+    }
+  });
+
+  it("moves an Athlete's log to the Customized Session that adapts a group session", () => {
+    // random 0: the Manager adapts every group session for every Athlete
+    const allAdapted = generateSessionHistory({ ...groupOfTwo, random: () => 0 });
+    const templates = allAdapted.sessions.filter((s) => s.origin === "template");
+    expect(templates.length).toBeGreaterThan(0);
+
+    for (const template of templates) {
+      // Nobody logs the original: each Athlete logs their own copy
+      expect(allAdapted.logs.filter((log) => log.sessionId === template.id)).toHaveLength(0);
+      for (const athleteId of bothAthletes) {
+        const copies = allAdapted.sessions.filter(
+          (s) => s.customizesSessionId === template.id && s.athleteId === athleteId,
+        );
+        expect(copies).toHaveLength(1);
+        expect(copies[0].origin).toBe("customized");
+        expect(copies[0].orgId).toBe(CLUB_ID);
+        expect(copies[0].groupId).toBeNull();
+        expect(copies[0].scheduledAt).toEqual(template.scheduledAt);
+
+        const copyLogs = allAdapted.logs.filter((log) => log.sessionId === copies[0].id);
+        expect(copyLogs).toHaveLength(1);
+        expect(copyLogs[0].athleteId).toBe(athleteId);
+      }
+    }
+  });
+
+  it("gives each Athlete one log per group session, on it or on their adaptation (#68)", () => {
+    const sources = [() => 0, () => 0.5, () => 0.99, seededRandom(1), seededRandom(42), seededRandom(2026)];
+    for (const random of sources) {
+      const generated = generateSessionHistory({ ...groupOfTwo, random });
+      for (const template of generated.sessions.filter((s) => s.origin === "template")) {
+        // The group session plus the copies that adapt it
+        const ids = [template.id];
+        for (const session of generated.sessions) {
+          if (session.customizesSessionId === template.id) {
+            ids.push(session.id);
+          }
+        }
+        for (const athleteId of bothAthletes) {
+          const athleteLogs = generated.logs.filter(
+            (log) => log.athleteId === athleteId && ids.includes(log.sessionId),
+          );
+          // Never both: #68 replaces the group session with the adaptation
+          expect(athleteLogs).toHaveLength(1);
+        }
+      }
     }
   });
 
