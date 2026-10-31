@@ -12,6 +12,10 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Nombre de la app
+
+El nombre de la app es **StrideSync** (elegido por Jean). Usarlo en la UI, textos y documentación. `ft_transcendence` es solo el nombre del proyecto de 42 y del repositorio.
+
 ## Skill obligatoria
 
 Usar siempre la skill 42-slow-mode al escribir, editar o revisar código y configuración (Docker, Prisma, NGINX).
