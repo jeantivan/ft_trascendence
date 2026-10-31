@@ -7,7 +7,7 @@ export function Sidebar() {
     <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-border-subtle bg-surface-elevated p-4 md:flex">
       <div className="flex flex-col gap-6">
         <span className="px-3 font-heading text-lg font-bold tracking-tight">
-          ft_transcendence
+          StrideSync
         </span>
         <nav aria-label="Principal" className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => (

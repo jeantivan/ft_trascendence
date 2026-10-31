@@ -19,7 +19,7 @@ export function MobileNav() {
   return (
     <header className="border-b border-border-subtle bg-surface-elevated md:hidden">
       <div className="flex items-center justify-between p-4">
-        <span className="font-heading text-lg font-bold">ft_transcendence</span>
+        <span className="font-heading text-lg font-bold">StrideSync</span>
         <button
           type="button"
           aria-expanded={open}
