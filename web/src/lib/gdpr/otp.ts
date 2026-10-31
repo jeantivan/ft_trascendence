@@ -9,14 +9,23 @@ export interface OtpRecord {
   codeHash: string;
   expiresAt: Date;
   consumedAt: Date | null;
+  // Failed hash checks, not total verifications
+  attempts: number;
 }
 
 const OTP_TTL_MS = 10 * 60 * 1000;
+export const OTP_MAX_ATTEMPTS = 5;
 
 export interface OtpRepository {
-  create(record: Omit<OtpRecord, "id">): Promise<OtpRecord>;
+  // attempts starts at 0 (same as the schema default)
+  create(record: Omit<OtpRecord, "id" | "attempts">): Promise<OtpRecord>;
   findLatest(userId: string, purpose: OtpPurpose): Promise<OtpRecord | null>;
-  // Atomically marks that exact code as used. Returns false if it was already used.
+  // Atomically adds 1 failed attempt only if the code is unused, not expired and
+  // has fewer than OTP_MAX_ATTEMPTS failures. Returns false if it did not count.
+  registerFailedAttempt(recordId: string, now: Date): Promise<boolean>;
+  // Atomically marks that exact code as used, only if it exists, is unused, is not
+  // expired and has fewer than OTP_MAX_ATTEMPTS failures. Returns true only if it
+  // consumed the code; false otherwise, leaving the record unchanged.
   consumeIfUnused(recordId: string, now: Date): Promise<boolean>;
 }
 
@@ -48,8 +57,13 @@ export async function verifyOtp(
     !record ||
     record.consumedAt ||
     now >= record.expiresAt ||
-    !(await verifyPassword(code, record.codeHash))
+    record.attempts >= OTP_MAX_ATTEMPTS
   ) {
+    return { success: false, reason: "invalid" };
+  }
+  if (!(await verifyPassword(code, record.codeHash))) {
+    // false (not counted) changes nothing outside: the answer is still "invalid"
+    await repo.registerFailedAttempt(record.id, now);
     return { success: false, reason: "invalid" };
   }
   if (!(await repo.consumeIfUnused(record.id, now))) {

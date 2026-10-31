@@ -23,8 +23,11 @@ describe("verifyOtp", () => {
     const code = await issueOtp(USER_ID, "export_data", repo);
 
     const result = await verifyOtp(USER_ID, "delete_account", code, repo);
+    const record = await repo.findLatest(USER_ID, "export_data");
 
     expect(result).toEqual({ success: false, reason: "invalid" });
+    expect(record?.attempts).toBe(0);
+    expect(record?.consumedAt).toBeNull();
   });
 
   it("rechaza un código pasados 10 minutos", async () => {
@@ -33,18 +36,27 @@ describe("verifyOtp", () => {
 
     const tenMinutesAndOneSecond = new Date(issuedAt.getTime() + 10 * 60 * 1000 + 1000);
     const result = await verifyOtp(USER_ID, "delete_account", code, repo, tenMinutesAndOneSecond);
+    const record = await repo.findLatest(USER_ID, "delete_account");
 
     expect(result).toEqual({ success: false, reason: "invalid" });
+    expect(record?.attempts).toBe(0);
+    expect(record?.consumedAt).toBeNull();
   });
 
   it("rechaza un código ya usado", async () => {
     const code = await issueOtp(USER_ID, "delete_account", repo);
 
     const first = await verifyOtp(USER_ID, "delete_account", code, repo);
+    const afterFirst = await repo.findLatest(USER_ID, "delete_account");
+    const firstConsumedAt = afterFirst?.consumedAt?.getTime();
     const second = await verifyOtp(USER_ID, "delete_account", code, repo);
+    const afterSecond = await repo.findLatest(USER_ID, "delete_account");
 
     expect(first).toEqual({ success: true });
+    expect(firstConsumedAt).toBeDefined();
     expect(second).toEqual({ success: false, reason: "invalid" });
+    expect(afterSecond?.consumedAt?.getTime()).toBe(firstConsumedAt);
+    expect(afterSecond?.attempts).toBe(0);
   });
 
   it("rechaza un código válido si el repositorio no consigue consumirlo", async () => {
@@ -58,8 +70,83 @@ describe("verifyOtp", () => {
     const code = await issueOtp(USER_ID, "delete_account", racedRepo);
 
     const result = await verifyOtp(USER_ID, "delete_account", code, racedRepo);
+    const record = await racedRepo.findLatest(USER_ID, "delete_account");
 
     expect(result).toEqual({ success: false, reason: "invalid" });
+    expect(record?.attempts).toBe(0);
+    expect(record?.consumedAt).toBeNull();
+  });
+
+  it("rechaza el código correcto tras cinco intentos fallidos", async () => {
+    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const wrongCode = code === "000000" ? "000001" : "000000";
+
+    for (let i = 0; i < 5; i++) {
+      const result = await verifyOtp(USER_ID, "delete_account", wrongCode, repo);
+      expect(result).toEqual({ success: false, reason: "invalid" });
+    }
+    const result = await verifyOtp(USER_ID, "delete_account", code, repo);
+    const record = await repo.findLatest(USER_ID, "delete_account");
+
+    expect(result).toEqual({ success: false, reason: "invalid" });
+    expect(record?.attempts).toBe(5);
+    expect(record?.consumedAt).toBeNull();
+  });
+
+  it("acepta el código correcto tras cuatro intentos fallidos", async () => {
+    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const wrongCode = code === "000000" ? "000001" : "000000";
+
+    for (let i = 0; i < 4; i++) {
+      await verifyOtp(USER_ID, "delete_account", wrongCode, repo);
+    }
+    const result = await verifyOtp(USER_ID, "delete_account", code, repo);
+
+    expect(result).toEqual({ success: true });
+  });
+
+  it("no sigue sumando intentos una vez bloqueado el código", async () => {
+    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const wrongCode = code === "000000" ? "000001" : "000000";
+
+    for (let i = 0; i < 7; i++) {
+      const result = await verifyOtp(USER_ID, "delete_account", wrongCode, repo);
+      expect(result).toEqual({ success: false, reason: "invalid" });
+    }
+    const record = await repo.findLatest(USER_ID, "delete_account");
+
+    expect(record).not.toBeNull();
+    expect(record?.attempts).toBe(5);
+  });
+
+  it("no cuenta intentos fallidos sobre un código expirado", async () => {
+    const issuedAt = new Date("2026-10-30T12:00:00Z");
+    const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+    const wrongCode = code === "000000" ? "000001" : "000000";
+
+    const expiresAt = new Date(issuedAt.getTime() + 10 * 60 * 1000);
+    const result = await verifyOtp(USER_ID, "delete_account", wrongCode, repo, expiresAt);
+    const record = await repo.findLatest(USER_ID, "delete_account");
+
+    expect(result).toEqual({ success: false, reason: "invalid" });
+    expect(record?.attempts).toBe(0);
+    expect(record?.consumedAt).toBeNull();
+  });
+
+  it("no cuenta intentos fallidos sobre un código ya consumido", async () => {
+    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const wrongCode = code === "000000" ? "000001" : "000000";
+
+    await verifyOtp(USER_ID, "delete_account", code, repo);
+    const afterConsume = await repo.findLatest(USER_ID, "delete_account");
+    const consumedAt = afterConsume?.consumedAt?.getTime();
+    const result = await verifyOtp(USER_ID, "delete_account", wrongCode, repo);
+    const record = await repo.findLatest(USER_ID, "delete_account");
+
+    expect(result).toEqual({ success: false, reason: "invalid" });
+    expect(consumedAt).toBeDefined();
+    expect(record?.consumedAt?.getTime()).toBe(consumedAt);
+    expect(record?.attempts).toBe(0);
   });
 
   it("acepta un código un milisegundo antes de expirar", async () => {
@@ -78,7 +165,10 @@ describe("verifyOtp", () => {
 
     const expiresAt = new Date(issuedAt.getTime() + 10 * 60 * 1000);
     const result = await verifyOtp(USER_ID, "delete_account", code, repo, expiresAt);
+    const record = await repo.findLatest(USER_ID, "delete_account");
 
     expect(result).toEqual({ success: false, reason: "invalid" });
+    expect(record?.attempts).toBe(0);
+    expect(record?.consumedAt).toBeNull();
   });
 });
