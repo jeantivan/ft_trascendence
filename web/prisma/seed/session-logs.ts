@@ -50,6 +50,8 @@ const WEEKS = 6;
 const TRAINING_DAYS = [0, 2, 5];
 // How often the Manager adapts a group session for one Athlete
 const CUSTOMIZE_CHANCE = 0.1;
+// How often the Manager prescribes a new individual session (each of 2 draws a week)
+const PRESCRIBE_CHANCE = 0.1;
 
 // Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
 // The Athletes of a group share its sessions, so ids only collide between
@@ -144,6 +146,31 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
         });
         // Only its owner logs a Free Session
         logs.push(makeLog(id, athleteId, date, params.random));
+      }
+    }
+
+    // Direct Customized Sessions: the Manager prescribes up to 2 new ones,
+    // not adapted from a group session (#68). Two draws keep 2 rare.
+    for (const athleteId of params.athleteIds) {
+      for (let i = 0; i < 2; i++) {
+        if (params.random() < PRESCRIBE_CHANCE) {
+          const day = Math.floor(params.random() * 7);
+          const id = sessionId(number);
+          const date = sessionDate(params.start, week, day);
+          number++;
+
+          sessions.push({
+            id,
+            athleteId,
+            orgId: params.orgId,
+            groupId: null,
+            customizesSessionId: null,
+            origin: "customized",
+            sessionType: "rodaje",
+            scheduledAt: date,
+          });
+          logs.push(makeLog(id, athleteId, date, params.random));
+        }
       }
     }
   }

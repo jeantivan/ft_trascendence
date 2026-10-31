@@ -10,6 +10,7 @@ import {
   generateSessionHistory,
   historyStart,
   type GeneratedLog,
+  type SessionHistory,
 } from "../../../prisma/seed/session-logs";
 import { seededRandom } from "../../../prisma/seed/random";
 import { SessionType } from "../../../src/generated/prisma/enums";
@@ -267,6 +268,29 @@ describe("generateSessionHistory", () => {
           expect(athleteLogs).toHaveLength(1);
         }
       }
+    }
+  });
+
+  it("gives each Athlete 0 to 2 direct Customized Sessions a week, each with only their own log", () => {
+    // Direct: prescribed by the Manager without adapting a group session
+    const direct = (generated: SessionHistory) =>
+      generated.sessions.filter((s) => s.origin === "customized" && s.customizesSessionId === null);
+
+    // Low random: 2 a week for each Athlete. High random: none
+    const twoAWeek = generateSessionHistory({ ...groupOfTwo, random: () => 0 });
+    expect(direct(twoAWeek)).toHaveLength(2 * 6 * bothAthletes.length);
+    expect(direct(generateSessionHistory({ ...groupOfTwo, random: () => 0.99 }))).toHaveLength(0);
+
+    for (const session of direct(twoAWeek)) {
+      expect(session.orgId).toBe(CLUB_ID);
+      expect(session.groupId).toBeNull();
+      expect(bothAthletes).toContain(session.athleteId);
+      expect(session.scheduledAt.getTime()).toBeGreaterThanOrEqual(start.getTime());
+      expect(session.scheduledAt.getTime()).toBeLessThan(end.getTime());
+
+      const logs = twoAWeek.logs.filter((log) => log.sessionId === session.id);
+      expect(logs).toHaveLength(1);
+      expect(logs[0].athleteId).toBe(session.athleteId);
     }
   });
 
