@@ -134,6 +134,36 @@ describe("generateSessionHistory", () => {
     }
   });
 
+  it("schedules 2 to 4 group sessions a week, on different days", () => {
+    const sources = [() => 0, () => 0.5, () => 0.99, seededRandom(1), seededRandom(42), seededRandom(2026)];
+    for (const random of sources) {
+      const generated = generateWith(random);
+      for (let week = 0; week < 6; week++) {
+        const weekStart = start.getTime() + week * 7 * DAY_MS;
+
+        // Day of the week (0 = Monday) of each group session of this week
+        const days: number[] = [];
+        for (const session of generated.sessions) {
+          const sinceWeekStart = session.scheduledAt.getTime() - weekStart;
+          if (session.origin === "template" && sinceWeekStart >= 0 && sinceWeekStart < 7 * DAY_MS) {
+            days.push(sinceWeekStart / DAY_MS);
+          }
+        }
+        expect(days.length).toBeGreaterThanOrEqual(2);
+        expect(days.length).toBeLessThanOrEqual(4);
+        // No two group sessions on the same day
+        expect(new Set(days).size).toBe(days.length);
+      }
+    }
+  });
+
+  it("schedules 2 group sessions a week with low random and 4 with high random", () => {
+    const groupSessions = (generated: SessionHistory) =>
+      generated.sessions.filter((s) => s.origin === "template");
+    expect(groupSessions(low)).toHaveLength(2 * 6);
+    expect(groupSessions(high)).toHaveLength(4 * 6);
+  });
+
   it("gives a lower average RPE when random always returns low values", () => {
     expect(averageRpe(low.logs)).toBeLessThan(averageRpe(high.logs));
   });

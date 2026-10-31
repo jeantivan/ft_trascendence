@@ -46,8 +46,6 @@ export interface SessionHistory {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKS = 6;
-// Monday, Wednesday and Saturday of each week
-const TRAINING_DAYS = [0, 2, 5];
 // How often the Manager adapts a group session for one Athlete
 const CUSTOMIZE_CHANCE = 0.1;
 // How often the Manager prescribes a new individual session (each of 2 draws a week)
@@ -63,6 +61,20 @@ function sessionId(number: number): string {
 // Midnight of the given day (0 = Monday) of the given week
 function sessionDate(start: Date, week: number, day: number): Date {
   return new Date(start.getTime() + (week * 7 + day) * DAY_MS);
+}
+
+// Days of one week (0 = Monday) with a group session: 2 to 4 different days, in order
+function groupDays(random: () => number): number[] {
+  const count = 2 + Math.floor(random() * 3);
+  const available = [0, 1, 2, 3, 4, 5, 6];
+  const days: number[] = [];
+  for (let i = 0; i < count; i++) {
+    // Take the day out of the list, so it cannot come out again
+    const position = Math.floor(random() * available.length);
+    days.push(available.splice(position, 1)[0]);
+  }
+  // Like qsort's compare in C: negative means a goes first
+  return days.sort((a, b) => a - b);
 }
 
 // What one Athlete did in one session. Every kind of session is logged the same way.
@@ -108,7 +120,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
   }
 
   for (let week = 0; week < WEEKS; week++) {
-    for (const day of TRAINING_DAYS) {
+    for (const day of groupDays(params.random)) {
       const id = sessionId(number);
       const date = sessionDate(params.start, week, day);
       number++;
