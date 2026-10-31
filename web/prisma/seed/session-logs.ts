@@ -55,6 +55,26 @@ function sessionId(number: number): string {
   return "00000000-0000-4000-8000-" + String(number).padStart(12, "0");
 }
 
+// Midnight of the given day (0 = Monday) of the given week
+function sessionDate(start: Date, week: number, day: number): Date {
+  return new Date(start.getTime() + (week * 7 + day) * DAY_MS);
+}
+
+// What one Athlete did in one session. Every kind of session is logged the same way.
+function makeLog(sessionId: string, athleteId: string, date: Date, random: () => number): GeneratedLog {
+  return {
+    sessionId,
+    athleteId,
+    performedAt: date,
+    // random() is in [0, 1), so this gives an integer from 1 to 10
+    rpe: 1 + Math.floor(random() * 10),
+    // 5 km at 6:00 min/km, an easy run
+    distanceM: 5000,
+    durationS: 1800,
+    completed: true,
+  };
+}
+
 export function generateSessionHistory(params: SessionHistoryParams): SessionHistory {
   const sessions: GeneratedSession[] = [];
   const logs: GeneratedLog[] = [];
@@ -63,7 +83,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
   for (let week = 0; week < WEEKS; week++) {
     for (const day of TRAINING_DAYS) {
       const id = sessionId(number);
-      const date = new Date(params.start.getTime() + (week * 7 + day) * DAY_MS);
+      const date = sessionDate(params.start, week, day);
       number++;
 
       sessions.push({
@@ -78,17 +98,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       });
       // One log per Athlete: each one rates the same session differently
       for (const athleteId of params.athleteIds) {
-        logs.push({
-          sessionId: id,
-          athleteId,
-          performedAt: date,
-          // random() is in [0, 1), so this gives an integer from 1 to 10
-          rpe: 1 + Math.floor(params.random() * 10),
-          // 5 km at 6:00 min/km, an easy run
-          distanceM: 5000,
-          durationS: 1800,
-          completed: true,
-        });
+        logs.push(makeLog(id, athleteId, date, params.random));
       }
     }
 
@@ -98,7 +108,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       for (let i = 0; i < count; i++) {
         const day = Math.floor(params.random() * 7);
         const id = sessionId(number);
-        const date = new Date(params.start.getTime() + (week * 7 + day) * DAY_MS);
+        const date = sessionDate(params.start, week, day);
         number++;
 
         sessions.push({
@@ -111,15 +121,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
           scheduledAt: date,
         });
         // Only its owner logs a Free Session
-        logs.push({
-          sessionId: id,
-          athleteId,
-          performedAt: date,
-          rpe: 1 + Math.floor(params.random() * 10),
-          distanceM: 5000,
-          durationS: 1800,
-          completed: true,
-        });
+        logs.push(makeLog(id, athleteId, date, params.random));
       }
     }
   }
