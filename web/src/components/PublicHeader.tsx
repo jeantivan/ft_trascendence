@@ -4,7 +4,7 @@ export function PublicHeader() {
   return (
     <header className="flex items-center justify-between border-b border-border-subtle px-4 py-3 md:px-8">
       <span className="font-heading text-lg font-bold tracking-tight">
-        ft_transcendence
+        StrideSync
       </span>
       <Link
         href="/dashboard"

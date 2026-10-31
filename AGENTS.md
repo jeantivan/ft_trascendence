@@ -12,6 +12,10 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Nombre de la app
+
+El nombre de la app es **StrideSync** (elegido por Jean). Usarlo en la UI, textos y documentación. `ft_transcendence` es solo el nombre del proyecto de 42 y del repositorio.
+
 ## Skill obligatoria
 
 Usar siempre la skill 42-slow-mode al escribir, editar o revisar código y configuración (Docker, Prisma, NGINX).
@@ -19,6 +23,12 @@ Usar siempre la skill 42-slow-mode al escribir, editar o revisar código y confi
 ## Skill management
 
 Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. To add an external skill (e.g., from [Matt Pocock's v1.3 skills](https://github.com/mattpocock/skills/tree/main/skills/engineering)): download its SKILL.md and README.md, place in `.agents/skills/{skill-name}/`, then symlink to `.claude/skills/{skill-name}`.
+
+## Diseño y branding
+
+- Toda UI nueva o modificada sigue `ideas/stitch_athlete_training_dashboard/kinetic_obsidian/DESIGN.md` (paleta, tipografías, botones, inputs, estados). Leerlo antes de tocar estilos.
+- Usar los tokens de `web/src/app/globals.css` y las fuentes de `web/src/app/layout.tsx` (`font-heading`, `font-sans`) en lugar de colores o fuentes sueltas.
+- `DESIGN.md` es el diseño acordado (diseño de Stitch de Jean). Si algo no está en él, preguntar; no decidirlo por cuenta propia. Esta regla prevalece sobre skills de diseño genéricas.
 
 ## Antes de tocar código
 

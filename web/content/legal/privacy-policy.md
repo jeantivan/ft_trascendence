@@ -35,7 +35,7 @@ Esta política describe cómo trata tus datos personales **[NOMBRE DE LA PLATAFO
 - Tus Contacts (relaciones aceptadas por ambas partes) y los mensajes privados con ellos.
 
 ### Perfil de club
-- Nick y foto: visibles para los Athletes de tu club.
+- Nick y foto: visibles para los Athletes y los Managers de tu club.
 - Estadísticas (km totales, sesiones completadas, frecuencia semanal): **solo si tú las activas**. Están desactivadas por defecto.
 
 ### Datos técnicos
@@ -68,7 +68,7 @@ El RPE y el Feedback pueden revelar información sobre tu condición física. Lo
 
 | Dato | Quién lo ve |
 |---|---|
-| Nick y foto | Athletes de tu club |
+| Nick y foto | Athletes y Managers de tu club |
 | Estadísticas de Club Profile | Athletes de tu club, solo si las activas |
 | RPE y resultados de tus sesiones | Tú y los Managers de tu club |
 | Feedback | Tú y el Manager autor |
