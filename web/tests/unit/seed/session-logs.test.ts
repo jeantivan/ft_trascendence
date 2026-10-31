@@ -144,7 +144,12 @@ describe("generateSessionHistory", () => {
       firstSessionNumber: 101,
     });
 
-    expect(group.logs.length).toBe(group.sessions.length * athleteIds.length);
+    // Free Sessions only have their owner's log, so count group sessions only
+    const templates = group.sessions.filter((s) => s.origin === "template");
+    const templateIds = templates.map((s) => s.id);
+    const templateLogs = group.logs.filter((log) => templateIds.includes(log.sessionId));
+    expect(templates.length).toBeGreaterThan(0);
+    expect(templateLogs.length).toBe(templates.length * athleteIds.length);
 
     // Same rule as @@unique([sessionId, athleteId]) in the schema
     const pairs = new Set<string>();
@@ -156,9 +161,14 @@ describe("generateSessionHistory", () => {
   });
 
   it("creates Template Sessions of the given club and group", () => {
-    for (const session of history.sessions) {
+    const templates = history.sessions.filter((s) => s.origin === "template");
+    // An empty list would pass the loop without checking anything
+    expect(templates.length).toBeGreaterThan(0);
+    for (const session of templates) {
       expect(session.orgId).toBe(CLUB_ID);
       expect(session.groupId).toBe(GROUP_BEGINNERS_ID);
+      // Group session: no owner (schema rule)
+      expect(session.athleteId).toBeNull();
       expect(session.origin).toBe("template");
       expect(Object.values(SessionType)).toContain(session.sessionType);
     }
@@ -167,6 +177,36 @@ describe("generateSessionHistory", () => {
   it("marks every log as completed", () => {
     for (const log of history.logs) {
       expect(log.completed).toBe(true);
+    }
+  });
+
+  it("gives each Athlete 0 to 2 Free Sessions a week, each with only their own log", () => {
+    const athleteIds = [ATHLETE_1_ID, ATHLETE_2_ID];
+    const params = {
+      athleteIds,
+      orgId: CLUB_ID,
+      groupId: GROUP_BEGINNERS_ID,
+      start,
+      firstSessionNumber: 101,
+    };
+
+    // Low random: none. High random: 2 a week for each Athlete
+    const none = generateSessionHistory({ ...params, random: () => 0 });
+    expect(none.sessions.filter((s) => s.origin === "free")).toHaveLength(0);
+    const twoAWeek = generateSessionHistory({ ...params, random: () => 0.99 });
+    const free = twoAWeek.sessions.filter((s) => s.origin === "free");
+    expect(free).toHaveLength(2 * 6 * athleteIds.length);
+
+    for (const session of free) {
+      expect(session.orgId).toBe(CLUB_ID);
+      expect(session.groupId).toBeNull();
+      expect(athleteIds).toContain(session.athleteId);
+      expect(session.scheduledAt.getTime()).toBeGreaterThanOrEqual(start.getTime());
+      expect(session.scheduledAt.getTime()).toBeLessThan(end.getTime());
+
+      const logs = twoAWeek.logs.filter((log) => log.sessionId === session.id);
+      expect(logs).toHaveLength(1);
+      expect(logs[0].athleteId).toBe(session.athleteId);
     }
   });
 

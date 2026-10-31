@@ -18,8 +18,9 @@ export interface SessionHistoryParams {
 
 export interface GeneratedSession {
   id: string;
+  athleteId: string | null;
   orgId: string;
-  groupId: string;
+  groupId: string | null;
   origin: SessionOrigin;
   sessionType: SessionType;
   scheduledAt: Date;
@@ -67,6 +68,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
 
       sessions.push({
         id,
+        athleteId: null,
         orgId: params.orgId,
         groupId: params.groupId,
         origin: "template",
@@ -83,6 +85,37 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
           // random() is in [0, 1), so this gives an integer from 1 to 10
           rpe: 1 + Math.floor(params.random() * 10),
           // 5 km at 6:00 min/km, an easy run
+          distanceM: 5000,
+          durationS: 1800,
+          completed: true,
+        });
+      }
+    }
+
+    // Free Sessions: each Athlete adds 0, 1 or 2 of their own, any day
+    for (const athleteId of params.athleteIds) {
+      const count = Math.floor(params.random() * 3);
+      for (let i = 0; i < count; i++) {
+        const day = Math.floor(params.random() * 7);
+        const id = sessionId(number);
+        const date = new Date(params.start.getTime() + (week * 7 + day) * DAY_MS);
+        number++;
+
+        sessions.push({
+          id,
+          athleteId,
+          orgId: params.orgId,
+          groupId: null,
+          origin: "free",
+          sessionType: "rodaje",
+          scheduledAt: date,
+        });
+        // Only its owner logs a Free Session
+        logs.push({
+          sessionId: id,
+          athleteId,
+          performedAt: date,
+          rpe: 1 + Math.floor(params.random() * 10),
           distanceM: 5000,
           durationS: 1800,
           completed: true,
