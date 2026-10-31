@@ -9,6 +9,22 @@ on:
 jobs:
   web:
     runs-on: ubuntu-latest
+    # Real Postgres for the integration tests that need LISTEN/NOTIFY (#22).
+    # Throwaway credentials: this database only lives during the CI job.
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: web
@@ -27,6 +43,8 @@ jobs:
       - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npm test
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
       - run: npm run build
       - run: sh scripts/env-sync.test.sh
         working-directory: .
