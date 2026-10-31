@@ -20,6 +20,7 @@ import {
   GROUP_BEGINNERS_ID,
   MANAGER_ID,
 } from "./seed/ids";
+import { seededRandom } from "./seed/random";
 import { generateSessionHistory, historyStart } from "./seed/session-logs";
 
 async function main() {
@@ -78,12 +79,17 @@ async function main() {
 
   // firstSessionNumber: each group's session ids start there. The ranges must
   // not overlap, or the upserts would silently skip the other group's sessions.
+  // With one Athlete a group uses at most 60 ids (18 group sessions, up to 18
+  // adapted copies, 12 Free and 12 direct Customized Sessions).
   const groups = [
     { id: GROUP_BEGINNERS_ID, name: "Iniciación", level: "inicial", objective: "carrera corta", athleteId: ATHLETE_1_ID, firstSessionNumber: 101 },
     { id: GROUP_ADVANCED_ID, name: "Avanzado", level: "avanzado", objective: "maratón", athleteId: ATHLETE_2_ID, firstSessionNumber: 201 },
   ];
   // Session history: dates stay as they were on the first seed (upserts)
   const start = historyStart(new Date());
+  // Fixed seed: every run and every machine get the same history. One generator
+  // for both groups, or they would get identical histories.
+  const random = seededRandom(42);
   let sessionCount = 0;
   let logCount = 0;
   for (const group of groups) {
@@ -104,7 +110,7 @@ async function main() {
       groupId: group.id,
       firstSessionNumber: group.firstSessionNumber,
       start,
-      random: Math.random,
+      random,
     });
     // Sessions first: every log points to one of them
     for (const session of history.sessions) {
