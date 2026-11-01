@@ -3,6 +3,8 @@
 // #23, seed/session-logs.ts). Never run in production.
 // Safe to run many times: every write is an upsert ("create it if it does not
 // exist; if it exists, leave it as it is").
+// So after changing seed/session-logs.ts, recreate the database: the upserts
+// would keep the old history and mix it with the new one.
 // A database seeded before users had fixed ids fails here with a duplicate
 // email: recreate it with make fclean + make dev. WARNING: make fclean
 // DELETES ALL the local data stored in the project's Docker volumes

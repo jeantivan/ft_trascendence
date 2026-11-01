@@ -6,6 +6,8 @@
 // for each Athlete 0 to 2 Free Sessions and 0 to 2 direct Customized Sessions.
 // Sometimes the Manager adapts a group session for one Athlete: that copy
 // replaces it for them (#68), so their log goes on the copy, never on both.
+// Half of the sessions are easy runs (rodaje). The RPE, distance and time of
+// each log depend on the session type (see RPE_RANGES and EFFORT_RANGES).
 // Every amount and day comes from random: the same random sequence (seed)
 // gives the same history. Changing the order of the random() calls changes it.
 import { SessionOrigin, SessionType } from "../../src/generated/prisma/enums";
@@ -45,7 +47,9 @@ export interface GeneratedLog {
   performedAt: Date;
   // 1-10, like SessionLog.rpe
   rpe: number;
+  // Metres, rounded to 100 m
   distanceM: number;
+  // Seconds
   durationS: number;
   completed: boolean;
 }
@@ -144,7 +148,7 @@ function pickRpe(sessionType: SessionType, random: () => number): number {
   return randomInt(range.min, range.max, random);
 }
 
-// What one Athlete did in one session. Every kind of session is logged the same way.
+// What one Athlete did in one session: RPE, distance and time depend on its type
 function makeLog(
   sessionId: string,
   athleteId: string,
