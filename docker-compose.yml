@@ -41,10 +41,23 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    # TEMPORARY: remove when NGINX is added. Only NGINX may publish ports (HTTPS only). See issue #14.
+    # No ports: only nginx is reachable from outside Docker (HTTPS only)
+    restart: unless-stopped
+
+  # The only entry point: HTTPS on the host port HTTPS_PORT (8443 by default),
+  # forwarded to app:3000 over Docker's internal network. See nginx/app.conf.
+  nginx:
+    build: ./nginx
     ports:
-      - "3000:3000"
+      - "${HTTPS_PORT:-8443}:8443"
+    volumes:
+      # Self-signed certificate and its key, created on first start.
+      # Only nginx mounts it; make fclean deletes it and the next start makes a new one.
+      - certs:/etc/nginx/certs
+    depends_on:
+      - app
     restart: unless-stopped
 
 volumes:
   pgdata:
+  certs:
