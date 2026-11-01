@@ -61,6 +61,17 @@ const WEEKS = 6;
 const CUSTOMIZE_CHANCE = 0.1;
 // How often the Manager prescribes a new individual session (each of 2 draws a week)
 const PRESCRIBE_CHANCE = 0.1;
+// Usual RPE of each session type. Orientation from CONTEXT.md: easy runs 4-5,
+// hard sessions 7-9; one point of margin for tired or good days.
+const RPE_RANGES: Record<SessionType, { min: number; max: number }> = {
+  rodaje: { min: 3, max: 6 },
+  tirada_larga: { min: 5, max: 8 },
+  intervalos: { min: 6, max: 9 },
+  cuestas: { min: 6, max: 9 },
+  fartlek: { min: 6, max: 9 },
+};
+// How often a log is an odd day, with any RPE from 1 to 10
+const ODD_DAY_CHANCE = 0.02;
 
 // Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
 // The Athletes of a group share its sessions, so ids only collide between
@@ -98,14 +109,31 @@ function pickSessionType(random: () => number): SessionType {
   return hardTypes[Math.floor(random() * hardTypes.length)];
 }
 
+// RPE 1-10 of one log. Usually inside the range of its session type; on a
+// rare odd day (very tired, or a great day) it can be anything, 1 and 10 too.
+function pickRpe(sessionType: SessionType, random: () => number): number {
+  if (random() < ODD_DAY_CHANCE) {
+    // random() is in [0, 1), so this gives an integer from 1 to 10
+    return 1 + Math.floor(random() * 10);
+  }
+  const range = RPE_RANGES[sessionType];
+  // + 1 because both ends count: 3 to 6 is 4 values
+  return range.min + Math.floor(random() * (range.max - range.min + 1));
+}
+
 // What one Athlete did in one session. Every kind of session is logged the same way.
-function makeLog(sessionId: string, athleteId: string, date: Date, random: () => number): GeneratedLog {
+function makeLog(
+  sessionId: string,
+  athleteId: string,
+  date: Date,
+  sessionType: SessionType,
+  random: () => number,
+): GeneratedLog {
   return {
     sessionId,
     athleteId,
     performedAt: date,
-    // random() is in [0, 1), so this gives an integer from 1 to 10
-    rpe: 1 + Math.floor(random() * 10),
+    rpe: pickRpe(sessionType, random),
     // 5 km at 6:00 min/km, an easy run
     distanceM: 5000,
     durationS: 1800,
@@ -126,6 +154,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
     customizesSessionId: string | null,
   ): void {
     const id = sessionId(number);
+    const sessionType = pickSessionType(params.random);
     number++;
     sessions.push({
       id,
@@ -134,16 +163,17 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       groupId: null,
       customizesSessionId,
       origin,
-      sessionType: pickSessionType(params.random),
+      sessionType,
       scheduledAt: date,
     });
-    logs.push(makeLog(id, athleteId, date, params.random));
+    logs.push(makeLog(id, athleteId, date, sessionType, params.random));
   }
 
   for (let week = 0; week < WEEKS; week++) {
     for (const day of groupDays(params.random)) {
       const id = sessionId(number);
       const date = sessionDate(params.start, week, day);
+      const sessionType = pickSessionType(params.random);
       number++;
 
       sessions.push({
@@ -153,7 +183,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
         groupId: params.groupId,
         customizesSessionId: null,
         origin: "template",
-        sessionType: pickSessionType(params.random),
+        sessionType,
         scheduledAt: date,
       });
       // One log per Athlete: each one rates the same session differently
@@ -163,7 +193,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
         if (params.random() < CUSTOMIZE_CHANCE) {
           addIndividualSession(athleteId, date, "customized", id);
         } else {
-          logs.push(makeLog(id, athleteId, date, params.random));
+          logs.push(makeLog(id, athleteId, date, sessionType, params.random));
         }
       }
     }

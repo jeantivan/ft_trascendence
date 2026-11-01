@@ -217,6 +217,58 @@ describe("generateSessionHistory", () => {
     }
   });
 
+  it("keeps almost every RPE inside the usual range of its session type", () => {
+    // Orientation from CONTEXT.md: easy runs 4-5, hard sessions 7-9, with margin
+    const usual: Record<SessionType, { min: number; max: number }> = {
+      rodaje: { min: 3, max: 6 },
+      tirada_larga: { min: 5, max: 8 },
+      intervalos: { min: 6, max: 9 },
+      cuestas: { min: 6, max: 9 },
+      fartlek: { min: 6, max: 9 },
+    };
+    let inside = 0;
+    let total = 0;
+    // "type/rpe" pairs that came out
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 100; seed++) {
+      const generated = generateWith(seededRandom(seed));
+      for (const log of generated.logs) {
+        const session = generated.sessions.find((s) => s.id === log.sessionId);
+        const range = usual[session!.sessionType];
+        seen.add(session!.sessionType + "/" + log.rpe);
+        if (log.rpe >= range.min && log.rpe <= range.max) {
+          inside++;
+        }
+        total++;
+      }
+    }
+    // About 2 % are odd days, with any RPE
+    expect(inside / total).toBeGreaterThan(0.95);
+
+    // And every value of each range comes out, its ends too (off-by-one bugs)
+    for (const type of Object.values(SessionType)) {
+      for (let rpe = usual[type].min; rpe <= usual[type].max; rpe++) {
+        expect(seen.has(type + "/" + rpe)).toBe(true);
+      }
+    }
+  });
+
+  it("gives an RPE of 1 or 10 only on rare odd days", () => {
+    let extremes = 0;
+    let total = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      for (const log of generateWith(seededRandom(seed)).logs) {
+        if (log.rpe === 1 || log.rpe === 10) {
+          extremes++;
+        }
+        total++;
+      }
+    }
+    // Possible, but about 0.4 % of the logs
+    expect(extremes).toBeGreaterThan(0);
+    expect(extremes / total).toBeLessThan(0.02);
+  });
+
   it("gives a lower average RPE when random always returns low values", () => {
     expect(averageRpe(low.logs)).toBeLessThan(averageRpe(high.logs));
   });
