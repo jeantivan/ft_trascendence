@@ -183,12 +183,62 @@ describe("verifyOtp", () => {
   it("no comprueba más de cinco intentos aunque lleguen a la vez", async () => {
     const code = await issueOtp(USER_ID, "delete_account", repo);
     const wrongCode = code === "000000" ? "000001" : "000000";
+    const { codeHash } = (await repo.findLatest(USER_ID, "delete_account"))!;
 
     // All 20 start before any of them has finished its hash check
     await Promise.all(
       Array.from({ length: 20 }, () => verifyOtp(USER_ID, "delete_account", wrongCode, repo)),
     );
 
-    expect(vi.mocked(verifyPassword)).toHaveBeenCalledTimes(OTP_MAX_ATTEMPTS);
+    // Rejected requests also hash (against a dummy hash), so count only the real one
+    const realChecks = vi.mocked(verifyPassword).mock.calls.filter(([, hash]) => hash === codeHash);
+    expect(realChecks).toHaveLength(OTP_MAX_ATTEMPTS);
+  });
+
+  describe("coste uniforme de los rechazos", () => {
+    // Every rejection must pay for one hash check, so the response time does not
+    // tell whether a usable code exists
+    async function hashChecksDuring(action: () => Promise<unknown>): Promise<number> {
+      vi.mocked(verifyPassword).mockClear();
+      await action();
+      return vi.mocked(verifyPassword).mock.calls.length;
+    }
+
+    it("cuando el usuario no tiene código", async () => {
+      const checks = await hashChecksDuring(() => verifyOtp(USER_ID, "delete_account", "123456", repo));
+
+      expect(checks).toBe(1);
+    });
+
+    it("cuando el código ha caducado", async () => {
+      const issuedAt = new Date("2026-10-30T12:00:00Z");
+      const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+      const expiredAt = new Date(issuedAt.getTime() + 10 * 60 * 1000);
+
+      const checks = await hashChecksDuring(() => verifyOtp(USER_ID, "delete_account", code, repo, expiredAt));
+
+      expect(checks).toBe(1);
+    });
+
+    it("cuando el código ya se usó", async () => {
+      const code = await issueOtp(USER_ID, "delete_account", repo);
+      await verifyOtp(USER_ID, "delete_account", code, repo);
+
+      const checks = await hashChecksDuring(() => verifyOtp(USER_ID, "delete_account", code, repo));
+
+      expect(checks).toBe(1);
+    });
+
+    it("cuando el código está bloqueado por intentos", async () => {
+      const code = await issueOtp(USER_ID, "delete_account", repo);
+      const wrongCode = code === "000000" ? "000001" : "000000";
+      for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
+        await verifyOtp(USER_ID, "delete_account", wrongCode, repo);
+      }
+
+      const checks = await hashChecksDuring(() => verifyOtp(USER_ID, "delete_account", code, repo));
+
+      expect(checks).toBe(1);
+    });
   });
 });

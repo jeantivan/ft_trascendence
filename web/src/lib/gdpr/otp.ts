@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import type { OtpPurpose } from "@/generated/prisma/client";
 
@@ -39,6 +39,16 @@ export interface OtpRepository {
 
 export type VerifyOtpResult = { success: true } | { success: false; reason: "invalid" };
 
+// Hash of a random value nobody knows, computed once with the same cost as real
+// codes. Rejections compare against it so they take as long as a real check.
+let dummyHash: Promise<string> | undefined;
+
+async function rejectInvalid(code: string): Promise<VerifyOtpResult> {
+  dummyHash ??= hashPassword(randomUUID());
+  await verifyPassword(code, await dummyHash);
+  return { success: false, reason: "invalid" };
+}
+
 // Returns the plain code (to send by email). Only its hash is stored.
 export async function issueOtp(
   userId: string,
@@ -67,12 +77,12 @@ export async function verifyOtp(
     now >= record.expiresAt ||
     record.attempts >= OTP_MAX_ATTEMPTS
   ) {
-    return { success: false, reason: "invalid" };
+    return rejectInvalid(code);
   }
   // Reserve the attempt BEFORE the slow hash check: the check above is only a
   // cheap early exit, this call is what enforces the limit under concurrency
   if (!(await repo.reserveAttempt(record.id, now))) {
-    return { success: false, reason: "invalid" };
+    return rejectInvalid(code);
   }
   if (!(await verifyPassword(code, record.codeHash))) {
     return { success: false, reason: "invalid" };

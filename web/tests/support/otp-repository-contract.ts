@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { OTP_MAX_ATTEMPTS, type OtpRepository } from "@/lib/gdpr/otp";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_USER_ID = "22222222-2222-4222-8222-222222222222";
+const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
 const NOW = new Date("2026-10-31T12:00:00Z");
 const IN_TEN_MINUTES = new Date(NOW.getTime() + 10 * 60 * 1000);
 
@@ -121,6 +123,64 @@ export function runOtpRepositoryContract(name: string, createRepo: () => OtpRepo
       const latest = await repo.findLatest(USER_ID, "delete_account");
 
       expect(latest?.id).toBe([...ids].sort().at(-1));
+    });
+
+    it("create y findLatest devuelven copias: un cambio posterior no altera lo ya leído", async () => {
+      const repo = createRepo();
+      const created = await createCode(repo);
+      const read = await repo.findLatest(USER_ID, "delete_account");
+
+      await repo.reserveAttempt(created.id, NOW);
+
+      expect(created.attempts).toBe(0);
+      expect(read?.attempts).toBe(0);
+    });
+
+    it("modificar un registro devuelto no cambia lo guardado", async () => {
+      const repo = createRepo();
+      const created = await createCode(repo);
+
+      created.attempts = 99;
+      const read = await repo.findLatest(USER_ID, "delete_account");
+
+      expect(read?.attempts).toBe(0);
+    });
+
+    it("findLatest devuelve null si el usuario no tiene ningún código", async () => {
+      const repo = createRepo();
+
+      expect(await repo.findLatest(USER_ID, "delete_account")).toBeNull();
+    });
+
+    it("findLatest no mezcla propósitos: cada uno devuelve su propio código", async () => {
+      const repo = createRepo();
+      const forDelete = await createCode(repo);
+      const forExport = await repo.create({
+        userId: USER_ID,
+        purpose: "export_data",
+        codeHash: "irrelevant-hash",
+        createdAt: new Date(NOW.getTime() + 1000),
+        expiresAt: IN_TEN_MINUTES,
+        consumedAt: null,
+      });
+
+      expect((await repo.findLatest(USER_ID, "delete_account"))?.id).toBe(forDelete.id);
+      expect((await repo.findLatest(USER_ID, "export_data"))?.id).toBe(forExport.id);
+    });
+
+    it("findLatest no devuelve el código de otro usuario", async () => {
+      const repo = createRepo();
+      await createCode(repo);
+
+      expect(await repo.findLatest(OTHER_USER_ID, "delete_account")).toBeNull();
+    });
+
+    it("reserveAttempt y consumeIfUnused devuelven false con un id desconocido", async () => {
+      const repo = createRepo();
+      await createCode(repo);
+
+      expect(await repo.reserveAttempt(UNKNOWN_ID, NOW)).toBe(false);
+      expect(await repo.consumeIfUnused(UNKNOWN_ID, NOW)).toBe(false);
     });
   });
 }

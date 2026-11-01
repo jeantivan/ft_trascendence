@@ -8,7 +8,7 @@ export class InMemoryOtpRepository implements OtpRepository {
   async create(data: Omit<OtpRecord, "id" | "attempts">): Promise<OtpRecord> {
     const record = { ...data, id: randomUUID(), attempts: 0 };
     this.records.push(record);
-    return record;
+    return { ...record };
   }
 
   async findLatest(userId: string, purpose: OtpPurpose): Promise<OtpRecord | null> {
@@ -23,7 +23,8 @@ export class InMemoryOtpRepository implements OtpRepository {
         latest = r;
       }
     }
-    return latest;
+    // Copy, like a database row: callers must not hold a live reference
+    return latest ? { ...latest } : null;
   }
 
   async reserveAttempt(recordId: string, now: Date): Promise<boolean> {
