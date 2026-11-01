@@ -1,6 +1,13 @@
 // Generates a simulated training history (TrainingSessions + SessionLogs) for
 // the demo seed, so analytics can be built before Athletes log real sessions.
 // Pure: it never touches the database; seed.ts saves what it returns.
+//
+// Each week: 2 to 4 group sessions (Template Sessions) on different days, and
+// for each Athlete 0 to 2 Free Sessions and 0 to 2 direct Customized Sessions.
+// Sometimes the Manager adapts a group session for one Athlete: that copy
+// replaces it for them (#68), so their log goes on the copy, never on both.
+// Every amount and day comes from random: the same random sequence (seed)
+// gives the same history. Changing the order of the random() calls changes it.
 import { SessionOrigin, SessionType } from "../../src/generated/prisma/enums";
 
 export interface SessionHistoryParams {
@@ -18,9 +25,13 @@ export interface SessionHistoryParams {
 
 export interface GeneratedSession {
   id: string;
+  // Owner of an individual session (free or customized); null in group sessions
   athleteId: string | null;
+  // Every session belongs to a club, individual ones too
   orgId: string;
+  // Group of a group session; null in individual sessions
   groupId: string | null;
+  // Group session that this customized copy adapts; null in any other session
   customizesSessionId: string | null;
   origin: SessionOrigin;
   sessionType: SessionType;
