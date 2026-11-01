@@ -120,6 +120,7 @@ model EmailOtpCode {
   userId     String     @map("user_id") @db.Uuid
   purpose    OtpPurpose
   codeHash   String     @map("code_hash")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   expiresAt  DateTime   @map("expires_at") @db.Timestamptz(3)
   attempts   Int        @default(0)
   consumedAt DateTime?  @map("consumed_at") @db.Timestamptz(3)

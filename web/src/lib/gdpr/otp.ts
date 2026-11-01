@@ -7,9 +7,11 @@ export interface OtpRecord {
   userId: string;
   purpose: OtpPurpose;
   codeHash: string;
+  // findLatest orders by this; the database fills it on its own when omitted
+  createdAt: Date;
   expiresAt: Date;
   consumedAt: Date | null;
-  // Failed hash checks, not total verifications
+  // Hash checks reserved with reserveAttempt (a correct one counts too)
   attempts: number;
 }
 
@@ -18,14 +20,20 @@ export const OTP_MAX_ATTEMPTS = 5;
 
 export interface OtpRepository {
   // attempts starts at 0 (same as the schema default)
+  // findLatest returns the code with the greatest createdAt, not the last inserted;
+  // ties go to the greatest id (Prisma: orderBy [{ createdAt: "desc" }, { id: "desc" }])
   create(record: Omit<OtpRecord, "id" | "attempts">): Promise<OtpRecord>;
   findLatest(userId: string, purpose: OtpPurpose): Promise<OtpRecord | null>;
-  // Atomically adds 1 failed attempt only if the code is unused, not expired and
-  // has fewer than OTP_MAX_ATTEMPTS failures. Returns false if it did not count.
-  registerFailedAttempt(recordId: string, now: Date): Promise<boolean>;
-  // Atomically marks that exact code as used, only if it exists, is unused, is not
-  // expired and has fewer than OTP_MAX_ATTEMPTS failures. Returns true only if it
-  // consumed the code; false otherwise, leaving the record unchanged.
+  // Atomically reserves one of the OTP_MAX_ATTEMPTS checks, only if the code is
+  // unused and not expired. Must be a single conditional write (in SQL:
+  // UPDATE ... SET attempts = attempts + 1 WHERE id = ? AND consumed_at IS NULL
+  // AND expires_at > now AND attempts < max, then check 1 row changed), never
+  // read-then-write, so concurrent calls cannot reserve more than the limit.
+  // Returns false if it did not reserve.
+  reserveAttempt(recordId: string, now: Date): Promise<boolean>;
+  // Atomically marks that exact code as used, only if it exists, is unused and is
+  // not expired. Returns true only if it consumed the code; false otherwise,
+  // leaving the record unchanged. The attempt limit is enforced by reserveAttempt.
   consumeIfUnused(recordId: string, now: Date): Promise<boolean>;
 }
 
@@ -41,7 +49,7 @@ export async function issueOtp(
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
   const codeHash = await hashPassword(code);
-  await repo.create({ userId, purpose, codeHash, expiresAt, consumedAt: null });
+  await repo.create({ userId, purpose, codeHash, createdAt: now, expiresAt, consumedAt: null });
   return code;
 }
 
@@ -61,9 +69,12 @@ export async function verifyOtp(
   ) {
     return { success: false, reason: "invalid" };
   }
+  // Reserve the attempt BEFORE the slow hash check: the check above is only a
+  // cheap early exit, this call is what enforces the limit under concurrency
+  if (!(await repo.reserveAttempt(record.id, now))) {
+    return { success: false, reason: "invalid" };
+  }
   if (!(await verifyPassword(code, record.codeHash))) {
-    // false (not counted) changes nothing outside: the answer is still "invalid"
-    await repo.registerFailedAttempt(record.id, now);
     return { success: false, reason: "invalid" };
   }
   if (!(await repo.consumeIfUnused(record.id, now))) {

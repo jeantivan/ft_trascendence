@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "email_otp_codes" ADD COLUMN     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

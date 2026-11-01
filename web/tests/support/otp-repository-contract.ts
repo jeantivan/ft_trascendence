@@ -14,51 +14,37 @@ export function runOtpRepositoryContract(name: string, createRepo: () => OtpRepo
         userId: USER_ID,
         purpose: "delete_account",
         codeHash: "irrelevant-hash",
+        createdAt: NOW,
         expiresAt: IN_TEN_MINUTES,
         consumedAt: null,
       });
     }
 
-    it("registerFailedAttempt cuenta cinco fallos y rechaza el sexto", async () => {
+    it("reserveAttempt reserva cinco intentos y rechaza el sexto", async () => {
       const repo = createRepo();
       const { id } = await createCode(repo);
 
       for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
-        expect(await repo.registerFailedAttempt(id, NOW)).toBe(true);
+        expect(await repo.reserveAttempt(id, NOW)).toBe(true);
       }
-      const sixth = await repo.registerFailedAttempt(id, NOW);
+      const sixth = await repo.reserveAttempt(id, NOW);
       const record = await repo.findLatest(USER_ID, "delete_account");
 
       expect(sixth).toBe(false);
       expect(record?.attempts).toBe(OTP_MAX_ATTEMPTS);
     });
 
-    it("registerFailedAttempt no cuenta sobre un código consumido", async () => {
+    it("reserveAttempt no reserva sobre un código consumido", async () => {
       const repo = createRepo();
       const { id } = await createCode(repo);
       expect(await repo.consumeIfUnused(id, NOW)).toBe(true);
 
-      const counted = await repo.registerFailedAttempt(id, NOW);
+      const counted = await repo.reserveAttempt(id, NOW);
       const record = await repo.findLatest(USER_ID, "delete_account");
 
       expect(counted).toBe(false);
       expect(record?.attempts).toBe(0);
       expect(record?.consumedAt?.getTime()).toBe(NOW.getTime());
-    });
-
-    it("consumeIfUnused rechaza un código bloqueado por intentos", async () => {
-      const repo = createRepo();
-      const { id } = await createCode(repo);
-      for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
-        expect(await repo.registerFailedAttempt(id, NOW)).toBe(true);
-      }
-
-      const consumed = await repo.consumeIfUnused(id, NOW);
-      const record = await repo.findLatest(USER_ID, "delete_account");
-
-      expect(consumed).toBe(false);
-      expect(record?.attempts).toBe(OTP_MAX_ATTEMPTS);
-      expect(record?.consumedAt).toBeNull();
     });
 
     it("consumeIfUnused rechaza un código exactamente en expiresAt", async () => {
@@ -74,16 +60,67 @@ export function runOtpRepositoryContract(name: string, createRepo: () => OtpRepo
       expect(record?.consumedAt).toBeNull();
     });
 
-    it("registerFailedAttempt no cuenta exactamente en expiresAt", async () => {
+    it("reserveAttempt no reserva exactamente en expiresAt", async () => {
       const repo = createRepo();
       const { id } = await createCode(repo);
 
-      const counted = await repo.registerFailedAttempt(id, IN_TEN_MINUTES);
+      const counted = await repo.reserveAttempt(id, IN_TEN_MINUTES);
       const record = await repo.findLatest(USER_ID, "delete_account");
 
       expect(counted).toBe(false);
       expect(record?.attempts).toBe(0);
       expect(record?.consumedAt).toBeNull();
+    });
+
+    it("reserveAttempt no reserva más de cinco intentos si llegan a la vez", async () => {
+      const repo = createRepo();
+      const { id } = await createCode(repo);
+
+      const results = await Promise.all(
+        Array.from({ length: 20 }, () => repo.reserveAttempt(id, NOW)),
+      );
+      const record = await repo.findLatest(USER_ID, "delete_account");
+
+      expect(results.filter(Boolean)).toHaveLength(OTP_MAX_ATTEMPTS);
+      expect(record?.attempts).toBe(OTP_MAX_ATTEMPTS);
+    });
+
+    it("findLatest devuelve el código con createdAt más reciente, no el último insertado", async () => {
+      const repo = createRepo();
+      const newer = await repo.create({
+        userId: USER_ID,
+        purpose: "delete_account",
+        codeHash: "newer-hash",
+        createdAt: NOW,
+        expiresAt: IN_TEN_MINUTES,
+        consumedAt: null,
+      });
+      await repo.create({
+        userId: USER_ID,
+        purpose: "delete_account",
+        codeHash: "older-hash",
+        createdAt: new Date(NOW.getTime() - 60 * 1000),
+        expiresAt: IN_TEN_MINUTES,
+        consumedAt: null,
+      });
+
+      const latest = await repo.findLatest(USER_ID, "delete_account");
+
+      expect(latest?.id).toBe(newer.id);
+    });
+
+    it("findLatest desempata por id mayor cuando el createdAt es el mismo", async () => {
+      const repo = createRepo();
+      // ids are random, so use several codes: the tie must not depend on insertion order
+      const ids: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        const { id } = await createCode(repo);
+        ids.push(id);
+      }
+
+      const latest = await repo.findLatest(USER_ID, "delete_account");
+
+      expect(latest?.id).toBe([...ids].sort().at(-1));
     });
   });
 }

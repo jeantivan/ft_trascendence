@@ -1,6 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { issueOtp, verifyOtp } from "@/lib/gdpr/otp";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { verifyPassword } from "@/lib/auth/password";
+import { issueOtp, OTP_MAX_ATTEMPTS, verifyOtp } from "@/lib/gdpr/otp";
 import { InMemoryOtpRepository } from "../support/in-memory-otp-repository";
+
+// Same behaviour as the real module, but now we can count the hash checks
+vi.mock("@/lib/auth/password", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/password")>();
+  return { ...actual, verifyPassword: vi.fn(actual.verifyPassword) };
+});
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -9,6 +16,7 @@ describe("verifyOtp", () => {
 
   beforeEach(() => {
     repo = new InMemoryOtpRepository();
+    vi.mocked(verifyPassword).mockClear();
   });
 
   it("acepta un código con el propósito correcto", async () => {
@@ -56,7 +64,7 @@ describe("verifyOtp", () => {
     expect(firstConsumedAt).toBeDefined();
     expect(second).toEqual({ success: false, reason: "invalid" });
     expect(afterSecond?.consumedAt?.getTime()).toBe(firstConsumedAt);
-    expect(afterSecond?.attempts).toBe(0);
+    expect(afterSecond?.attempts).toBe(1);
   });
 
   it("rechaza un código válido si el repositorio no consigue consumirlo", async () => {
@@ -73,7 +81,7 @@ describe("verifyOtp", () => {
     const record = await racedRepo.findLatest(USER_ID, "delete_account");
 
     expect(result).toEqual({ success: false, reason: "invalid" });
-    expect(record?.attempts).toBe(0);
+    expect(record?.attempts).toBe(1);
     expect(record?.consumedAt).toBeNull();
   });
 
@@ -146,7 +154,7 @@ describe("verifyOtp", () => {
     expect(result).toEqual({ success: false, reason: "invalid" });
     expect(consumedAt).toBeDefined();
     expect(record?.consumedAt?.getTime()).toBe(consumedAt);
-    expect(record?.attempts).toBe(0);
+    expect(record?.attempts).toBe(1);
   });
 
   it("acepta un código un milisegundo antes de expirar", async () => {
@@ -170,5 +178,17 @@ describe("verifyOtp", () => {
     expect(result).toEqual({ success: false, reason: "invalid" });
     expect(record?.attempts).toBe(0);
     expect(record?.consumedAt).toBeNull();
+  });
+
+  it("no comprueba más de cinco intentos aunque lleguen a la vez", async () => {
+    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const wrongCode = code === "000000" ? "000001" : "000000";
+
+    // All 20 start before any of them has finished its hash check
+    await Promise.all(
+      Array.from({ length: 20 }, () => verifyOtp(USER_ID, "delete_account", wrongCode, repo)),
+    );
+
+    expect(vi.mocked(verifyPassword)).toHaveBeenCalledTimes(OTP_MAX_ATTEMPTS);
   });
 });
