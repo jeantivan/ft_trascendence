@@ -16,18 +16,18 @@ const globalForHub = globalThis as unknown as { eventHub?: EventEmitter };
 const emitter = globalForHub.eventHub ?? new EventEmitter();
 globalForHub.eventHub = emitter;
 
-// Limit removed so extra tabs wont be a false positive for a leak
+// Limit removed so extra tabs won't be a false positive for a leak
 emitter.setMaxListeners(0);
 
 // Called by Postgres listener.
 export function dispatch(event: RealtimeEvent) {
-    emitter.emit(EVENT_NAME, event);
+  emitter.emit(EVENT_NAME, event);
 }
 
 // Returns an unsubscribe function: call it when the stream closes, or the listener leaks.
 export function subscribe(listener: (event: RealtimeEvent) => void) {
-    emitter.on(EVENT_NAME, listener);
-    return () => {
-        emitter.off(EVENT_NAME, listener);
-    };
+  emitter.on(EVENT_NAME, listener);
+  return () => {
+    emitter.off(EVENT_NAME, listener);
+  };
 }

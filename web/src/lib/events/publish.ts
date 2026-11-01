@@ -7,11 +7,11 @@ import { Prisma } from "@/generated/prisma/client";
 import { RealtimeEvent } from "@/lib/events/hub";
 
 export async function publish(
-    tx: Prisma.TransactionClient,
-    channel: string,
-    payload: RealtimeEvent["payload"],
+  tx: Prisma.TransactionClient,
+  channel: string,
+  payload: RealtimeEvent["payload"],
 ) {
-    const message = JSON.stringify({ channel, payload });
-    // Tagged template: Prisma sends message as a bind parameter, so it cannot inject SQL.
-    await tx.$executeRaw`SELECT pg_notify('ft_events', ${message})`;
+  const message = JSON.stringify({ channel, payload });
+  // Tagged template: Prisma sends message as a bind parameter, so it cannot inject SQL.
+  await tx.$executeRaw`SELECT pg_notify('ft_events', ${message})`;
 }

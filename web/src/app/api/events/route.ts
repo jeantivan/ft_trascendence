@@ -9,7 +9,6 @@ export const runtime = "nodejs";
 
 const PING_INTERVAL_MS = 15_000;
 
-// Convert to UTF-8.
 const encoder = new TextEncoder();
 
 export async function GET(request: Request) {
