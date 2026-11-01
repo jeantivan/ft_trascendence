@@ -85,6 +85,8 @@ model User {
   messages                 Message[]
   notifications            Notification[]
 
+  files File[]
+
   @@map("users")
 }
 
@@ -565,4 +567,27 @@ model AuditLog {
   // To delete rows older than 12 months
   @@index([createdAt])
   @@map("audit_log")
+}
+
+// ===== Block 7: uploaded files =====
+
+// One row per uploaded file (avatars, issue #23). The bytes live in the
+// uploads volume; this row says who owns them and where they are.
+// User.image stores /api/files/<id>, never the path on disk.
+// Deleting the User deletes these rows (Cascade), but not the files on disk:
+// the server must delete them first (account deletion table, PR #24).
+model File {
+  id        String   @id @default(uuid()) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  // image/jpeg, image/png or image/webp, checked by the server on upload
+  mimeType  String   @map("mime_type")
+  sizeBytes Int      @map("size_bytes")
+  // Relative to /data/uploads, e.g. avatars/<uuid>.webp
+  path      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@map("files")
 }
