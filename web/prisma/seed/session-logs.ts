@@ -70,6 +70,15 @@ const RPE_RANGES: Record<SessionType, { min: number; max: number }> = {
   cuestas: { min: 6, max: 9 },
   fartlek: { min: 6, max: 9 },
 };
+// Usual distance (metres) and average pace (seconds per km; 300 = 5:00 min/km)
+// of each session type. Intervals include warm-up and recoveries.
+const EFFORT_RANGES: Record<SessionType, { distance: [number, number]; pace: [number, number] }> = {
+  rodaje: { distance: [6000, 12000], pace: [300, 390] },
+  tirada_larga: { distance: [15000, 25000], pace: [315, 405] },
+  intervalos: { distance: [6000, 10000], pace: [270, 330] },
+  cuestas: { distance: [6000, 10000], pace: [300, 390] },
+  fartlek: { distance: [7000, 12000], pace: [285, 345] },
+};
 // How often a log is an odd day, with any RPE from 1 to 10
 const ODD_DAY_CHANCE = 0.02;
 
@@ -109,16 +118,30 @@ function pickSessionType(random: () => number): SessionType {
   return hardTypes[Math.floor(random() * hardTypes.length)];
 }
 
+// An integer from min to max, both included
+function randomInt(min: number, max: number, random: () => number): number {
+  // random() is in [0, 1); + 1 because both ends count: 3 to 6 is 4 values
+  return min + Math.floor(random() * (max - min + 1));
+}
+
+// Distance and time of one log. The time comes from distance x pace, so the
+// two always match and the pace is believable.
+function pickEffort(sessionType: SessionType, random: () => number): { distanceM: number; durationS: number } {
+  const range = EFFORT_RANGES[sessionType];
+  // Rounded to 100 m, like people write it down
+  const distanceM = 100 * randomInt(range.distance[0] / 100, range.distance[1] / 100, random);
+  const paceSPerKm = randomInt(range.pace[0], range.pace[1], random);
+  return { distanceM, durationS: Math.round((distanceM / 1000) * paceSPerKm) };
+}
+
 // RPE 1-10 of one log. Usually inside the range of its session type; on a
 // rare odd day (very tired, or a great day) it can be anything, 1 and 10 too.
 function pickRpe(sessionType: SessionType, random: () => number): number {
   if (random() < ODD_DAY_CHANCE) {
-    // random() is in [0, 1), so this gives an integer from 1 to 10
-    return 1 + Math.floor(random() * 10);
+    return randomInt(1, 10, random);
   }
   const range = RPE_RANGES[sessionType];
-  // + 1 because both ends count: 3 to 6 is 4 values
-  return range.min + Math.floor(random() * (range.max - range.min + 1));
+  return randomInt(range.min, range.max, random);
 }
 
 // What one Athlete did in one session. Every kind of session is logged the same way.
@@ -134,9 +157,8 @@ function makeLog(
     athleteId,
     performedAt: date,
     rpe: pickRpe(sessionType, random),
-    // 5 km at 6:00 min/km, an easy run
-    distanceM: 5000,
-    durationS: 1800,
+    // distanceM and durationS
+    ...pickEffort(sessionType, random),
     completed: true,
   };
 }
