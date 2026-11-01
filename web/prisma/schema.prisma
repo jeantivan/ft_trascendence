@@ -50,7 +50,9 @@ model User {
   // Explicit consent for health data (RPE and Feedback); null = not given or
   // withdrawn (Privacy Policy, PR #30)
   healthConsentAt      DateTime?  @map("health_consent_at") @db.Timestamptz(3)
-  // Version of the consent text accepted (1, 2, 3...); null like healthConsentAt
+  // Version of the consent text accepted (1, 2, 3...); null like healthConsentAt.
+  // Both null or both set: CHECK users_health_consent_both_or_neither, written
+  // by hand in migration 20261030164936 (Prisma does not see it)
   healthConsentVersion Int?       @map("health_consent_version")
   // Consent for notifications (Privacy Policy, PR #30; default pending)
   notificationsEnabled Boolean    @default(true) @map("notifications_enabled")
@@ -163,8 +165,8 @@ enum MembershipRole {
 // A person's role in one club (one role per club). A club keeps at least one
 // Manager, with one exception: if the only Manager deletes the account or
 // leaves the club, it is not blocked (GDPR right to erasure); the server
-// notifies the Admin, who takes over or names a new Manager. Decided in #8,
-// PR #24 still pending team review.
+// notifies the Admin, who takes over or names a new Manager. Decided in
+// PR #24 and #34.
 model Membership {
   userId   String         @map("user_id") @db.Uuid
   orgId    String         @map("org_id") @db.Uuid
@@ -527,19 +529,31 @@ model Notification {
 
 // ===== Block 6: audit =====
 
+// Role of the actor when the action was done (PR #31)
+enum ActorRole {
+  admin
+  manager
+}
+
 enum AuditAction {
   read
   update
+  consent_given
+  consent_withdrawn
 }
 
 // Who read or changed sensitive data of an Athlete (RPE, Feedback, reported
-// content), when and on which resource. Never stores the value itself.
+// content), when and on which resource, plus health consent given or
+// withdrawn. Never stores the value itself.
 // actor_id and subject_id are plain uuids with NO foreign key on purpose:
 // the rows must survive account deletion (PR #24). Kept 12 months (PR #30).
 model AuditLog {
   id         BigInt      @id @default(autoincrement())
   actorId    String      @map("actor_id") @db.Uuid
   subjectId  String?     @map("subject_id") @db.Uuid
+  // Null in consent events: the person acts on their own behalf, so no role
+  // applies (it does not mean "unknown")
+  actorRole  ActorRole?  @map("actor_role")
   action     AuditAction
   // e.g. "session_log", "feedback", "message"
   resource   String
