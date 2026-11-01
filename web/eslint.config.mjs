@@ -15,6 +15,13 @@ const eslintConfig = defineConfig([
           message:
             "Call requireAuth() outside try/catch: redirect() throws, and a catch would swallow it.",
         },
+        {
+          // The API versions (requireApiOrgRole, requireApiOrgResource) return a Response instead
+          selector:
+            "TryStatement[handler] > BlockStatement.block CallExpression[callee.name=/^(requireOrgRole|requireOrgResource)$/]",
+          message:
+            "Call requireOrgRole() and requireOrgResource() outside try/catch: redirect(), notFound() and forbidden() throw, and a catch would swallow them.",
+        },
       ],
     },
   },
