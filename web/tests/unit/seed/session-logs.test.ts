@@ -60,6 +60,16 @@ function randomSources(): (() => number)[] {
   return sources;
 }
 
+// Usual distance (metres) and pace (seconds per km; 300 = 5:00 min/km) of a
+// completed log of each session type
+const USUAL_EFFORT: Record<SessionType, { distance: [number, number]; pace: [number, number] }> = {
+  rodaje: { distance: [6000, 12000], pace: [300, 390] },
+  tirada_larga: { distance: [15000, 25000], pace: [315, 405] },
+  intervalos: { distance: [6000, 10000], pace: [270, 330] },
+  cuestas: { distance: [6000, 10000], pace: [300, 390] },
+  fartlek: { distance: [7000, 12000], pace: [285, 345] },
+};
+
 function averageRpe(logs: GeneratedLog[]): number {
   let total = 0;
   for (const log of logs) {
@@ -253,23 +263,19 @@ describe("generateSessionHistory", () => {
     }
   });
 
-  it("gives each log a distance and pace inside the range of its session type", () => {
-    // Distance in metres; pace in seconds per km (300 = 5:00 min/km)
-    const usual: Record<SessionType, { distance: [number, number]; pace: [number, number] }> = {
-      rodaje: { distance: [6000, 12000], pace: [300, 390] },
-      tirada_larga: { distance: [15000, 25000], pace: [315, 405] },
-      intervalos: { distance: [6000, 10000], pace: [270, 330] },
-      cuestas: { distance: [6000, 10000], pace: [300, 390] },
-      fartlek: { distance: [7000, 12000], pace: [285, 345] },
-    };
+  it("gives each completed log a distance and pace inside the range of its session type", () => {
     // "type/distance" pairs that came out
     const seen = new Set<string>();
     for (let seed = 1; seed <= 300; seed++) {
       const generated = generateWith(seededRandom(seed));
       for (const log of generated.logs) {
+        // Abandoned logs are shorter: checked in their own test
+        if (!log.completed) {
+          continue;
+        }
         const type = generated.sessions.find((s) => s.id === log.sessionId)!.sessionType;
-        const [minDistance, maxDistance] = usual[type].distance;
-        const [minPace, maxPace] = usual[type].pace;
+        const [minDistance, maxDistance] = USUAL_EFFORT[type].distance;
+        const [minPace, maxPace] = USUAL_EFFORT[type].pace;
 
         // Rounded to 100 m, like people write it down
         expect(log.distanceM % 100).toBe(0);
@@ -285,8 +291,8 @@ describe("generateSessionHistory", () => {
 
     // Both ends of every distance range come out (off-by-one bugs)
     for (const type of Object.values(SessionType)) {
-      expect(seen.has(type + "/" + usual[type].distance[0])).toBe(true);
-      expect(seen.has(type + "/" + usual[type].distance[1])).toBe(true);
+      expect(seen.has(type + "/" + USUAL_EFFORT[type].distance[0])).toBe(true);
+      expect(seen.has(type + "/" + USUAL_EFFORT[type].distance[1])).toBe(true);
     }
   });
 
@@ -360,10 +366,48 @@ describe("generateSessionHistory", () => {
     }
   });
 
-  it("marks every log as completed", () => {
+  it("marks every log as completed, with no reason, with random 0.5", () => {
     for (const log of history.logs) {
       expect(log.completed).toBe(true);
+      expect(log.incompletionReason).toBeNull();
     }
+  });
+
+  it("marks every log as not completed with low random, each with a reason", () => {
+    // Reasons of an abandoned session (#23), from the closed list of
+    // docs/gdpr/export-spec.md 3.3
+    const reasons = ["time_constraints", "equipment_issue", "other"];
+    expect(low.logs.length).toBeGreaterThan(0);
+    for (const log of low.logs) {
+      expect(log.completed).toBe(false);
+      expect(reasons).toContain(log.incompletionReason);
+    }
+  });
+
+  it("cuts an abandoned log to 20-80 % of a usual distance, at a usual pace", () => {
+    let abandoned = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      const generated = generateWith(seededRandom(seed));
+      for (const log of generated.logs) {
+        if (log.completed) {
+          continue;
+        }
+        abandoned++;
+        const type = generated.sessions.find((s) => s.id === log.sessionId)!.sessionType;
+        const [minDistance, maxDistance] = USUAL_EFFORT[type].distance;
+        const [minPace, maxPace] = USUAL_EFFORT[type].pace;
+
+        expect(log.distanceM % 100).toBe(0);
+        expect(log.distanceM).toBeGreaterThanOrEqual(0.2 * minDistance);
+        expect(log.distanceM).toBeLessThanOrEqual(0.8 * maxDistance);
+        // Same margin as the completed logs: durationS is rounded to the second
+        const pace = log.durationS / (log.distanceM / 1000);
+        expect(pace).toBeGreaterThanOrEqual(minPace - 1);
+        expect(pace).toBeLessThanOrEqual(maxPace + 1);
+      }
+    }
+    // About 5 % of the logs: with 100 seeds there are always some
+    expect(abandoned).toBeGreaterThan(0);
   });
 
   it("gives each Athlete 0 to 2 Free Sessions a week, each with only their own log", () => {

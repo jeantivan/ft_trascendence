@@ -8,6 +8,7 @@
 // replaces it for them (#68), so their log goes on the copy, never on both.
 // Half of the sessions are easy runs (rodaje). The RPE, distance and time of
 // each log depend on the session type (see RPE_RANGES and EFFORT_RANGES).
+// A few logs are abandoned midway: not completed, with a reason.
 // Every amount and day comes from random: the same random sequence (seed)
 // gives the same history. Changing the order of the random() calls changes it.
 import { SessionOrigin, SessionType } from "../../src/generated/prisma/enums";
@@ -52,6 +53,9 @@ export interface GeneratedLog {
   // Seconds
   durationS: number;
   completed: boolean;
+  // Why the Athlete did not finish (one of INCOMPLETION_REASONS); null when
+  // completed. seed.ts saves it in SessionLog.extra as incompletion_reason.
+  incompletionReason: string | null;
 }
 
 export interface SessionHistory {
@@ -85,6 +89,11 @@ const EFFORT_RANGES: Record<SessionType, { distance: [number, number]; pace: [nu
 };
 // How often a log is an odd day, with any RPE from 1 to 10
 const ODD_DAY_CHANCE = 0.02;
+// How often an Athlete abandons a session midway (#23: option a, RPE kept)
+const INCOMPLETE_CHANCE = 0.05;
+// Reasons that fit an abandoned session, from the closed list of
+// docs/gdpr/export-spec.md 3.3
+const INCOMPLETION_REASONS = ["time_constraints", "equipment_issue", "other"];
 
 // Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
 // The Athletes of a group share its sessions, so ids only collide between
@@ -148,7 +157,8 @@ function pickRpe(sessionType: SessionType, random: () => number): number {
   return randomInt(range.min, range.max, random);
 }
 
-// What one Athlete did in one session: RPE, distance and time depend on its type
+// What one Athlete did in one session: RPE, distance and time depend on its
+// type; an abandoned log keeps its RPE and gets a shorter distance and time
 function makeLog(
   sessionId: string,
   athleteId: string,
@@ -156,14 +166,33 @@ function makeLog(
   sessionType: SessionType,
   random: () => number,
 ): GeneratedLog {
+  // Order of the random() calls: RPE, effort, then whether they abandon
+  const rpe = pickRpe(sessionType, random);
+  const effort = pickEffort(sessionType, random);
+
+  // Sometimes the Athlete abandons the session midway
+  let completed = true;
+  let incompletionReason: string | null = null;
+  if (random() < INCOMPLETE_CHANCE) {
+    completed = false;
+    incompletionReason = INCOMPLETION_REASONS[Math.floor(random() * INCOMPLETION_REASONS.length)];
+    // They ran 20 to 80 % of it, rounded to 100 m like a completed log
+    const percent = randomInt(20, 80, random);
+    const plannedDistanceM = effort.distanceM;
+    effort.distanceM = 100 * Math.round((plannedDistanceM * percent) / 100 / 100);
+    // Time cut in the same proportion: same pace, they just stopped earlier
+    effort.durationS = Math.round((effort.durationS * effort.distanceM) / plannedDistanceM);
+  }
+
   return {
     sessionId,
     athleteId,
     performedAt: date,
-    rpe: pickRpe(sessionType, random),
+    rpe,
     // distanceM and durationS
-    ...pickEffort(sessionType, random),
-    completed: true,
+    ...effort,
+    completed,
+    incompletionReason,
   };
 }
 
