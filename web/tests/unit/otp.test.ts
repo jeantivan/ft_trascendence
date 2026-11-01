@@ -11,6 +11,13 @@ vi.mock("@/lib/auth/password", async (importOriginal) => {
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 
+// For tests that need a code and are not about the cooldown
+async function issueCode(...args: Parameters<typeof issueOtp>): Promise<string> {
+  const result = await issueOtp(...args);
+  if (!result.issued) throw new Error("issueOtp refused: cooldown");
+  return result.code;
+}
+
 describe("verifyOtp", () => {
   let repo: InMemoryOtpRepository;
 
@@ -20,7 +27,7 @@ describe("verifyOtp", () => {
   });
 
   it("acepta un código con el propósito correcto", async () => {
-    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const code = await issueCode(USER_ID, "delete_account", repo);
 
     const result = await verifyOtp(USER_ID, "delete_account", code, repo);
 
@@ -28,7 +35,7 @@ describe("verifyOtp", () => {
   });
 
   it("rechaza un código emitido para otro propósito", async () => {
-    const code = await issueOtp(USER_ID, "export_data", repo);
+    const code = await issueCode(USER_ID, "export_data", repo);
 
     const result = await verifyOtp(USER_ID, "delete_account", code, repo);
     const record = await repo.findLatest(USER_ID, "export_data");
@@ -40,7 +47,7 @@ describe("verifyOtp", () => {
 
   it("rechaza un código pasados 10 minutos", async () => {
     const issuedAt = new Date("2026-10-30T12:00:00Z");
-    const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+    const code = await issueCode(USER_ID, "delete_account", repo, issuedAt);
 
     const tenMinutesAndOneSecond = new Date(issuedAt.getTime() + 10 * 60 * 1000 + 1000);
     const result = await verifyOtp(USER_ID, "delete_account", code, repo, tenMinutesAndOneSecond);
@@ -52,7 +59,7 @@ describe("verifyOtp", () => {
   });
 
   it("rechaza un código ya usado", async () => {
-    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const code = await issueCode(USER_ID, "delete_account", repo);
 
     const first = await verifyOtp(USER_ID, "delete_account", code, repo);
     const afterFirst = await repo.findLatest(USER_ID, "delete_account");
@@ -75,7 +82,7 @@ describe("verifyOtp", () => {
       }
     }
     const racedRepo = new LostRaceRepository();
-    const code = await issueOtp(USER_ID, "delete_account", racedRepo);
+    const code = await issueCode(USER_ID, "delete_account", racedRepo);
 
     const result = await verifyOtp(USER_ID, "delete_account", code, racedRepo);
     const record = await racedRepo.findLatest(USER_ID, "delete_account");
@@ -86,7 +93,7 @@ describe("verifyOtp", () => {
   });
 
   it("rechaza el código correcto tras cinco intentos fallidos", async () => {
-    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const code = await issueCode(USER_ID, "delete_account", repo);
     const wrongCode = code === "000000" ? "000001" : "000000";
 
     for (let i = 0; i < 5; i++) {
@@ -102,7 +109,7 @@ describe("verifyOtp", () => {
   });
 
   it("acepta el código correcto tras cuatro intentos fallidos", async () => {
-    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const code = await issueCode(USER_ID, "delete_account", repo);
     const wrongCode = code === "000000" ? "000001" : "000000";
 
     for (let i = 0; i < 4; i++) {
@@ -114,7 +121,7 @@ describe("verifyOtp", () => {
   });
 
   it("no sigue sumando intentos una vez bloqueado el código", async () => {
-    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const code = await issueCode(USER_ID, "delete_account", repo);
     const wrongCode = code === "000000" ? "000001" : "000000";
 
     for (let i = 0; i < 7; i++) {
@@ -129,7 +136,7 @@ describe("verifyOtp", () => {
 
   it("no cuenta intentos fallidos sobre un código expirado", async () => {
     const issuedAt = new Date("2026-10-30T12:00:00Z");
-    const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+    const code = await issueCode(USER_ID, "delete_account", repo, issuedAt);
     const wrongCode = code === "000000" ? "000001" : "000000";
 
     const expiresAt = new Date(issuedAt.getTime() + 10 * 60 * 1000);
@@ -142,7 +149,7 @@ describe("verifyOtp", () => {
   });
 
   it("no cuenta intentos fallidos sobre un código ya consumido", async () => {
-    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const code = await issueCode(USER_ID, "delete_account", repo);
     const wrongCode = code === "000000" ? "000001" : "000000";
 
     await verifyOtp(USER_ID, "delete_account", code, repo);
@@ -159,7 +166,7 @@ describe("verifyOtp", () => {
 
   it("acepta un código un milisegundo antes de expirar", async () => {
     const issuedAt = new Date("2026-10-30T12:00:00Z");
-    const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+    const code = await issueCode(USER_ID, "delete_account", repo, issuedAt);
 
     const justBefore = new Date(issuedAt.getTime() + 10 * 60 * 1000 - 1);
     const result = await verifyOtp(USER_ID, "delete_account", code, repo, justBefore);
@@ -169,7 +176,7 @@ describe("verifyOtp", () => {
 
   it("rechaza un código exactamente en el instante de expirar", async () => {
     const issuedAt = new Date("2026-10-30T12:00:00Z");
-    const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+    const code = await issueCode(USER_ID, "delete_account", repo, issuedAt);
 
     const expiresAt = new Date(issuedAt.getTime() + 10 * 60 * 1000);
     const result = await verifyOtp(USER_ID, "delete_account", code, repo, expiresAt);
@@ -181,7 +188,7 @@ describe("verifyOtp", () => {
   });
 
   it("no comprueba más de cinco intentos aunque lleguen a la vez", async () => {
-    const code = await issueOtp(USER_ID, "delete_account", repo);
+    const code = await issueCode(USER_ID, "delete_account", repo);
     const wrongCode = code === "000000" ? "000001" : "000000";
     const { codeHash } = (await repo.findLatest(USER_ID, "delete_account"))!;
 
@@ -212,7 +219,7 @@ describe("verifyOtp", () => {
 
     it("cuando el código ha caducado", async () => {
       const issuedAt = new Date("2026-10-30T12:00:00Z");
-      const code = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+      const code = await issueCode(USER_ID, "delete_account", repo, issuedAt);
       const expiredAt = new Date(issuedAt.getTime() + 10 * 60 * 1000);
 
       const checks = await hashChecksDuring(() => verifyOtp(USER_ID, "delete_account", code, repo, expiredAt));
@@ -221,7 +228,7 @@ describe("verifyOtp", () => {
     });
 
     it("cuando el código ya se usó", async () => {
-      const code = await issueOtp(USER_ID, "delete_account", repo);
+      const code = await issueCode(USER_ID, "delete_account", repo);
       await verifyOtp(USER_ID, "delete_account", code, repo);
 
       const checks = await hashChecksDuring(() => verifyOtp(USER_ID, "delete_account", code, repo));
@@ -230,7 +237,7 @@ describe("verifyOtp", () => {
     });
 
     it("cuando el código está bloqueado por intentos", async () => {
-      const code = await issueOtp(USER_ID, "delete_account", repo);
+      const code = await issueCode(USER_ID, "delete_account", repo);
       const wrongCode = code === "000000" ? "000001" : "000000";
       for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
         await verifyOtp(USER_ID, "delete_account", wrongCode, repo);
@@ -240,5 +247,41 @@ describe("verifyOtp", () => {
 
       expect(checks).toBe(1);
     });
+  });
+});
+
+describe("issueOtp: enfriamiento entre emisiones", () => {
+  const issuedAt = new Date("2026-11-01T12:00:00Z");
+  const after = (seconds: number) => new Date(issuedAt.getTime() + seconds * 1000);
+  let repo: InMemoryOtpRepository;
+
+  beforeEach(() => {
+    repo = new InMemoryOtpRepository();
+  });
+
+  it("rechaza emitir otro código antes de 60 s e indica cuánto falta", async () => {
+    const first = await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+    const second = await issueOtp(USER_ID, "delete_account", repo, after(59));
+
+    expect(first).toMatchObject({ issued: true });
+    expect(second).toEqual({ issued: false, retryAfterSeconds: 1 });
+  });
+
+  it("emite otro código a los 60 s", async () => {
+    await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+
+    const second = await issueOtp(USER_ID, "delete_account", repo, after(60));
+
+    expect(second).toMatchObject({ issued: true });
+  });
+
+  it("no mezcla propósitos ni usuarios", async () => {
+    await issueOtp(USER_ID, "delete_account", repo, issuedAt);
+
+    const otherPurpose = await issueOtp(USER_ID, "export_data", repo, after(1));
+    const otherUser = await issueOtp("22222222-2222-4222-8222-222222222222", "delete_account", repo, after(1));
+
+    expect(otherPurpose).toMatchObject({ issued: true });
+    expect(otherUser).toMatchObject({ issued: true });
   });
 });

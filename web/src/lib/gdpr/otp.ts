@@ -17,6 +17,7 @@ export interface OtpRecord {
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;
+const OTP_COOLDOWN_MS = 60 * 1000;
 
 export interface OtpRepository {
   // attempts starts at 0 (same as the schema default)
@@ -49,18 +50,31 @@ async function rejectInvalid(code: string): Promise<VerifyOtpResult> {
   return { success: false, reason: "invalid" };
 }
 
+export type IssueOtpResult =
+  | { issued: true; code: string }
+  | { issued: false; retryAfterSeconds: number };
+
 // Returns the plain code (to send by email). Only its hash is stored.
+// Refuses to issue another one for the same user and purpose until the cooldown
+// has passed, so requesting codes cannot be used to get unlimited attempts.
 export async function issueOtp(
   userId: string,
   purpose: OtpPurpose,
   repo: OtpRepository,
   now: Date = new Date(),
-): Promise<string> {
+): Promise<IssueOtpResult> {
+  const latest = await repo.findLatest(userId, purpose);
+  if (latest) {
+    const elapsedMs = now.getTime() - latest.createdAt.getTime();
+    if (elapsedMs < OTP_COOLDOWN_MS) {
+      return { issued: false, retryAfterSeconds: Math.ceil((OTP_COOLDOWN_MS - elapsedMs) / 1000) };
+    }
+  }
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
   const codeHash = await hashPassword(code);
   await repo.create({ userId, purpose, codeHash, createdAt: now, expiresAt, consumedAt: null });
-  return code;
+  return { issued: true, code };
 }
 
 export async function verifyOtp(
