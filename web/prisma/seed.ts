@@ -123,10 +123,17 @@ async function main() {
       });
     }
     for (const log of history.logs) {
+      // incompletionReason is not a column: it goes in extra, with the name of
+      // the export spec (docs/gdpr/export-spec.md 3.3). Completed logs have no
+      // extra (undefined leaves the column null).
+      const { incompletionReason, ...columns } = log;
       await prisma.sessionLog.upsert({
         where: { sessionId_athleteId: { sessionId: log.sessionId, athleteId: log.athleteId } },
         update: {},
-        create: { ...log },
+        create: {
+          ...columns,
+          extra: incompletionReason === null ? undefined : { incompletion_reason: incompletionReason },
+        },
       });
     }
     sessionCount += history.sessions.length;
