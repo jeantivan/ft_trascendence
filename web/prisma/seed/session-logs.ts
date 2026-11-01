@@ -88,6 +88,16 @@ function groupDays(random: () => number): number[] {
   return days.sort((a, b) => a - b);
 }
 
+// Like real runners: half of the sessions are easy runs (rodaje), the other
+// half is split evenly among the hard types
+function pickSessionType(random: () => number): SessionType {
+  if (random() < 0.5) {
+    return "rodaje";
+  }
+  const hardTypes = Object.values(SessionType).filter((type) => type !== "rodaje");
+  return hardTypes[Math.floor(random() * hardTypes.length)];
+}
+
 // What one Athlete did in one session. Every kind of session is logged the same way.
 function makeLog(sessionId: string, athleteId: string, date: Date, random: () => number): GeneratedLog {
   return {
@@ -124,7 +134,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       groupId: null,
       customizesSessionId,
       origin,
-      sessionType: "rodaje",
+      sessionType: pickSessionType(params.random),
       scheduledAt: date,
     });
     logs.push(makeLog(id, athleteId, date, params.random));
@@ -143,8 +153,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
         groupId: params.groupId,
         customizesSessionId: null,
         origin: "template",
-        // An easy run, like the 5 km at 6:00 min/km of the logs
-        sessionType: "rodaje",
+        sessionType: pickSessionType(params.random),
         scheduledAt: date,
       });
       // One log per Athlete: each one rates the same session differently

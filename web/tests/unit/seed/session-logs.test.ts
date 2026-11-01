@@ -178,6 +178,45 @@ describe("generateSessionHistory", () => {
     expect(groupSessions(high)).toHaveLength(4 * 6);
   });
 
+  it("gives every session a valid session type", () => {
+    for (const random of randomSources()) {
+      for (const session of generateWith(random).sessions) {
+        expect(Object.values(SessionType)).toContain(session.sessionType);
+      }
+    }
+  });
+
+  it("makes about half of the sessions easy runs and splits the rest among the other types", () => {
+    // How many sessions of each type, over the histories of 100 seeds
+    const counts: Record<string, number> = {};
+    let total = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      for (const session of generateWith(seededRandom(seed)).sessions) {
+        counts[session.sessionType] = (counts[session.sessionType] ?? 0) + 1;
+        total++;
+      }
+    }
+
+    // Over thousands of sessions the shares get close to 50 % and 12.5 %
+    expect(counts.rodaje / total).toBeGreaterThan(0.45);
+    expect(counts.rodaje / total).toBeLessThan(0.55);
+    for (const type of Object.values(SessionType)) {
+      if (type !== "rodaje") {
+        expect(counts[type] / total).toBeGreaterThan(0.09);
+        expect(counts[type] / total).toBeLessThan(0.16);
+      }
+    }
+  });
+
+  it("uses rodaje with low random and the last hard type with high random", () => {
+    for (const session of low.sessions) {
+      expect(session.sessionType).toBe("rodaje");
+    }
+    for (const session of high.sessions) {
+      expect(session.sessionType).toBe("fartlek");
+    }
+  });
+
   it("gives a lower average RPE when random always returns low values", () => {
     expect(averageRpe(low.logs)).toBeLessThan(averageRpe(high.logs));
   });
