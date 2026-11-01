@@ -49,6 +49,17 @@ const groupOfTwo = {
   firstSessionNumber: 101,
 };
 
+// Many random sources for the rules that must hold for any history: the edges
+// plus 100 seeds. A new list on every call, because each seededRandom moves on
+// when used and a test must not get one that another test already used.
+function randomSources(): (() => number)[] {
+  const sources = [() => 0, () => 0.5, () => 0.99];
+  for (let seed = 1; seed <= 100; seed++) {
+    sources.push(seededRandom(seed));
+  }
+  return sources;
+}
+
 function averageRpe(logs: GeneratedLog[]): number {
   let total = 0;
   for (const log of logs) {
@@ -84,23 +95,27 @@ describe("generateSessionHistory", () => {
   });
 
   it("gives every log an integer RPE between 1 and 10", () => {
-    const allLogs = [...low.logs, ...history.logs, ...high.logs];
-    for (const log of allLogs) {
-      expect(Number.isInteger(log.rpe)).toBe(true);
-      expect(log.rpe).toBeGreaterThanOrEqual(1);
-      expect(log.rpe).toBeLessThanOrEqual(10);
+    for (const random of randomSources()) {
+      for (const log of generateWith(random).logs) {
+        expect(Number.isInteger(log.rpe)).toBe(true);
+        expect(log.rpe).toBeGreaterThanOrEqual(1);
+        expect(log.rpe).toBeLessThanOrEqual(10);
+      }
     }
   });
 
-  it("links every log to a generated session, at most one log per session", () => {
-    const sessionIds = new Set(history.sessions.map((session) => session.id));
-    for (const log of history.logs) {
-      expect(sessionIds.has(log.sessionId)).toBe(true);
-    }
+  it("links every log to a generated session, at most one log per session and Athlete", () => {
+    for (const random of randomSources()) {
+      const generated = generateSessionHistory({ ...groupOfTwo, random });
+      const sessionIds = new Set(generated.sessions.map((session) => session.id));
+      for (const log of generated.logs) {
+        expect(sessionIds.has(log.sessionId)).toBe(true);
+      }
 
-    // Same rule as @@unique([sessionId, athleteId]) in the schema
-    const loggedSessionIds = new Set(history.logs.map((log) => log.sessionId));
-    expect(loggedSessionIds.size).toBe(history.logs.length);
+      // Same rule as @@unique([sessionId, athleteId]) in the schema
+      const pairs = new Set(generated.logs.map((log) => log.sessionId + "/" + log.athleteId));
+      expect(pairs.size).toBe(generated.logs.length);
+    }
   });
 
   it("gives every log a positive distance and duration at a believable pace", () => {
@@ -135,8 +150,7 @@ describe("generateSessionHistory", () => {
   });
 
   it("schedules 2 to 4 group sessions a week, on different days", () => {
-    const sources = [() => 0, () => 0.5, () => 0.99, seededRandom(1), seededRandom(42), seededRandom(2026)];
-    for (const random of sources) {
+    for (const random of randomSources()) {
       const generated = generateWith(random);
       for (let week = 0; week < 6; week++) {
         const weekStart = start.getTime() + week * 7 * DAY_MS;
@@ -182,6 +196,8 @@ describe("generateSessionHistory", () => {
       orgId: CLUB_ID,
       groupId: GROUP_BEGINNERS_ID,
       start,
+      // 0.5 adapts no session (0.5 < CUSTOMIZE_CHANCE is false), so every log
+      // stays on its group session. Adapted ones are checked in the #68 test.
       random: () => 0.5,
       firstSessionNumber: 101,
     });
@@ -279,8 +295,7 @@ describe("generateSessionHistory", () => {
   });
 
   it("gives each Athlete one log per group session, on it or on their adaptation (#68)", () => {
-    const sources = [() => 0, () => 0.5, () => 0.99, seededRandom(1), seededRandom(42), seededRandom(2026)];
-    for (const random of sources) {
+    for (const random of randomSources()) {
       const generated = generateSessionHistory({ ...groupOfTwo, random });
       for (const template of generated.sessions.filter((s) => s.origin === "template")) {
         // The group session plus the copies that adapt it
