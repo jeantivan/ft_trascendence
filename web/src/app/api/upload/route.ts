@@ -57,7 +57,12 @@ export async function POST(request: Request): Promise<Response> {
       return record.id;
     });
   } catch (error) {
-    await unlink(path.join(UPLOADS_DIR, relativePath));
+    try {
+      await unlink(path.join(UPLOADS_DIR, relativePath));
+    } catch (cleanupError) {
+      // Only an orphan file is left: report it, but keep the database error
+      console.error("Could not remove orphan upload", relativePath, cleanupError);
+    }
     throw error;
   }
 

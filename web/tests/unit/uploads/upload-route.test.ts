@@ -133,4 +133,20 @@ describe("POST /api/upload", () => {
     // avatars/ was created for the file, which must be gone
     expect(await readdir(path.join(fake.uploadsDir, "avatars"))).toEqual([]);
   });
+
+  it("still reports the database error when removing the saved image fails too", async () => {
+    // The file disappears before the cleanup, so unlink fails with ENOENT
+    fake.transaction.mockImplementation(async () => {
+      await rm(path.join(fake.uploadsDir, "avatars"), { recursive: true });
+      throw new Error("database down");
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")))).rejects.toThrow(
+      "database down",
+    );
+    // The orphan is reported, so someone can find it
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
 });
