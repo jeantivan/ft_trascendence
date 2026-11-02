@@ -21,7 +21,9 @@ function isRealtimeEvent(value: unknown): value is RealtimeEvent {
 }
 
 // prisma does not allow LISTEN
-async function startListener(isReconnect = false) {
+// afterFailure: this attempt follows a failed connect or a dropped connection. Events
+// published meanwhile were lost, so "resync" goes out even if we never connected before.
+async function startListener(afterFailure = false) {
 
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   // "end" and a failed connect can both ask for a retry; only the first one counts,
@@ -81,7 +83,7 @@ async function startListener(isReconnect = false) {
   console.log("Listener connected");
   // Events published while the listener was down are lost: tell every open stream
   // to fetch its open resources again (ADR 0001).
-  if (isReconnect) {
+  if (afterFailure) {
     dispatch({ channel: "resync", payload: {} });
   }
 }
@@ -90,6 +92,8 @@ async function startListener(isReconnect = false) {
 // so there is only one connection per process. globalThis survives dev reloads.
 const globalForListener = globalThis as unknown as { listenerReady?: Promise<void> };
 
+// The Promise also resolves when the first connect fails: the listener keeps retrying
+// in the background, so a Postgres outage never leaves the SSE streams hanging.
 export function ensureListener() {
   if (!globalForListener.listenerReady) {
     globalForListener.listenerReady = startListener();
