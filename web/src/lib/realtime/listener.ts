@@ -2,7 +2,7 @@
 // Reconnects on its own and sends "resync" to every stream after a reconnection.
 
 import { Client } from "pg";
-import { dispatch, RealtimeEvent } from "@/lib/events/hub";
+import { dispatch, RealtimeEvent } from "@/lib/realtime/hub";
 
 const RETRY_DELAY_MS = 2000;
 

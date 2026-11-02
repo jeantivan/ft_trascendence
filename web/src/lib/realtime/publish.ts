@@ -4,7 +4,7 @@
 // The payload carries only ids (never content, RPE or Feedback); send BigInt ids as strings.
 
 import { Prisma } from "@/generated/prisma/client";
-import { RealtimeEvent } from "@/lib/events/hub";
+import { RealtimeEvent } from "@/lib/realtime/hub";
 
 export async function publish(
   tx: Prisma.TransactionClient,

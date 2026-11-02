@@ -2,9 +2,9 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/events/route";
 import { prisma } from "@/lib/prisma";
-import { publish } from "@/lib/events/publish";
+import { publish } from "@/lib/realtime/publish";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
-import { closeListener } from "@/lib/events/listener";
+import { closeListener } from "@/lib/realtime/listener";
 // The real requireApiAuth needs NextAuth and the users table: fake it, so this test
 // only checks the realtime path.
 vi.mock("@/lib/permissions/require-api-auth", () => ({
@@ -50,7 +50,8 @@ describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
   it("delivers a published event to an open SSE stream", async () => {
     const response = await GET(new Request("http://localhost/api/events"));
     expect(response.headers.get("Content-Type")).toBe("text/event-stream");
-
+    expect(response.headers.get("Cache-Control")).toBe("no-cache");
+    expect(response.headers.get("X-Accel-Buffering")).toBe("no");
     const body = response.body;
     if (!body) {
       throw new Error("the SSE response has no body");

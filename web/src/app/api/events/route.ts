@@ -1,8 +1,8 @@
 // GET /api/events: the one SSE stream per browser tab (ADR 0001).
 // Sends a heartbeat and every event the hub dispatches.
 
-import { subscribe } from "@/lib/events/hub";
-import { ensureListener } from "@/lib/events/listener";
+import { subscribe } from "@/lib/realtime/hub";
+import { ensureListener } from "@/lib/realtime/listener";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
 
 // pg (LISTEN/NOTIFY) needs Node APIs, so this route cannot run on Edge.
