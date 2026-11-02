@@ -13,7 +13,7 @@ const hankenGrotesk = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "ft_transcendence",
+  title: "StrideSync",
   description: "Plataforma para clubes de running",
 };
 
