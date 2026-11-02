@@ -26,16 +26,18 @@ function isRealtimeEvent(value: unknown): value is RealtimeEvent {
 async function startListener(afterFailure = false) {
 
   const client = new Client({ connectionString: process.env.DATABASE_URL });
+  globalForListener.listenerClient = client;
   // "end" and a failed connect can both ask for a retry; only the first one counts,
   // or two clients would LISTEN and every event would arrive twice.
   let retryScheduled = false;
   function scheduleRetry() {
-    if (retryScheduled) {
+    // closeListener() ends the client on purpose: never reconnect then.
+    if (retryScheduled || globalForListener.listenerClosing) {
       return;
     }
     retryScheduled = true;
     console.error("Listener not connected, retrying in 2 s");
-    setTimeout(() => {
+    globalForListener.listenerRetryTimer = setTimeout(() => {
       startListener(true);
     }, RETRY_DELAY_MS);
   }
@@ -90,7 +92,12 @@ async function startListener(afterFailure = false) {
 
 // The first call starts the listener and stores its Promise for later calls to reuse,
 // so there is only one connection per process. globalThis survives dev reloads.
-const globalForListener = globalThis as unknown as { listenerReady?: Promise<void> };
+const globalForListener = globalThis as unknown as {
+  listenerReady?: Promise<void>;
+  listenerClient?: Client;
+  listenerRetryTimer?: ReturnType<typeof setTimeout>;
+  listenerClosing?: boolean;
+};
 
 // The Promise also resolves when the first connect fails: the listener keeps retrying
 // in the background, so a Postgres outage never leaves the SSE streams hanging.
@@ -99,4 +106,23 @@ export function ensureListener() {
     globalForListener.listenerReady = startListener();
   }
   return globalForListener.listenerReady;
+}
+
+// Stops the listener and cancels a pending retry,
+// closes the connection and lets the next ensureListener() start from scratch.
+export async function closeListener() {
+  globalForListener.listenerClosing = true;
+  clearTimeout(globalForListener.listenerRetryTimer);
+  const client = globalForListener.listenerClient;
+  globalForListener.listenerRetryTimer = undefined;
+  globalForListener.listenerClient = undefined;
+  globalForListener.listenerReady = undefined;
+  if (client) {
+    try {
+      await client.end();
+    } catch {
+      // Already closed: nothing to do.
+    }
+  }
+  globalForListener.listenerClosing = false;
 }
