@@ -1,14 +1,28 @@
 // @vitest-environment node
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/events/route";
 import { prisma } from "@/lib/prisma";
 import { publish } from "@/lib/events/publish";
+import { requireApiAuth } from "@/lib/permissions/require-api-auth";
+import { closeListener } from "@/lib/events/listener";
+// The real requireApiAuth needs NextAuth and the users table: fake it, so this test
+// only checks the realtime path.
+vi.mock("@/lib/permissions/require-api-auth", () => ({
+  requireApiAuth: vi.fn(),
+}));
 
-// Needs a real Postgres (LISTEN/NOTIFY): skipped locally without DATABASE_URL,
-// but CI must always run it, so a missing database fails there.
-const hasDatabase = Boolean(process.env.DATABASE_URL);
+const testUser = {
+  id: "00000000-0000-0000-0000-000000000001",
+  email: "runner@example.com",
+  nick: "runner",
+  roleGlobal: "user" as const,
+};
+
+// Needs a real Postgres (LISTEN/NOTIFY): skipped locally without DATABASE_URL_TEST (#83),
+// but CI must always run it, so a missing test database fails there.
+const hasDatabase = Boolean(process.env.DATABASE_URL_TEST);
 if (!hasDatabase && process.env.CI) {
-  throw new Error("DATABASE_URL is required in CI for the realtime integration test");
+  throw new Error("DATABASE_URL_TEST is required in CI for the realtime integration test");
 }
 
 async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, expected: string) {
@@ -25,7 +39,11 @@ async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, expect
 }
 
 describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
+  beforeEach(() => {
+    vi.mocked(requireApiAuth).mockResolvedValue(testUser);
+  });
   afterAll(async () => {
+    await closeListener();
     await prisma.$disconnect();
   });
 
@@ -72,5 +90,15 @@ describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
     expect(received).not.toContain("rolled-back");
 
     await reader.cancel();
+  });
+  it("answers 401 without opening a stream when requireApiAuth rejects", async () => {
+    vi.mocked(requireApiAuth).mockResolvedValue(
+      Response.json({ error: "Unauthorized" }, {status: 401 }),
+    );
+
+    const response = await GET(new Request("http://localhost/api/events"));
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("Content-Type")).not.toBe("text/event-stream");
   });
 });
