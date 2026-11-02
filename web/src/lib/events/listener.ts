@@ -6,6 +6,20 @@ import { dispatch, RealtimeEvent } from "@/lib/events/hub";
 
 const RETRY_DELAY_MS = 2000;
 
+// JSON.parse returns whatever was sent: check it really is an event before dispatching.
+function isRealtimeEvent(value: unknown): value is RealtimeEvent {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const event = value as { channel?: unknown; payload?: unknown };
+  return (
+    typeof event.channel === "string" &&
+    typeof event.payload === "object" &&
+    event.payload !== null &&
+    !Array.isArray(event.payload)
+  );
+}
+
 // prisma does not allow LISTEN
 async function startListener(isReconnect = false) {
 
@@ -28,15 +42,19 @@ async function startListener(isReconnect = false) {
     if (!msg.payload) {
       return;
     }
-    let event: RealtimeEvent;
+    let parsed: unknown;
     // A malformed input would lead to a crash.
     try {
-      event = JSON.parse(msg.payload);
+      parsed = JSON.parse(msg.payload);
     } catch {
       console.error("Ignoring a malformed ft_events payload");
       return;
     }
-    dispatch(event);
+    if (!isRealtimeEvent(parsed)) {
+      console.error("Ignoring an ft_events payload that is not an event");
+      return;
+    }
+    dispatch(parsed);
   });
 
   client.on("error", (err) => {
