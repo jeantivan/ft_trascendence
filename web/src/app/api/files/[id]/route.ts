@@ -12,7 +12,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // and serve it to another user. nosniff: the browser uses our Content-Type as is.
 const IMAGE_HEADERS = { "Cache-Control": "private", "X-Content-Type-Options": "nosniff" };
 
-// The same answer for no session, no permission, unknown id and missing file, so
+// The same answer for no permission, unknown id and missing file, so
 // nobody can tell whether a photo exists (#23, an exception to the 404 rule).
 function silhouette(): Response {
   return new Response(SILHOUETTE_SVG, { headers: { ...IMAGE_HEADERS, "Content-Type": "image/svg+xml" } });
@@ -23,10 +23,11 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<Response> {
-  // PROVISIONAL: no session gets the silhouette too; asked on #23 whether it should be a 401
+  // proxy.ts already answers 401 without a session; this is the second barrier
+  // in case the route is ever reached without it (same 401 as the rest of the API, #46)
   const viewer = await requireApiAuth();
   if (viewer instanceof Response) {
-    return silhouette();
+    return viewer;
   }
 
   const { id } = await params;

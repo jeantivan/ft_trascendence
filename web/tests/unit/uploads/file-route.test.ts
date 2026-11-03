@@ -100,9 +100,12 @@ describe("GET /api/files/[id]", () => {
     expect(fake.findUnique).not.toHaveBeenCalled();
   });
 
-  it("returns the silhouette without a session (provisional, asked on #23)", async () => {
-    vi.mocked(requireApiAuth).mockResolvedValue(Response.json({ error: "Unauthorized" }, { status: 401 }));
-    await expectSilhouette(await getFile(AVATAR_ID));
+  it("returns the 401 of requireApiAuth without a session, like the rest of the API (#46)", async () => {
+    const unauthorized = Response.json({ error: "Unauthorized" }, { status: 401 });
+    vi.mocked(requireApiAuth).mockResolvedValue(unauthorized);
+    const response = await getFile(AVATAR_ID);
+    expect(response).toBe(unauthorized);
+    expect(response.status).toBe(401);
     expect(fake.findUnique).not.toHaveBeenCalled();
   });
 
