@@ -53,6 +53,15 @@ describe("requireOrgResource", () => {
     expect(notFound).toHaveBeenCalled();
   });
 
+  it("answers 404 for a missing resource even if the role check lets the empty club id through", async () => {
+    // Does not rely on getOrgRole rejecting "": a missing resource is never returned
+    const alwaysAllowed = async () => ({ ok: true, user: USER, role: "manager" }) as const;
+
+    await expect(requireOrgResource(null, ["manager"], alwaysAllowed)).rejects.toThrow("404");
+
+    expect(notFound).toHaveBeenCalled();
+  });
+
   it("checks the session before the resource: no session redirects even if it does not exist", async () => {
     // Otherwise a visitor could tell existing ids (redirect) from missing ones (404)
     const noSession = (orgId: string, roles: readonly MembershipRole[]) =>

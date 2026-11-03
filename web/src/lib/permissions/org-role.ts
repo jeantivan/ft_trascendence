@@ -29,7 +29,8 @@ export async function getOrgRole(
   }
 
   // A malformed id would make Prisma throw (500); for the caller it is just a club they cannot see
-  if (!z.uuid().safeParse(orgId).success) {
+  // z.guid(), not z.uuid(): any 8-4-4-4-12 hex id, like Postgres (z.uuid() rejects the seed's 00000000-...-0001)
+  if (!z.guid().safeParse(orgId).success) {
     return { ok: false, reason: "not-member" };
   }
 

@@ -15,6 +15,9 @@ export async function requireApiOrgResource<T extends { orgId: string }>(
   if (result instanceof Response) {
     return result;
   }
-  // requireApiOrgRole only accepts a real club id, so resource is not null here
-  return { resource: resource as T, user: result.user, role: result.role };
+  // Today "" already ended in not-member above; this check does not depend on it
+  if (!resource) {
+    return Response.json({ error: "Not Found" }, { status: 404 });
+  }
+  return { resource, user: result.user, role: result.role };
 }

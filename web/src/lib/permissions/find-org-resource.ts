@@ -15,7 +15,8 @@ export async function findOrgResource<T extends { orgId: string }>(
   id: string,
   find: (id: string) => Promise<T | null>
 ): Promise<T | null> {
-  if (!z.uuid().safeParse(id).success) {
+  // z.guid(), not z.uuid(): any 8-4-4-4-12 hex id, like Postgres (z.uuid() rejects the seed's 00000000-...-0001)
+  if (!z.guid().safeParse(id).success) {
     return null;
   }
   return find(id);

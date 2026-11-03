@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import type { MembershipRole } from "@/generated/prisma/client";
 import type { CurrentUser } from "./current-user";
 import { getOrgRole, type OrgRoleCheck } from "./org-role";
@@ -16,6 +17,9 @@ export async function requireOrgResource<T extends { orgId: string }>(
   checkOrgRole: OrgRoleCheck = getOrgRole
 ): Promise<{ resource: T; user: CurrentUser; role: MembershipRole }> {
   const { user, role } = await requireOrgRole(resource?.orgId ?? "", roles, checkOrgRole);
-  // requireOrgRole only returns when the club id was a real one, so resource is not null
-  return { resource: resource as T, user, role };
+  // Today "" already ended in not-member above; this check does not depend on it
+  if (!resource) {
+    notFound();
+  }
+  return { resource, user, role };
 }

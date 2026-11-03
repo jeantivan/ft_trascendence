@@ -38,4 +38,12 @@ describe("findOrgResource", () => {
 
     expect(group).toEqual(stored);
   });
+
+  it("finds a resource whose id Postgres accepts but is not a v4 UUID, like the seed's fixed ids", async () => {
+    const stored = { id: "00000000-0000-0000-0000-000000000001", orgId: CLUB, name: "Seed group" };
+
+    const group = await findOrgResource(stored.id, findGroupIn([stored]));
+
+    expect(group).toEqual(stored);
+  });
 });

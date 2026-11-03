@@ -54,6 +54,18 @@ describe("requireApiOrgResource", () => {
     expect(await result.json()).toEqual({ error: "Not Found" });
   });
 
+  it("answers 404 JSON for a missing resource even if the role check lets the empty club id through", async () => {
+    // Does not rely on getOrgRole rejecting "": a missing resource is never returned
+    const alwaysAllowed = async () => ({ ok: true, user: USER, role: "manager" }) as const;
+
+    const result = await requireApiOrgResource(null, ["manager"], alwaysAllowed);
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+    expect(result.status).toBe(404);
+    expect(await result.json()).toEqual({ error: "Not Found" });
+  });
+
   it("returns the resource, the user and their role when the user may act on it", async () => {
     repo.add(USER.id, CLUB, "athlete");
     const event = { id: EVENT_ID, orgId: CLUB, title: "Tirada larga del domingo" };

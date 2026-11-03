@@ -48,7 +48,7 @@ export const ORG_ROLES = {
   "spotRequest.review": ["manager"],
   // Create, withdraw and read their own
   "spotRequest.request": ["athlete"],
-  // Read and write. Athlete: only if admitted to the Event
+  // Read and write: there is no separate eventChat.read row. Athlete: only if admitted to the Event
   "eventChat.post": ["manager", "athlete"],
   // Delete messages and expel from the chat
   "eventChat.moderate": ["manager"],

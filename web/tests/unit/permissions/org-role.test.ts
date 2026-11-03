@@ -82,6 +82,15 @@ describe("getOrgRole", () => {
     });
   });
 
+  it("accepts a club id that Postgres accepts but is not a v4 UUID, like the seed's fixed ids", async () => {
+    const seedClub = "00000000-0000-0000-0000-000000000001";
+    repo.add(USER_ID, seedClub, "athlete");
+
+    const result = await getOrgRole(seedClub, ["athlete"], activeUser, repo);
+
+    expect(result).toMatchObject({ ok: true, role: "athlete" });
+  });
+
   it("returns the Athlete role when both roles may act", async () => {
     repo.add(USER_ID, CLUB, "athlete");
 
