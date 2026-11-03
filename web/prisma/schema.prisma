@@ -85,7 +85,7 @@ model User {
   messages                 Message[]
   notifications            Notification[]
 
-  files File[]
+  avatars Avatar[]
 
   @@map("users")
 }
@@ -569,14 +569,16 @@ model AuditLog {
   @@map("audit_log")
 }
 
-// ===== Block 7: uploaded files =====
+// ===== Block 7: avatars =====
 
-// One row per uploaded file (avatars, issue #23). The bytes live in the
-// uploads volume; this row says who owns them and where they are.
+// One row per uploaded avatar (issue #23). Only avatars: GET /api/files/[id]
+// applies avatar visibility rules to every row, so other files (exports, #35)
+// must not be stored here. The bytes live in the uploads volume; this row
+// says who owns them and where they are.
 // User.image stores /api/files/<id>, never the path on disk.
 // Deleting the User deletes these rows (Cascade), but not the files on disk:
 // the server must delete them first (account deletion table, PR #24).
-model File {
+model Avatar {
   id        String   @id @default(uuid()) @db.Uuid
   ownerId   String   @map("owner_id") @db.Uuid
   // image/jpeg, image/png or image/webp, checked by the server on upload
@@ -589,5 +591,5 @@ model File {
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@index([ownerId])
-  @@map("files")
+  @@map("avatars")
 }

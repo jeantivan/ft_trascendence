@@ -16,7 +16,7 @@ vi.mock("@/lib/permissions/require-api-auth", () => ({
 // created with vi.hoisted, which runs even earlier.
 const fake = vi.hoisted(() => ({
   uploadsDir: "",
-  fileCreate: vi.fn(),
+  avatarCreate: vi.fn(),
   userUpdate: vi.fn(),
   transaction: vi.fn(),
 }));
@@ -33,7 +33,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: { $transaction: fake.transaction },
 }));
 
-const FILE_ID = "00000000-0000-0000-0000-00000000f001";
+const AVATAR_ID = "00000000-0000-0000-0000-00000000f001";
 
 const testUser = {
   id: "00000000-0000-0000-0000-000000000001",
@@ -64,11 +64,11 @@ function formWithFile(bytes: Uint8Array<ArrayBuffer>, name: string, type: string
 beforeEach(async () => {
   vi.mocked(requireApiAuth).mockResolvedValue(testUser);
   fake.uploadsDir = await mkdtemp(path.join(tmpdir(), "upload-route-test-"));
-  fake.fileCreate.mockReset().mockResolvedValue({ id: FILE_ID });
+  fake.avatarCreate.mockReset().mockResolvedValue({ id: AVATAR_ID });
   fake.userUpdate.mockReset().mockResolvedValue({});
   fake.transaction
     .mockReset()
-    .mockImplementation((work) => work({ file: { create: fake.fileCreate }, user: { update: fake.userUpdate } }));
+    .mockImplementation((work) => work({ avatar: { create: fake.avatarCreate }, user: { update: fake.userUpdate } }));
 });
 
 afterEach(async () => {
@@ -111,16 +111,16 @@ describe("POST /api/upload", () => {
     const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")));
 
     expect(response.status).toBe(201);
-    expect(await response.json()).toEqual({ id: FILE_ID, url: `/api/files/${FILE_ID}` });
+    expect(await response.json()).toEqual({ id: AVATAR_ID, url: `/api/files/${AVATAR_ID}` });
 
-    const record = fake.fileCreate.mock.calls[0][0].data;
+    const record = fake.avatarCreate.mock.calls[0][0].data;
     expect(record).toMatchObject({ ownerId: testUser.id, mimeType: "image/png", sizeBytes: PNG_BYTES.length });
     expect(record.path).toMatch(/^avatars\/.+\.png$/);
     expect(new Uint8Array(await readFile(path.join(fake.uploadsDir, record.path)))).toEqual(PNG_BYTES);
 
     expect(fake.userUpdate).toHaveBeenCalledWith({
       where: { id: testUser.id },
-      data: { image: `/api/files/${FILE_ID}` },
+      data: { image: `/api/files/${AVATAR_ID}` },
     });
   });
 

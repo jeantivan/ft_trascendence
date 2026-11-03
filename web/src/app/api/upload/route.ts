@@ -47,10 +47,10 @@ export async function POST(request: Request): Promise<Response> {
   // points at, and we remove it. The other order could leave User.image pointing
   // at a file that does not exist.
   const relativePath = await saveAvatar(bytes, check.extension, UPLOADS_DIR);
-  let fileId: string;
+  let avatarId: string;
   try {
-    fileId = await prisma.$transaction(async (tx) => {
-      const record = await tx.file.create({
+    avatarId = await prisma.$transaction(async (tx) => {
+      const record = await tx.avatar.create({
         data: { ownerId: user.id, mimeType: check.mimeType, sizeBytes: bytes.length, path: relativePath },
       });
       await tx.user.update({ where: { id: user.id }, data: { image: `/api/files/${record.id}` } });
@@ -66,5 +66,5 @@ export async function POST(request: Request): Promise<Response> {
     throw error;
   }
 
-  return Response.json({ id: fileId, url: `/api/files/${fileId}` }, { status: 201 });
+  return Response.json({ id: avatarId, url: `/api/files/${avatarId}` }, { status: 201 });
 }

@@ -30,7 +30,7 @@ vi.mock("@/lib/uploads/uploads-dir", () => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: { file: { findUnique: fake.findUnique } },
+  prisma: { avatar: { findUnique: fake.findUnique } },
 }));
 
 const viewer = {
@@ -40,7 +40,7 @@ const viewer = {
   roleGlobal: "user" as const,
 };
 const OWNER_ID = "00000000-0000-0000-0000-000000000001";
-const FILE_ID = "00000000-0000-0000-0000-00000000f001";
+const AVATAR_ID = "00000000-0000-0000-0000-00000000f001";
 const PHOTO = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7]);
 const RECORD = { ownerId: OWNER_ID, mimeType: "image/png", path: "avatars/photo.png" };
 
@@ -72,7 +72,7 @@ afterEach(async () => {
 
 describe("GET /api/files/[id]", () => {
   it("returns the photo with its type when the viewer may see it", async () => {
-    const response = await getFile(FILE_ID);
+    const response = await getFile(AVATAR_ID);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
@@ -84,12 +84,12 @@ describe("GET /api/files/[id]", () => {
 
   it("returns the silhouette when the viewer may not see it", async () => {
     vi.mocked(canViewAvatar).mockResolvedValue(false);
-    await expectSilhouette(await getFile(FILE_ID));
+    await expectSilhouette(await getFile(AVATAR_ID));
   });
 
   it("returns the silhouette for an unknown id", async () => {
     fake.findUnique.mockResolvedValue(null);
-    await expectSilhouette(await getFile(FILE_ID));
+    await expectSilhouette(await getFile(AVATAR_ID));
     expect(canViewAvatar).not.toHaveBeenCalled();
   });
 
@@ -102,12 +102,12 @@ describe("GET /api/files/[id]", () => {
 
   it("returns the silhouette without a session (provisional, asked on #23)", async () => {
     vi.mocked(requireApiAuth).mockResolvedValue(Response.json({ error: "Unauthorized" }, { status: 401 }));
-    await expectSilhouette(await getFile(FILE_ID));
+    await expectSilhouette(await getFile(AVATAR_ID));
     expect(fake.findUnique).not.toHaveBeenCalled();
   });
 
   it("returns the silhouette when the row exists but the file is missing on disk", async () => {
     await rm(path.join(fake.uploadsDir, RECORD.path));
-    await expectSilhouette(await getFile(FILE_ID));
+    await expectSilhouette(await getFile(AVATAR_ID));
   });
 });

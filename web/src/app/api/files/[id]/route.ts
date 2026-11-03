@@ -34,18 +34,18 @@ export async function GET(
     return silhouette();
   }
 
-  const file = await prisma.file.findUnique({
+  const avatar = await prisma.avatar.findUnique({
     where: { id },
     select: { ownerId: true, mimeType: true, path: true },
   });
-  if (file === null || !(await canViewAvatar(viewer, file.ownerId))) {
+  if (avatar === null || !(await canViewAvatar(viewer, avatar.ownerId))) {
     return silhouette();
   }
 
   // Response only takes bytes backed by a plain ArrayBuffer, as readFile returns
   let bytes: Uint8Array<ArrayBuffer>;
   try {
-    bytes = await readFile(path.join(UPLOADS_DIR, file.path));
+    bytes = await readFile(path.join(UPLOADS_DIR, avatar.path));
   } catch (error) {
     // The row without its file is "no photo"; any other disk error is a real failure
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -54,5 +54,5 @@ export async function GET(
     throw error;
   }
 
-  return new Response(bytes, { headers: { ...IMAGE_HEADERS, "Content-Type": file.mimeType } });
+  return new Response(bytes, { headers: { ...IMAGE_HEADERS, "Content-Type": avatar.mimeType } });
 }
