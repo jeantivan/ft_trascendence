@@ -18,16 +18,41 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // formData() reads the whole body into memory: reject big requests before that.
-  // Content-Length is only the client's claim; checkImage checks the real size.
+  // With Node's HTTP/1.1 server the body is exactly Content-Length bytes, but that is
+  // the runtime's behaviour, not a promise of this code: the hard cap belongs in NGINX
+  // (client_max_body_size). The image inside can still lie; checkImage checks its size.
   const contentLength = request.headers.get("content-length");
   if (contentLength === null) {
     return Response.json({ error: "Content-Length required" }, { status: 411 });
+  }
+  // HTTP allows only digits here. Number() alone would take "abc" (NaN, and NaN > limit
+  // is false, so it would pass), "0x10", "1e3" or "-1".
+  if (!/^\d+$/.test(contentLength)) {
+    return Response.json({ error: "Invalid Content-Length" }, { status: 400 });
   }
   if (Number(contentLength) > MAX_IMAGE_BYTES + FORM_OVERHEAD_BYTES) {
     return Response.json({ error: "File too large" }, { status: 413 });
   }
 
-  const form = await request.formData();
+  // formData() also parses url-encoded forms, which cannot carry a file: only multipart.
+  // The media type is what comes before "; boundary=...", and it is case-insensitive.
+  const contentType = request.headers.get("content-type") ?? "";
+  const mediaType = contentType.split(";")[0].trim().toLowerCase();
+  if (mediaType !== "multipart/form-data") {
+    return Response.json({ error: "Expected multipart/form-data" }, { status: 415 });
+  }
+
+  // A cut-off or malformed body makes formData() throw a TypeError: the client's fault.
+  // Anything else is ours, so it goes on to the logs as a 500.
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return Response.json({ error: "Malformed form data" }, { status: 400 });
+    }
+    throw error;
+  }
   const file = form.get("file");
   // get() returns null without the field, and a string for a text field
   if (!(file instanceof File)) {
@@ -47,15 +72,30 @@ export async function POST(request: Request): Promise<Response> {
   // points at, and we remove it. The other order could leave User.image pointing
   // at a file that does not exist.
   const relativePath = await saveAvatar(bytes, check.extension, UPLOADS_DIR);
-  let avatar: { id: string; createdAt: Date };
+  let saved: { avatarId: string; oldAvatars: { id: string; path: string }[] };
   try {
-    avatar = await prisma.$transaction(async (tx) => {
+    // Pinned to READ COMMITTED (Postgres' default; the option at the end): each query
+    // sees what was committed when it starts, which is how a waiting upload sees this one
+    saved = await prisma.$transaction(async (tx) => {
       const record = await tx.avatar.create({
         data: { ownerId: user.id, mimeType: check.mimeType, sizeBytes: bytes.length, path: relativePath },
       });
       await tx.user.update({ where: { id: user.id }, data: { image: `/api/files/${record.id}` } });
-      return record;
-    });
+      // One avatar per user (#23): every other one goes, not only older ones. The update
+      // above locks the user's row until commit, so a parallel upload waits there and
+      // then sees this avatar: the one that commits last keeps its own and User.image.
+      // So an earlier upload may already have answered 201 with an id that is gone by
+      // now: on purpose, the last upload wins, and User.image is what counts.
+      const oldAvatars = await tx.avatar.findMany({
+        where: { ownerId: user.id, id: { not: record.id } },
+        select: { id: true, path: true },
+      });
+      // Usually there is none: skip the extra query while the user's row is locked
+      if (oldAvatars.length > 0) {
+        await tx.avatar.deleteMany({ where: { id: { in: oldAvatars.map((old) => old.id) } } });
+      }
+      return { avatarId: record.id, oldAvatars };
+    }, { isolationLevel: "ReadCommitted" });
   } catch (error) {
     try {
       await unlink(path.join(UPLOADS_DIR, relativePath));
@@ -66,22 +106,17 @@ export async function POST(request: Request): Promise<Response> {
     throw error;
   }
 
-  // One avatar per user (#23). Only now that the new one is saved: if anything above
-  // failed, the user keeps the old one. Only older ones, so an upload saved later
-  // is not deleted. Row first: a failure then leaves a file nobody points at.
-  const oldAvatars = await prisma.avatar.findMany({
-    where: { ownerId: user.id, createdAt: { lt: avatar.createdAt } },
-    select: { id: true, path: true },
-  });
-  for (const old of oldAvatars) {
+  // Files only after the commit: a rollback brings the rows back, but the disk has no
+  // rollback. Rows first, files second: a failure here only leaves a file nobody points at.
+  for (const old of saved.oldAvatars) {
     try {
-      await prisma.avatar.delete({ where: { id: old.id } });
       await unlink(path.join(UPLOADS_DIR, old.path));
     } catch (error) {
-      // The new avatar is already in use: report the leftover, don't fail the upload
-      console.error("Could not delete old avatar", old.id, error);
+      // The new avatar is already in use: report the leftover, don't fail the upload.
+      // With the path: the row is gone, so the id alone cannot find the file.
+      console.error("Could not delete old avatar file", old.id, old.path, error);
     }
   }
 
-  return Response.json({ id: avatar.id, url: `/api/files/${avatar.id}` }, { status: 201 });
+  return Response.json({ id: saved.avatarId, url: `/api/files/${saved.avatarId}` }, { status: 201 });
 }
