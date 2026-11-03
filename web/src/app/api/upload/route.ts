@@ -47,14 +47,14 @@ export async function POST(request: Request): Promise<Response> {
   // points at, and we remove it. The other order could leave User.image pointing
   // at a file that does not exist.
   const relativePath = await saveAvatar(bytes, check.extension, UPLOADS_DIR);
-  let avatarId: string;
+  let avatar: { id: string; createdAt: Date };
   try {
-    avatarId = await prisma.$transaction(async (tx) => {
+    avatar = await prisma.$transaction(async (tx) => {
       const record = await tx.avatar.create({
         data: { ownerId: user.id, mimeType: check.mimeType, sizeBytes: bytes.length, path: relativePath },
       });
       await tx.user.update({ where: { id: user.id }, data: { image: `/api/files/${record.id}` } });
-      return record.id;
+      return record;
     });
   } catch (error) {
     try {
@@ -66,5 +66,22 @@ export async function POST(request: Request): Promise<Response> {
     throw error;
   }
 
-  return Response.json({ id: avatarId, url: `/api/files/${avatarId}` }, { status: 201 });
+  // One avatar per user (#23). Only now that the new one is saved: if anything above
+  // failed, the user keeps the old one. Only older ones, so an upload saved later
+  // is not deleted. Row first: a failure then leaves a file nobody points at.
+  const oldAvatars = await prisma.avatar.findMany({
+    where: { ownerId: user.id, createdAt: { lt: avatar.createdAt } },
+    select: { id: true, path: true },
+  });
+  for (const old of oldAvatars) {
+    try {
+      await prisma.avatar.delete({ where: { id: old.id } });
+      await unlink(path.join(UPLOADS_DIR, old.path));
+    } catch (error) {
+      // The new avatar is already in use: report the leftover, don't fail the upload
+      console.error("Could not delete old avatar", old.id, error);
+    }
+  }
+
+  return Response.json({ id: avatar.id, url: `/api/files/${avatar.id}` }, { status: 201 });
 }

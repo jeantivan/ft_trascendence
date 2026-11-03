@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +19,8 @@ const fake = vi.hoisted(() => ({
   avatarCreate: vi.fn(),
   userUpdate: vi.fn(),
   transaction: vi.fn(),
+  avatarFindMany: vi.fn(),
+  avatarDelete: vi.fn(),
 }));
 
 // A getter, so the route reads the temporary directory of the current test
@@ -28,12 +30,18 @@ vi.mock("@/lib/uploads/uploads-dir", () => ({
   },
 }));
 
-// No database here: the transaction runs the route's callback with a fake client
+// No database here: the transaction runs the route's callback with a fake client,
+// and the old avatars are whatever avatarFindMany returns in each test
 vi.mock("@/lib/prisma", () => ({
-  prisma: { $transaction: fake.transaction },
+  prisma: {
+    $transaction: fake.transaction,
+    avatar: { findMany: fake.avatarFindMany, delete: fake.avatarDelete },
+  },
 }));
 
 const AVATAR_ID = "00000000-0000-0000-0000-00000000f001";
+const AVATAR_CREATED_AT = new Date("2026-11-03T12:00:00Z");
+const OLD_AVATAR = { id: "00000000-0000-0000-0000-00000000f000", path: "avatars/old.png" };
 
 const testUser = {
   id: "00000000-0000-0000-0000-000000000001",
@@ -64,11 +72,14 @@ function formWithFile(bytes: Uint8Array<ArrayBuffer>, name: string, type: string
 beforeEach(async () => {
   vi.mocked(requireApiAuth).mockResolvedValue(testUser);
   fake.uploadsDir = await mkdtemp(path.join(tmpdir(), "upload-route-test-"));
-  fake.avatarCreate.mockReset().mockResolvedValue({ id: AVATAR_ID });
+  fake.avatarCreate.mockReset().mockResolvedValue({ id: AVATAR_ID, createdAt: AVATAR_CREATED_AT });
   fake.userUpdate.mockReset().mockResolvedValue({});
   fake.transaction
     .mockReset()
     .mockImplementation((work) => work({ avatar: { create: fake.avatarCreate }, user: { update: fake.userUpdate } }));
+  // By default the user had no avatar before
+  fake.avatarFindMany.mockReset().mockResolvedValue([]);
+  fake.avatarDelete.mockReset().mockResolvedValue({});
 });
 
 afterEach(async () => {
@@ -124,6 +135,32 @@ describe("POST /api/upload", () => {
     });
   });
 
+  it("deletes the avatars created before the new one, row first and then file", async () => {
+    await mkdir(path.join(fake.uploadsDir, "avatars"));
+    await writeFile(path.join(fake.uploadsDir, OLD_AVATAR.path), PNG_BYTES);
+    fake.avatarFindMany.mockResolvedValue([OLD_AVATAR]);
+    // What is on disk when the row is deleted: the old file must still be there
+    let filesWhenRowDeleted: string[] = [];
+    fake.avatarDelete.mockImplementation(async () => {
+      filesWhenRowDeleted = await readdir(path.join(fake.uploadsDir, "avatars"));
+      return {};
+    });
+
+    const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")));
+    expect(response.status).toBe(201);
+
+    // Only older ones: a newer avatar belongs to an upload saved later (#23)
+    expect(fake.avatarFindMany).toHaveBeenCalledWith({
+      where: { ownerId: testUser.id, createdAt: { lt: AVATAR_CREATED_AT } },
+      select: { id: true, path: true },
+    });
+    expect(fake.avatarDelete).toHaveBeenCalledWith({ where: { id: OLD_AVATAR.id } });
+    expect(filesWhenRowDeleted).toContain(path.basename(OLD_AVATAR.path));
+    // The old file is gone and the new one stays
+    const newPath = fake.avatarCreate.mock.calls[0][0].data.path;
+    expect(await readdir(path.join(fake.uploadsDir, "avatars"))).toEqual([path.basename(newPath)]);
+  });
+
   it("removes the saved image when the database write fails", async () => {
     fake.transaction.mockRejectedValue(new Error("database down"));
 
@@ -132,6 +169,38 @@ describe("POST /api/upload", () => {
     );
     // avatars/ was created for the file, which must be gone
     expect(await readdir(path.join(fake.uploadsDir, "avatars"))).toEqual([]);
+  });
+
+  it("keeps the old avatar when the database write fails", async () => {
+    fake.avatarFindMany.mockResolvedValue([OLD_AVATAR]);
+    fake.transaction.mockRejectedValue(new Error("database down"));
+
+    await expect(POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")))).rejects.toThrow(
+      "database down",
+    );
+    // The user keeps the photo they had (#23)
+    expect(fake.avatarFindMany).not.toHaveBeenCalled();
+    expect(fake.avatarDelete).not.toHaveBeenCalled();
+  });
+
+  it("still answers 201 and logs the id when deleting an old avatar fails", async () => {
+    const otherOld = { id: "00000000-0000-0000-0000-00000000f00f", path: "avatars/other.png" };
+    // OLD_AVATAR has no file on disk, so its unlink fails with ENOENT; otherOld has one
+    await mkdir(path.join(fake.uploadsDir, "avatars"));
+    await writeFile(path.join(fake.uploadsDir, otherOld.path), PNG_BYTES);
+    fake.avatarFindMany.mockResolvedValue([OLD_AVATAR, otherOld]);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")));
+
+    // The new avatar is saved and in use: the failure is only ours to clean up
+    expect(response.status).toBe(201);
+    expect(consoleError).toHaveBeenCalledWith(expect.any(String), OLD_AVATAR.id, expect.anything());
+    // One failure does not stop the rest
+    expect(fake.avatarDelete).toHaveBeenCalledWith({ where: { id: otherOld.id } });
+    const newPath = fake.avatarCreate.mock.calls[0][0].data.path;
+    expect(await readdir(path.join(fake.uploadsDir, "avatars"))).toEqual([path.basename(newPath)]);
+    consoleError.mockRestore();
   });
 
   it("still reports the database error when removing the saved image fails too", async () => {
