@@ -2,8 +2,9 @@
 // the demo seed, so analytics can be built before Athletes log real sessions.
 // Pure: it never touches the database; seed.ts saves what it returns.
 //
-// Each week: 2 to 4 group sessions (Template Sessions) on different days, and
-// for each Athlete 0 to 2 Free Sessions and 0 to 2 direct Customized Sessions.
+// Each week: a few group sessions (Template Sessions) on different days, and
+// for each Athlete a few Free Sessions and direct Customized Sessions (limits
+// in the *_PER_WEEK constants).
 // Sometimes the Manager adapts a group session for one Athlete: that copy
 // replaces it for them (#68), so their log goes on the copy, never on both.
 // Half of the sessions are easy runs (rodaje). The RPE, distance and time of
@@ -21,8 +22,8 @@ export interface SessionHistoryParams {
   start: Date;
   // Returns a number in [0, 1), like Math.random. Tests pass a fixed one.
   random: () => number;
-  // Ids are built from this number: give each group its own range
-  // (e.g. 101 and 201) or their sessions get the same ids.
+  // Ids are built from this number: give each group its own range, at least
+  // maxSessionCount long (e.g. 101 and 201), or their sessions get the same ids.
   firstSessionNumber: number;
 }
 
@@ -65,9 +66,17 @@ export interface SessionHistory {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKS = 6;
+// Limits of the weekly amounts. maxSessionCount adds up the maximums, so
+// change them here, never as a number inside the code.
+const MIN_GROUP_SESSIONS_PER_WEEK = 2;
+const MAX_GROUP_SESSIONS_PER_WEEK = 4;
+// Per Athlete
+const MAX_FREE_SESSIONS_PER_WEEK = 2;
+const MAX_DIRECT_CUSTOMIZED_PER_WEEK = 2;
 // How often the Manager adapts a group session for one Athlete
 const CUSTOMIZE_CHANCE = 0.1;
-// How often the Manager prescribes a new individual session (each of 2 draws a week)
+// How often the Manager prescribes a new individual session (each of the
+// MAX_DIRECT_CUSTOMIZED_PER_WEEK draws a week)
 const PRESCRIBE_CHANCE = 0.1;
 // Usual RPE of each session type. Orientation from CONTEXT.md: easy runs 4-5,
 // hard sessions 7-9; one point of margin for tired or good days.
@@ -97,8 +106,9 @@ const INCOMPLETION_REASONS = ["time_constraints", "equipment_issue", "other"];
 
 // Same format as seed/ids.ts, because sessions.id is a Postgres uuid column.
 // The Athletes of a group share its sessions, so ids only collide between
-// groups, if their firstSessionNumber ranges overlap.
-function sessionId(number: number): string {
+// groups, if their firstSessionNumber ranges overlap. Exported so seed.ts can
+// find the ids a group may have used before.
+export function sessionId(number: number): string {
   return "00000000-0000-4000-8000-" + String(number).padStart(12, "0");
 }
 
@@ -107,9 +117,10 @@ function sessionDate(start: Date, week: number, day: number): Date {
   return new Date(start.getTime() + (week * 7 + day) * DAY_MS);
 }
 
-// Days of one week (0 = Monday) with a group session: 2 to 4 different days, in order
+// Days of one week (0 = Monday) with a group session: MIN_ to
+// MAX_GROUP_SESSIONS_PER_WEEK different days, in order
 function groupDays(random: () => number): number[] {
-  const count = 2 + Math.floor(random() * 3);
+  const count = randomInt(MIN_GROUP_SESSIONS_PER_WEEK, MAX_GROUP_SESSIONS_PER_WEEK, random);
   const available = [0, 1, 2, 3, 4, 5, 6];
   const days: number[] = [];
   for (let i = 0; i < count; i++) {
@@ -253,19 +264,20 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       }
     }
 
-    // Free Sessions: each Athlete adds 0, 1 or 2 of their own, any day
+    // Free Sessions: each Athlete adds 0 to MAX_FREE_SESSIONS_PER_WEEK of their
+    // own, any day
     for (const athleteId of params.athleteIds) {
-      const count = Math.floor(params.random() * 3);
+      const count = randomInt(0, MAX_FREE_SESSIONS_PER_WEEK, params.random);
       for (let i = 0; i < count; i++) {
         const day = Math.floor(params.random() * 7);
         addIndividualSession(athleteId, sessionDate(params.start, week, day), "free", null);
       }
     }
 
-    // Direct Customized Sessions: the Manager prescribes up to 2 new ones,
-    // not adapted from a group session (#68). Two draws keep 2 rare.
+    // Direct Customized Sessions: the Manager prescribes new ones, not adapted
+    // from a group session (#68). One unlikely draw each keeps the maximum rare.
     for (const athleteId of params.athleteIds) {
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < MAX_DIRECT_CUSTOMIZED_PER_WEEK; i++) {
         if (params.random() < PRESCRIBE_CHANCE) {
           const day = Math.floor(params.random() * 7);
           addIndividualSession(athleteId, sessionDate(params.start, week, day), "customized", null);
@@ -275,6 +287,15 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
   }
 
   return { sessions, logs };
+}
+
+// Most sessions (and so session ids) generateSessionHistory can create for a
+// group: give the next group a firstSessionNumber at least this much higher.
+export function maxSessionCount(athleteCount: number): number {
+  // Per Athlete: one adapted copy per group session at most, plus their Free
+  // and direct Customized Sessions
+  const perAthlete = MAX_GROUP_SESSIONS_PER_WEEK + MAX_FREE_SESSIONS_PER_WEEK + MAX_DIRECT_CUSTOMIZED_PER_WEEK;
+  return WEEKS * (MAX_GROUP_SESSIONS_PER_WEEK + athleteCount * perAthlete);
 }
 
 // Monday 00:00 UTC of the 6 full weeks that end just before today's week
