@@ -60,8 +60,8 @@ function randomSources(): (() => number)[] {
   return sources;
 }
 
-// Usual distance (metres) and pace (seconds per km; 300 = 5:00 min/km) of a
-// completed log of each session type
+// Usual target distance (metres) and pace (seconds per km; 300 = 5:00 min/km)
+// of each session type
 const USUAL_EFFORT: Record<SessionType, { distance: [number, number]; pace: [number, number] }> = {
   rodaje: { distance: [6000, 12000], pace: [300, 390] },
   tirada_larga: { distance: [15000, 25000], pace: [315, 405] },
@@ -69,6 +69,8 @@ const USUAL_EFFORT: Record<SessionType, { distance: [number, number]; pace: [num
   cuestas: { distance: [6000, 10000], pace: [300, 390] },
   fartlek: { distance: [7000, 12000], pace: [285, 345] },
 };
+// A log's pace is at most this far from its session's target pace
+const PACE_VARIATION_S_PER_KM = 15;
 
 function averageRpe(logs: GeneratedLog[]): number {
   let total = 0;
@@ -263,29 +265,25 @@ describe("generateSessionHistory", () => {
     }
   });
 
-  it("gives each completed log a distance and pace inside the range of its session type", () => {
+  it("gives every session a target inside the usual range of its type, with time = distance x pace", () => {
     // "type/distance" pairs that came out
     const seen = new Set<string>();
     for (let seed = 1; seed <= 300; seed++) {
-      const generated = generateWith(seededRandom(seed));
-      for (const log of generated.logs) {
-        // Abandoned logs are shorter: checked in their own test
-        if (!log.completed) {
-          continue;
-        }
-        const type = generated.sessions.find((s) => s.id === log.sessionId)!.sessionType;
+      for (const session of generateWith(seededRandom(seed)).sessions) {
+        const type = session.sessionType;
         const [minDistance, maxDistance] = USUAL_EFFORT[type].distance;
         const [minPace, maxPace] = USUAL_EFFORT[type].pace;
 
         // Rounded to 100 m, like people write it down
-        expect(log.distanceM % 100).toBe(0);
-        expect(log.distanceM).toBeGreaterThanOrEqual(minDistance);
-        expect(log.distanceM).toBeLessThanOrEqual(maxDistance);
-        // durationS is rounded to the second, so the pace can be off by a fraction
-        const pace = log.durationS / (log.distanceM / 1000);
-        expect(pace).toBeGreaterThanOrEqual(minPace - 1);
-        expect(pace).toBeLessThanOrEqual(maxPace + 1);
-        seen.add(type + "/" + log.distanceM);
+        expect(session.targetDistanceM % 100).toBe(0);
+        expect(session.targetDistanceM).toBeGreaterThanOrEqual(minDistance);
+        expect(session.targetDistanceM).toBeLessThanOrEqual(maxDistance);
+        expect(session.targetPaceSPerKm).toBeGreaterThanOrEqual(minPace);
+        expect(session.targetPaceSPerKm).toBeLessThanOrEqual(maxPace);
+        expect(session.targetDurationS).toBe(
+          Math.round((session.targetDistanceM / 1000) * session.targetPaceSPerKm),
+        );
+        seen.add(type + "/" + session.targetDistanceM);
       }
     }
 
@@ -293,6 +291,25 @@ describe("generateSessionHistory", () => {
     for (const type of Object.values(SessionType)) {
       expect(seen.has(type + "/" + USUAL_EFFORT[type].distance[0])).toBe(true);
       expect(seen.has(type + "/" + USUAL_EFFORT[type].distance[1])).toBe(true);
+    }
+  });
+
+  it("gives each completed log its session's target distance, at about the target pace", () => {
+    for (const random of randomSources()) {
+      const generated = generateWith(random);
+      for (const log of generated.logs) {
+        // Abandoned logs are shorter: checked in their own test
+        if (!log.completed) {
+          continue;
+        }
+        const session = generated.sessions.find((s) => s.id === log.sessionId)!;
+
+        expect(log.distanceM).toBe(session.targetDistanceM);
+        // durationS is rounded to the second, so the pace can be off by a fraction
+        const pace = log.durationS / (log.distanceM / 1000);
+        expect(pace).toBeGreaterThanOrEqual(session.targetPaceSPerKm - PACE_VARIATION_S_PER_KM - 1);
+        expect(pace).toBeLessThanOrEqual(session.targetPaceSPerKm + PACE_VARIATION_S_PER_KM + 1);
+      }
     }
   });
 
@@ -384,7 +401,7 @@ describe("generateSessionHistory", () => {
     }
   });
 
-  it("cuts an abandoned log to 20-80 % of a usual distance, at a usual pace", () => {
+  it("cuts an abandoned log to 20-80 % of its target distance, at about the target pace", () => {
     let abandoned = 0;
     for (let seed = 1; seed <= 100; seed++) {
       const generated = generateWith(seededRandom(seed));
@@ -393,17 +410,16 @@ describe("generateSessionHistory", () => {
           continue;
         }
         abandoned++;
-        const type = generated.sessions.find((s) => s.id === log.sessionId)!.sessionType;
-        const [minDistance, maxDistance] = USUAL_EFFORT[type].distance;
-        const [minPace, maxPace] = USUAL_EFFORT[type].pace;
+        const session = generated.sessions.find((s) => s.id === log.sessionId)!;
 
+        // Rounded to 100 m, so up to 50 m past 20 % or 80 %
         expect(log.distanceM % 100).toBe(0);
-        expect(log.distanceM).toBeGreaterThanOrEqual(0.2 * minDistance);
-        expect(log.distanceM).toBeLessThanOrEqual(0.8 * maxDistance);
+        expect(log.distanceM).toBeGreaterThanOrEqual(0.2 * session.targetDistanceM - 50);
+        expect(log.distanceM).toBeLessThanOrEqual(0.8 * session.targetDistanceM + 50);
         // Same margin as the completed logs: durationS is rounded to the second
         const pace = log.durationS / (log.distanceM / 1000);
-        expect(pace).toBeGreaterThanOrEqual(minPace - 1);
-        expect(pace).toBeLessThanOrEqual(maxPace + 1);
+        expect(pace).toBeGreaterThanOrEqual(session.targetPaceSPerKm - PACE_VARIATION_S_PER_KM - 1);
+        expect(pace).toBeLessThanOrEqual(session.targetPaceSPerKm + PACE_VARIATION_S_PER_KM + 1);
       }
     }
     // About 5 % of the logs: with 100 seeds there are always some
