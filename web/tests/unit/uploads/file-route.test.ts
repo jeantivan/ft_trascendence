@@ -43,10 +43,14 @@ const OWNER_ID = "00000000-0000-0000-0000-000000000001";
 const AVATAR_ID = "00000000-0000-0000-0000-00000000f001";
 const PHOTO = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7]);
 const RECORD = { ownerId: OWNER_ID, mimeType: "image/png", path: "avatars/photo.png" };
+// An avatar id never changes its bytes, so the id itself is the ETag (in quotes, as HTTP wants)
+const ETAG = `"${AVATAR_ID}"`;
 
-// Next passes the [id] segment as a Promise of the params
-function getFile(id: string): Promise<Response> {
-  return GET(new Request(`http://localhost/api/files/${id}`), { params: Promise.resolve({ id }) });
+// Next passes the [id] segment as a Promise of the params. ifNoneMatch: the
+// ETag the browser already has, if any
+function getFile(id: string, ifNoneMatch?: string): Promise<Response> {
+  const headers: Record<string, string> = ifNoneMatch === undefined ? {} : { "If-None-Match": ifNoneMatch };
+  return GET(new Request(`http://localhost/api/files/${id}`, { headers }), { params: Promise.resolve({ id }) });
 }
 
 async function expectSilhouette(response: Response): Promise<void> {
@@ -76,10 +80,38 @@ describe("GET /api/files/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
-    expect(response.headers.get("cache-control")).toBe("private");
+    // no-cache: the browser may keep it, but must ask before every use, so a
+    // viewer who loses permission (or an owner who deletes their account) stops showing it
+    expect(response.headers.get("cache-control")).toBe("private, no-cache");
+    expect(response.headers.get("etag")).toBe(ETAG);
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PHOTO);
     expect(canViewAvatar).toHaveBeenCalledWith(viewer, OWNER_ID);
+  });
+
+  it("returns 304 with no body when the browser already has this photo, without reading the disk", async () => {
+    // Without the file, a 304 can only come from not reading it
+    await rm(path.join(fake.uploadsDir, RECORD.path));
+    // The three forms a browser may send: the ETag, a list, and a weak W/ ETag
+    for (const ifNoneMatch of [ETAG, `"other", ${ETAG}`, `W/${ETAG}`]) {
+      const response = await getFile(AVATAR_ID, ifNoneMatch);
+
+      expect(response.status).toBe(304);
+      expect(response.headers.get("etag")).toBe(ETAG);
+      expect(response.headers.get("cache-control")).toBe("private, no-cache");
+      expect(await response.text()).toBe("");
+    }
+  });
+
+  it("returns the photo when the browser has another ETag", async () => {
+    const response = await getFile(AVATAR_ID, '"00000000-0000-0000-0000-00000000f002"');
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(PHOTO);
+  });
+
+  it("returns the silhouette, not 304, to a viewer with the ETag who lost permission", async () => {
+    vi.mocked(canViewAvatar).mockResolvedValue(false);
+    await expectSilhouette(await getFile(AVATAR_ID, ETAG));
   });
 
   it("returns the silhouette when the viewer may not see it", async () => {
