@@ -69,32 +69,11 @@ describe("canViewAvatar", () => {
     expect(await canViewAvatar(viewer(OTHER), OWNER, repo)).toBe(false);
   });
 
-  it("asks the club and the Contact questions at once, not one after the other", async () => {
-    const started: string[] = [];
-    // Neither query answers until the test calls answer()
-    let answer!: () => void;
-    const answered = new Promise<void>((resolve) => {
-      answer = resolve;
-    });
-    const slowRepo = {
-      async shareAClub() {
-        started.push("club");
-        await answered;
-        return false;
-      },
-      async areAcceptedContacts() {
-        started.push("contact");
-        await answered;
-        return false;
-      },
-    };
-
-    // Not awaited yet: an async function runs until its first await, so here
-    // both queries have started only if they are not waiting for each other
-    const result = canViewAvatar(viewer(OTHER), OWNER, slowRepo);
-    expect(started).toEqual(["club", "contact"]);
-
-    answer();
-    expect(await result).toBe(false);
+  it("does not ask about Contacts when they already share a club", async () => {
+    // Most viewers share a club with the owner: one query is enough for them
+    repo.addMembership(OWNER, CLUB_A);
+    repo.addMembership(OTHER, CLUB_A);
+    expect(await canViewAvatar(viewer(OTHER), OWNER, repo)).toBe(true);
+    expect(repo.queries).toBe(1);
   });
 });

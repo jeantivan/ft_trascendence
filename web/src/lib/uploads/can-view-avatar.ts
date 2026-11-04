@@ -20,11 +20,11 @@ export async function canViewAvatar(
   if (viewer.roleGlobal === "admin") {
     return true;
   }
-  // Both queries at once (PR #88 review): the wait is the slower one, not the
-  // sum. Both always run, even when the first one is already true.
-  const [shareAClub, areContacts] = await Promise.all([
-    repo.shareAClub(viewer.id, ownerId),
-    repo.areAcceptedContacts(viewer.id, ownerId),
-  ]);
-  return shareAClub || areContacts;
+  // One after the other, not in parallel: most viewers share a club with the
+  // owner, so the Contacts query is usually skipped. In parallel it would always
+  // run, to save about a millisecond only when the first answer is no.
+  if (await repo.shareAClub(viewer.id, ownerId)) {
+    return true;
+  }
+  return repo.areAcceptedContacts(viewer.id, ownerId);
 }
