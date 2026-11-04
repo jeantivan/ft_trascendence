@@ -125,7 +125,7 @@ function groupDays(random: () => number): number[] {
   const days: number[] = [];
   for (let i = 0; i < count; i++) {
     // Take the day out of the list, so it cannot come out again
-    const position = Math.floor(random() * available.length);
+    const position = randomInt(0, available.length - 1, random);
     days.push(available.splice(position, 1)[0]);
   }
   // Like qsort's compare in C: negative means a goes first
@@ -139,7 +139,7 @@ function pickSessionType(random: () => number): SessionType {
     return "rodaje";
   }
   const hardTypes = Object.values(SessionType).filter((type) => type !== "rodaje");
-  return hardTypes[Math.floor(random() * hardTypes.length)];
+  return hardTypes[randomInt(0, hardTypes.length - 1, random)];
 }
 
 // An integer from min to max, both included
@@ -186,7 +186,7 @@ function makeLog(
   let incompletionReason: string | null = null;
   if (random() < INCOMPLETE_CHANCE) {
     completed = false;
-    incompletionReason = INCOMPLETION_REASONS[Math.floor(random() * INCOMPLETION_REASONS.length)];
+    incompletionReason = INCOMPLETION_REASONS[randomInt(0, INCOMPLETION_REASONS.length - 1, random)];
     // They ran 20 to 80 % of it, rounded to 100 m like a completed log
     const percent = randomInt(20, 80, random);
     const plannedDistanceM = effort.distanceM;
@@ -210,7 +210,7 @@ function makeLog(
 export function generateSessionHistory(params: SessionHistoryParams): SessionHistory {
   const sessions: GeneratedSession[] = [];
   const logs: GeneratedLog[] = [];
-  let number = params.firstSessionNumber;
+  let nextSessionNumber = params.firstSessionNumber;
 
   // A session of one Athlete (no group) and its only log, which is theirs
   function addIndividualSession(
@@ -219,9 +219,9 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
     origin: SessionOrigin,
     customizesSessionId: string | null,
   ): void {
-    const id = sessionId(number);
+    const id = sessionId(nextSessionNumber);
     const sessionType = pickSessionType(params.random);
-    number++;
+    nextSessionNumber++;
     sessions.push({
       id,
       athleteId,
@@ -237,10 +237,10 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
 
   for (let week = 0; week < WEEKS; week++) {
     for (const day of groupDays(params.random)) {
-      const id = sessionId(number);
+      const id = sessionId(nextSessionNumber);
       const date = sessionDate(params.start, week, day);
       const sessionType = pickSessionType(params.random);
-      number++;
+      nextSessionNumber++;
 
       sessions.push({
         id,
@@ -269,7 +269,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
     for (const athleteId of params.athleteIds) {
       const count = randomInt(0, MAX_FREE_SESSIONS_PER_WEEK, params.random);
       for (let i = 0; i < count; i++) {
-        const day = Math.floor(params.random() * 7);
+        const day = randomInt(0, 6, params.random);
         addIndividualSession(athleteId, sessionDate(params.start, week, day), "free", null);
       }
     }
@@ -279,7 +279,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
     for (const athleteId of params.athleteIds) {
       for (let i = 0; i < MAX_DIRECT_CUSTOMIZED_PER_WEEK; i++) {
         if (params.random() < PRESCRIBE_CHANCE) {
-          const day = Math.floor(params.random() * 7);
+          const day = randomInt(0, 6, params.random);
           addIndividualSession(athleteId, sessionDate(params.start, week, day), "customized", null);
         }
       }
