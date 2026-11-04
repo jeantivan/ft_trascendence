@@ -7,7 +7,9 @@
 // the sessions of each group's id range and creates them again, with dates
 // from today. So changing seed/session-logs.ts needs no new database, but
 // moving a firstSessionNumber or giving a group fewer Athletes (a shorter
-// range) does: the old ids outside the new range would stay.
+// range) does: the old ids outside the new range would stay. Whatever points
+// at those sessions goes too: logs typed by hand (Cascade), and Events lose
+// their link (SetNull).
 // A database seeded before users had fixed ids fails here with a duplicate
 // email: recreate it with make fclean + make dev. WARNING: make fclean
 // DELETES ALL the local data stored in the project's Docker volumes

@@ -40,8 +40,8 @@ export interface GeneratedSession {
   customizesSessionId: string | null;
   origin: SessionOrigin;
   sessionType: SessionType;
-  // What the Manager plans: metres (rounded to 100 m), seconds per km, and
-  // seconds (= distance x pace)
+  // What the session plans (the Manager; in a Free Session, the Athlete):
+  // metres (rounded to 100 m), seconds per km, and seconds (= distance x pace)
   targetDistanceM: number;
   targetPaceSPerKm: number;
   targetDurationS: number;
@@ -244,7 +244,7 @@ export function generateSessionHistory(params: SessionHistoryParams): SessionHis
       customizesSessionId,
       origin,
       sessionType,
-      // An adapted copy gets its own target: adapting changes the load (#68)
+      // Its own target, also in an adapted copy: adapting changes the load (#68)
       ...pickTarget(sessionType, params.random),
       scheduledAt: date,
     };

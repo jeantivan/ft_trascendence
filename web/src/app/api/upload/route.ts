@@ -114,6 +114,8 @@ export async function POST(request: Request): Promise<Response> {
     } catch (error) {
       // The new avatar is already in use: report the leftover, don't fail the upload.
       // With the path: the row is gone, so the id alone cannot find the file.
+      // ENOENT is logged too: the row lock lets only one upload delete each old row,
+      // so a missing file here means the disk had lost a file the database still had.
       console.error("Could not delete old avatar file", old.id, old.path, error);
     }
   }
