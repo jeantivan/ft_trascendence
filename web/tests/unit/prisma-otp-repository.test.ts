@@ -22,13 +22,16 @@ describe.skipIf(!isTestDatabase)("PrismaOtpRepository", () => {
     }
   });
 
+  // Only this file's users: other test files share the database and run in parallel
+  const contractUsers = { userId: { in: [USER_ID, OTHER_USER_ID] } };
+
   // Each test starts without codes (the users stay)
   beforeEach(async () => {
-    await db.emailOtpCode.deleteMany();
+    await db.emailOtpCode.deleteMany({ where: contractUsers });
   });
 
   afterAll(async () => {
-    await db.emailOtpCode.deleteMany();
+    await db.emailOtpCode.deleteMany({ where: contractUsers });
     await db.user.deleteMany({ where: { id: { in: [USER_ID, OTHER_USER_ID] } } });
     await db.$disconnect();
   });

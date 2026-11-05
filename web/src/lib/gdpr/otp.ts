@@ -36,15 +36,26 @@ export interface OtpRepository {
   // not expired. Returns true only if it consumed the code; false otherwise,
   // leaving the record unchanged. The attempt limit is enforced by reserveAttempt.
   consumeIfUnused(recordId: string, now: Date): Promise<boolean>;
+  // Same as consumeIfUnused, but the single conditional write also requires that
+  // the code belongs to userId and has that purpose, so a recordId that did not
+  // come from a verification for this user and purpose cannot consume anything.
+  // Expiry is checked here against the given now: callers inside a transaction
+  // pass a fresh new Date(), not the time of the earlier verification.
+  consumeIfUnusedFor(recordId: string, userId: string, purpose: OtpPurpose, now: Date): Promise<boolean>;
 }
 
 export type VerifyOtpResult = { success: true } | { success: false; reason: "invalid" };
+
+// Like VerifyOtpResult, but a success carries the id of the code that matched
+export type VerifyOtpWithoutConsumingResult =
+  | { success: true; recordId: string }
+  | { success: false; reason: "invalid" };
 
 // Hash of a random value nobody knows, computed once with the same cost as real
 // codes. Rejections compare against it so they take as long as a real check.
 let dummyHash: Promise<string> | undefined;
 
-async function rejectInvalid(code: string): Promise<VerifyOtpResult> {
+async function rejectInvalid(code: string): Promise<{ success: false; reason: "invalid" }> {
   dummyHash ??= hashPassword(randomUUID());
   await verifyPassword(code, await dummyHash);
   return { success: false, reason: "invalid" };
@@ -77,13 +88,16 @@ export async function issueOtp(
   return { issued: true, code };
 }
 
-export async function verifyOtp(
+// Checks the code and reserves an attempt, but does not consume it: the caller
+// consumes it (consumeIfUnusedFor) in the same transaction as what the code
+// authorizes. A success only says the hash matched; it is not a permission.
+export async function verifyOtpWithoutConsuming(
   userId: string,
   purpose: OtpPurpose,
   code: string,
   repo: OtpRepository,
   now: Date = new Date(),
-): Promise<VerifyOtpResult> {
+): Promise<VerifyOtpWithoutConsumingResult> {
   const record = await repo.findLatest(userId, purpose);
   if (
     !record ||
@@ -101,7 +115,19 @@ export async function verifyOtp(
   if (!(await verifyPassword(code, record.codeHash))) {
     return { success: false, reason: "invalid" };
   }
-  if (!(await repo.consumeIfUnused(record.id, now))) {
+  return { success: true, recordId: record.id };
+}
+
+export async function verifyOtp(
+  userId: string,
+  purpose: OtpPurpose,
+  code: string,
+  repo: OtpRepository,
+  now: Date = new Date(),
+): Promise<VerifyOtpResult> {
+  const verified = await verifyOtpWithoutConsuming(userId, purpose, code, repo, now);
+  if (!verified.success) return verified;
+  if (!(await repo.consumeIfUnused(verified.recordId, now))) {
     return { success: false, reason: "invalid" };
   }
   return { success: true };

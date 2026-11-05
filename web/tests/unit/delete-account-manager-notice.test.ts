@@ -2,7 +2,8 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { afterEach, afterAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
-import { deleteAccount } from "@/lib/gdpr/delete-account";
+import { deleteAccountWithOtp } from "@/lib/gdpr/delete-account";
+import { deleteWithFreshOtp, issueDeleteCode } from "../support/delete-account-helper";
 
 // These tests delete rows, so they only run against a database whose name ends
 // in _test (the db-test container). Without DATABASE_URL_TEST they are skipped.
@@ -19,7 +20,8 @@ const ORG_2 = "b0000000-0000-4000-8000-000000000002";
 const USER_IDS = [ADMIN_1, ADMIN_2, MANAGER_A, MANAGER_B];
 const ORG_IDS = [ORG_1, ORG_2];
 
-describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Manager", () => {
+// Real password hashing on every OTP: with other test files running in parallel the 5 s default is too tight
+describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000 }, () => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
   async function createUser(id: string, roleGlobal: "admin" | "user") {
@@ -35,7 +37,10 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
 
   // Notices as [recipient, orgId] pairs, sorted so the assertions do not depend on insert order
   async function notices() {
-    const rows = await db.notification.findMany({ where: { type: "club_without_manager" } });
+    // Only this file's Admins: other test files share the database and create their own
+    const rows = await db.notification.findMany({
+      where: { type: "club_without_manager", userId: { in: [ADMIN_1, ADMIN_2] } },
+    });
     return rows
       .map((row) => [row.userId, (row.payload as { orgId: string }).orgId])
       .sort((a, b) => a.join().localeCompare(b.join()));
@@ -60,7 +65,7 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
   it("avisa al Admin cuando se borra al último Manager de un club", async () => {
     await createClub(ORG_1, [MANAGER_A]);
 
-    await deleteAccount(MANAGER_A, db);
+    await deleteWithFreshOtp(MANAGER_A, db);
 
     expect(await notices()).toEqual([[ADMIN_1, ORG_1]]);
   });
@@ -68,7 +73,7 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
   it("no avisa si queda otro Manager en el club", async () => {
     await createClub(ORG_1, [MANAGER_A, MANAGER_B]);
 
-    await deleteAccount(MANAGER_A, db);
+    await deleteWithFreshOtp(MANAGER_A, db);
 
     expect(await notices()).toEqual([]);
   });
@@ -77,7 +82,7 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
     await createClub(ORG_1, [MANAGER_A]);
     await createClub(ORG_2, [MANAGER_A, MANAGER_B]);
 
-    await deleteAccount(MANAGER_A, db);
+    await deleteWithFreshOtp(MANAGER_A, db);
 
     expect(await notices()).toEqual([[ADMIN_1, ORG_1]]);
   });
@@ -87,7 +92,7 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
     await createClub(ORG_1, [MANAGER_A]);
     await createClub(ORG_2, [MANAGER_A]);
 
-    await deleteAccount(MANAGER_A, db);
+    await deleteWithFreshOtp(MANAGER_A, db);
 
     expect(await notices()).toEqual([
       [ADMIN_1, ORG_1],
@@ -102,7 +107,7 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
     await db.user.update({ where: { id: MANAGER_A }, data: { roleGlobal: "admin" } });
     await createClub(ORG_1, [MANAGER_A]);
 
-    await deleteAccount(MANAGER_A, db);
+    await deleteWithFreshOtp(MANAGER_A, db);
 
     expect(await notices()).toEqual([
       [ADMIN_1, ORG_1],
@@ -125,7 +130,7 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
     }) as unknown as PrismaClient;
 
     // toBe: it must be the injected error itself, not another failure that happens to share text
-    await expect(deleteAccount(MANAGER_A, failing)).rejects.toBe(injected);
+    await expect(deleteWithFreshOtp(MANAGER_A, db, failing)).rejects.toBe(injected);
 
     expect(await db.user.findUnique({ where: { id: MANAGER_A } })).not.toBeNull();
     expect(await db.membership.count({ where: { userId: MANAGER_A } })).toBe(1);
@@ -139,7 +144,9 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
     for (let round = 0; round < 10; round++) {
       await createClub(ORG_1, [MANAGER_A, MANAGER_B]);
 
-      await Promise.all([deleteAccount(MANAGER_A, db), deleteAccount(MANAGER_B, db)]);
+      // Codes first, so the two deletions start together and only the transactions race
+      const [codeA, codeB] = await Promise.all([issueDeleteCode(db, MANAGER_A), issueDeleteCode(db, MANAGER_B)]);
+      await Promise.all([deleteAccountWithOtp(MANAGER_A, codeA, db), deleteAccountWithOtp(MANAGER_B, codeB, db)]);
 
       expect(await notices()).toEqual([[ADMIN_1, ORG_1]]);
 
@@ -149,5 +156,5 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
       await createUser(MANAGER_A, "user");
       await createUser(MANAGER_B, "user");
     }
-  });
+  }, 60_000);
 });

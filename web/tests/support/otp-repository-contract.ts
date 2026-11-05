@@ -183,5 +183,52 @@ export function runOtpRepositoryContract(name: string, createRepo: () => OtpRepo
       expect(await repo.reserveAttempt(UNKNOWN_ID, NOW)).toBe(false);
       expect(await repo.consumeIfUnused(UNKNOWN_ID, NOW)).toBe(false);
     });
+
+    describe("consumeIfUnusedFor", () => {
+      it("consume el código una vez y rechaza reutilizarlo", async () => {
+        const repo = createRepo();
+        const { id } = await createCode(repo);
+
+        expect(await repo.consumeIfUnusedFor(id, USER_ID, "delete_account", NOW)).toBe(true);
+        expect(await repo.consumeIfUnusedFor(id, USER_ID, "delete_account", NOW)).toBe(false);
+
+        const record = await repo.findLatest(USER_ID, "delete_account");
+        expect(record?.consumedAt?.getTime()).toBe(NOW.getTime());
+      });
+
+      it("rechaza el código de otro usuario y lo deja sin consumir", async () => {
+        const repo = createRepo();
+        const { id } = await createCode(repo);
+
+        expect(await repo.consumeIfUnusedFor(id, OTHER_USER_ID, "delete_account", NOW)).toBe(false);
+
+        expect((await repo.findLatest(USER_ID, "delete_account"))?.consumedAt).toBeNull();
+      });
+
+      it("rechaza otro propósito y lo deja sin consumir", async () => {
+        const repo = createRepo();
+        const { id } = await createCode(repo);
+
+        expect(await repo.consumeIfUnusedFor(id, USER_ID, "export_data", NOW)).toBe(false);
+
+        expect((await repo.findLatest(USER_ID, "delete_account"))?.consumedAt).toBeNull();
+      });
+
+      it("rechaza un código exactamente en expiresAt y lo deja sin consumir", async () => {
+        const repo = createRepo();
+        const { id } = await createCode(repo);
+
+        expect(await repo.consumeIfUnusedFor(id, USER_ID, "delete_account", IN_TEN_MINUTES)).toBe(false);
+
+        expect((await repo.findLatest(USER_ID, "delete_account"))?.consumedAt).toBeNull();
+      });
+
+      it("devuelve false con un id desconocido", async () => {
+        const repo = createRepo();
+        await createCode(repo);
+
+        expect(await repo.consumeIfUnusedFor(UNKNOWN_ID, USER_ID, "delete_account", NOW)).toBe(false);
+      });
+    });
   });
 }

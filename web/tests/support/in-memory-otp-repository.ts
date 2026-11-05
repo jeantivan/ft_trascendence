@@ -42,4 +42,10 @@ export class InMemoryOtpRepository implements OtpRepository {
     record.consumedAt = now;
     return true;
   }
+
+  async consumeIfUnusedFor(recordId: string, userId: string, purpose: OtpPurpose, now: Date): Promise<boolean> {
+    const record = this.records.find((r) => r.id === recordId);
+    if (!record || record.userId !== userId || record.purpose !== purpose) return false;
+    return this.consumeIfUnused(recordId, now);
+  }
 }
