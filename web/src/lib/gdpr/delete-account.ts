@@ -2,10 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { verifyOtpWithoutConsuming } from "@/lib/gdpr/otp";
 import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
+import { deleteAvatarFiles } from "@/lib/uploads/delete-avatar-files";
+import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
 
 export const CLUB_WITHOUT_MANAGER = "club_without_manager";
 
-export type DeleteAccountResult = { deleted: true } | { deleted: false; reason: "invalid_code" };
+export type DeleteAccountResult =
+  // avatarCleanupFailed is only present when some avatar file could not be removed
+  | { deleted: true; avatarCleanupFailed?: number }
+  | { deleted: false; reason: "invalid_code" };
 
 // Thrown inside the transaction when the code could not be consumed; caught
 // below and returned as invalid_code. Any other error is rethrown unchanged.
@@ -23,14 +28,23 @@ class OtpNotConsumedError extends Error {}
 // Expiry is checked when the code is consumed, with a fresh new Date() taken
 // there (the repository checks it against the now it receives), not with the
 // time of step 1. Two requests with the same code: only one consumes it.
+//
+// 3. After the commit: the avatar files are deleted from uploadsDir. The paths are
+//    read inside the transaction, before the user row goes, because the cascade
+//    removes the Avatar rows and without them nobody knows which files to delete.
+//    If the code is rejected or the transaction fails, the disk is never touched.
+//    A file that cannot be deleted does not undo the deletion: the result stays
+//    deleted: true (the session must be closed) and carries avatarCleanupFailed.
 export async function deleteAccountWithOtp(
   userId: string,
   code: string,
   db: PrismaClient = prisma,
+  uploadsDir: string = UPLOADS_DIR,
 ): Promise<DeleteAccountResult> {
   const verified = await verifyOtpWithoutConsuming(userId, "delete_account", code, new PrismaOtpRepository(db));
   if (!verified.success) return { deleted: false, reason: "invalid_code" };
 
+  let avatarPaths: string[] = [];
   try {
     await db.$transaction(
       async (tx) => {
@@ -41,6 +55,8 @@ export async function deleteAccountWithOtp(
           new Date(),
         );
         if (!consumed) throw new OtpNotConsumedError();
+        const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
+        avatarPaths = avatars.map((avatar) => avatar.path);
         await deleteAccountRows(userId, tx);
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
@@ -49,7 +65,13 @@ export async function deleteAccountWithOtp(
     if (error instanceof OtpNotConsumedError) return { deleted: false, reason: "invalid_code" };
     throw error;
   }
-  return { deleted: true };
+
+  // Committed: the account is gone. A disk failure must not look like it still exists
+  const failed = await deleteAvatarFiles(avatarPaths, uploadsDir);
+  if (failed === 0) return { deleted: true };
+  // Only the count: no paths, email, code or error
+  console.warn(`Account deleted, but ${failed} avatar file(s) could not be removed`);
+  return { deleted: true, avatarCleanupFailed: failed };
 }
 
 // Deletes the user row; Postgres removes or detaches the rest through the

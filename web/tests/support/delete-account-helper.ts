@@ -11,7 +11,13 @@ export async function issueDeleteCode(db: PrismaClient, userId: string): Promise
 }
 
 // Issues a code with db and deletes through callDb, so a test can swap in a client that fails
-export async function deleteWithFreshOtp(userId: string, db: PrismaClient, callDb: PrismaClient = db) {
+// uploadsDir is where the avatar files are looked for (a temp dir in tests)
+export async function deleteWithFreshOtp(
+  userId: string,
+  db: PrismaClient,
+  callDb: PrismaClient = db,
+  uploadsDir?: string,
+) {
   const code = await issueDeleteCode(db, userId);
-  return deleteAccountWithOtp(userId, code, callDb);
+  return deleteAccountWithOtp(userId, code, callDb, uploadsDir);
 }

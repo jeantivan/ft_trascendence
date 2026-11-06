@@ -45,6 +45,20 @@ describe("deleteAvatarFile", () => {
     }
   });
 
+  it("rechaza un directorio hermano con el mismo prefijo que uploadsDir", async () => {
+    // <uploadsDir>-evil is NOT inside <uploadsDir>, even though its name starts the same
+    const sibling = `${uploadsDir}-evil`;
+    await mkdir(sibling);
+    await writeFile(path.join(sibling, "x.png"), "keep me");
+
+    try {
+      await expect(deleteAvatarFile(`../${path.basename(sibling)}/x.png`, uploadsDir)).rejects.toThrow();
+      expect(await readFile(path.join(sibling, "x.png"), "utf8")).toBe("keep me");
+    } finally {
+      await rm(sibling, { recursive: true, force: true });
+    }
+  });
+
   it("rechaza una ruta absoluta aunque apunte dentro de uploadsDir y deja el fichero", async () => {
     const inside = path.join(uploadsDir, "avatar.png");
     await writeFile(inside, "keep me");
