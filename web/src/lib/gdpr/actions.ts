@@ -39,7 +39,11 @@ export async function requestDeleteCodeAction(): Promise<RequestDeleteCodeAction
       retryAfterSeconds: result.retryAfterSeconds,
     };
   }
-  return { success: false, error: "No se pudo enviar el código. Espera un minuto antes de reintentarlo." };
+  return {
+    success: false,
+    error: "No se pudo enviar el código. Espera un minuto antes de reintentarlo.",
+    retryAfterSeconds: 60,
+  };
 }
 
 export async function deleteAccountAction(

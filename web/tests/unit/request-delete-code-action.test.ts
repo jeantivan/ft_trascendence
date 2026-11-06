@@ -64,6 +64,7 @@ describe("requestDeleteCodeAction", () => {
     expect(result).toEqual({
       success: false,
       error: "No se pudo enviar el código. Espera un minuto antes de reintentarlo.",
+      retryAfterSeconds: 60,
     });
   });
 
