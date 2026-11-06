@@ -126,5 +126,43 @@ async function deleteAccountRows(userId: string, tx: Prisma.TransactionClient): 
     }
   }
 
+  await deleteDirectMessagesLeftEmpty(userId, tx);
+
   await tx.user.delete({ where: { id: userId } });
+}
+
+// A DM is kept for the other Contact while their account exists; when the last
+// account in it is deleted, the conversation and its messages go too
+// (docs/gdpr/account-deletion-table.md). Event chats are never touched here.
+//
+// PROVISIONAL, pending Jacobo's answer in #34: every participant row still linked to
+// an existing account counts as "the other person is still here", including rows
+// with removed_at. Do not read this as the decision on what removed_at means.
+//
+// Two people deleting the same DM at the same time: without a lock each one still
+// sees the other one's row, so nobody deletes the conversation and it is left empty.
+// The conversations are locked (by id, to acquire locks in a consistent order, after
+// the club locks) before the other participants are counted. The second transaction
+// waits for the first one's commit and then counts again, so it sees the real state.
+async function deleteDirectMessagesLeftEmpty(userId: string, tx: Prisma.TransactionClient): Promise<void> {
+  const mine = await tx.conversation.findMany({
+    where: { kind: "dm", participants: { some: { userId } } },
+    select: { id: true },
+  });
+  if (mine.length === 0) return;
+  const ids = mine.map((conversation) => conversation.id);
+
+  await tx.$queryRaw`SELECT id FROM conversations WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+
+  // Counted after the lock, in a new statement, so it sees what the other transaction committed.
+  // A participant row exists only while its account does (cascade), so a row is an account
+  const stillShared = await tx.conversationParticipant.findMany({
+    where: { conversationId: { in: ids }, userId: { not: userId } },
+    select: { conversationId: true },
+    distinct: ["conversationId"],
+  });
+  const keep = new Set(stillShared.map((participant) => participant.conversationId));
+
+  // Messages go with the conversation (cascade)
+  await tx.conversation.deleteMany({ where: { id: { in: ids.filter((id) => !keep.has(id)) } } });
 }
