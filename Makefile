@@ -1,18 +1,21 @@
 COMPOSE     = docker compose
 COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 
+# Run when the start fails: explains it if Postgres rejected the password
+DB_PASSWORD_HINT = $(COMPOSE) logs migrate 2>/dev/null | sh scripts/db-password-hint.sh
+
 # Production: build the images and start everything in the background
 all: env
-	$(COMPOSE) up --build -d
+	$(COMPOSE) up --build -d || { $(DB_PASSWORD_HINT); exit 1; }
 
 # Development: hot reload without rebuilding (make logs to see the output)
 # Removing the old app container with its anonymous node_modules volume gives
 # a fresh install every time (new dependencies) without leaving orphan volumes
 dev: env
 	$(COMPOSE_DEV) rm --stop --force --volumes app
-	$(COMPOSE_DEV) up --build -d
+	$(COMPOSE_DEV) up --build -d || { $(DB_PASSWORD_HINT); exit 1; }
 
-# Create .env or add the variables it is missing, and generate AUTH_SECRET if empty.
+# Create .env or add the variables it is missing, and generate the secrets if empty.
 # Runs every time (not only when .env is missing) so new variables reach everyone.
 env:
 	sh scripts/env-sync.sh

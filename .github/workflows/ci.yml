@@ -49,3 +49,5 @@ jobs:
       - run: npm run build
       - run: sh scripts/env-sync.test.sh
         working-directory: .
+      - run: sh scripts/db-password-hint.test.sh
+        working-directory: .
