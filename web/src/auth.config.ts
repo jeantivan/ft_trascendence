@@ -20,7 +20,14 @@ export const authConfig: NextAuthConfig = {
         if ("status" in access && access.status === 401) {
           return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
-        if ("redirectTo" in access && access.redirectTo && access.redirectTo !== "/login") {
+        if ("redirectTo" in access) {
+          // Only the path: Auth.js would store the full address, and login only accepts
+          // paths (lib/auth/actions.ts) so nobody can be sent to another site after it
+          if (access.redirectTo === "/login") {
+            const login = new URL("/login", nextUrl);
+            login.searchParams.set("callbackUrl", `${nextUrl.pathname}${nextUrl.search}`);
+            return Response.redirect(login, 307);
+          }
           return Response.redirect(new URL(access.redirectTo, nextUrl));
         }
         return false;

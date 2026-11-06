@@ -121,6 +121,18 @@ if docker compose ps app --format '{{.Image}}' | grep -q -- '-dev$'; then
   if [ "$code" = "101" ]; then pass "WebSocket upgrade reaches next dev (101)"; else fail "WebSocket upgrade answered $code, expected 101"; fi
 fi
 
+# 11. Redirects use the address the visitor used, whichever it is (#60): the app can
+# be opened from another computer. 10.11.1.5 is made up: only the Host header matters.
+for host in "localhost:$port" "10.11.1.5:$port"; do
+  expected="https://$host/login?callbackUrl=%2Fdashboard"
+  location=$(curl_https -o /dev/null -D - -H "Host: $host" "$url/dashboard" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')
+  if [ "$location" = "$expected" ]; then
+    pass "redirect to /login keeps $host"
+  else
+    fail "redirect through $host goes to '$location', expected '$expected'"
+  fi
+done
+
 if [ "$failures" -eq 0 ]; then
   echo "All nginx checks passed"
 else

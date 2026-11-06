@@ -131,7 +131,25 @@ describe("Auth.js Base Configuration and Callbacks", () => {
         auth: null,
         request: createMockRequest("/dashboard"),
       });
-      expect(result).toBe(false);
+
+      expect(result).toBeInstanceOf(Response);
+      const response = result as Response;
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get("location") ?? "");
+      expect(location.pathname).toBe("/login");
+    });
+
+    it("keeps only the path of the requested page in callbackUrl, so login can return to it", async () => {
+      expect(authorizedCallback).toBeDefined();
+      if (!authorizedCallback) return;
+
+      const result = await authorizedCallback({
+        auth: null,
+        request: createMockRequest("/settings?tab=1"),
+      });
+
+      const location = new URL((result as Response).headers.get("location") ?? "");
+      expect(location.search).toBe("?callbackUrl=%2Fsettings%3Ftab%3D1");
     });
 
     it("returns 401 Response for unauthenticated requests to /api/*", async () => {
