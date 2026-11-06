@@ -171,8 +171,8 @@ test_generates_empty_mailpit_password() {
   setup
   printf 'A=1\nMAILPIT_PASSWORD=\n' > .env.example
   sh "$SCRIPT"
-  if ! grep -Eq '^MAILPIT_PASSWORD=[0-9a-f]{64}$' .env; then
-    fail "fills an empty MAILPIT_PASSWORD with 64 hexadecimal characters"
+  if ! grep -Eq '^MAILPIT_PASSWORD=[0-9a-f]{8}$' .env; then
+    fail "fills an empty MAILPIT_PASSWORD with 8 hexadecimal characters"
   fi
   teardown
 }
@@ -183,7 +183,7 @@ test_adds_and_generates_mailpit_password_in_existing_env() {
   # A .env from before Mailpit existed: the variable is added and then generated
   printf 'A=mine\n' > .env
   sh "$SCRIPT"
-  if ! grep -q '^A=mine$' .env || ! grep -Eq '^MAILPIT_PASSWORD=[0-9a-f]{64}$' .env; then
+  if ! grep -q '^A=mine$' .env || ! grep -Eq '^MAILPIT_PASSWORD=[0-9a-f]{8}$' .env; then
     fail "adds MAILPIT_PASSWORD to a .env without it, generated and keeping the rest"
   fi
   teardown

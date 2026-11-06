@@ -58,5 +58,6 @@ fill_if_empty AUTH_SECRET -base64 33
 # Hexadecimal: the password goes inside DATABASE_URL, where symbols like @ or / break the URL.
 # Postgres only reads it when it creates its data, so a password with a value is never changed.
 fill_if_empty POSTGRES_PASSWORD -hex 32
-# Hexadecimal too: it goes inside MP_UI_AUTH (user:password) in docker-compose.yml
-fill_if_empty MAILPIT_PASSWORD -hex 32
+# Hexadecimal too: it goes inside MP_UI_AUTH (user:password) in docker-compose.yml.
+# Only 8 characters: unlike the others, a person types this one to read the test inbox
+fill_if_empty MAILPIT_PASSWORD -hex 4
