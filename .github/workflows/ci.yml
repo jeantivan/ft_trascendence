@@ -53,6 +53,8 @@ jobs:
       - run: npm run build
       - run: sh scripts/env-sync.test.sh
         working-directory: .
+      - run: sh scripts/db-password-hint.test.sh
+        working-directory: .
 
   # nginx is the only way in, over HTTPS (#59): start everything as make does,
   # then run the checks of make test-nginx (it waits for the app to start).
