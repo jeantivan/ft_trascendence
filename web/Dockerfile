@@ -12,6 +12,11 @@ RUN npm ci
 # and `next dev` reloads on every change. Not used by the default build.
 FROM deps AS dev
 ENV NEXT_TELEMETRY_DISABLED=1
+# Owned by node so the app can write to the uploads volume: Docker copies this
+# owner into the volume the first time it is mounted (issue #23). Only in dev
+# and runner, the stages that mount it. root for mkdir in /data, then node.
+USER root
+RUN mkdir -p /data/uploads && chown node:node /data/uploads
 USER node
 EXPOSE 3000
 # Generate the Prisma client at start: ./web is bind-mounted over /app,
@@ -49,6 +54,8 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+# Same as in dev: the uploads volume must be writable by node (issue #23)
+RUN mkdir -p /data/uploads && chown node:node /data/uploads
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]

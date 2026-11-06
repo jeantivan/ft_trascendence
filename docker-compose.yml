@@ -36,6 +36,10 @@ services:
       AUTH_TRUST_HOST: ${AUTH_TRUST_HOST}
       # Read from .env; off unless it is exactly "true". See .env.example.
       LEGAL_DRAFTS_ENABLED: ${LEGAL_DRAFTS_ENABLED:-false}
+    volumes:
+      # Uploaded files (avatars/, and exports/ later). Never served by NGINX:
+      # only by Route Handlers that check the session (issue #23).
+      - uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -60,4 +64,5 @@ services:
 
 volumes:
   pgdata:
+  uploads:
   certs:
