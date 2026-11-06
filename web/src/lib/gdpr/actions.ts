@@ -1,12 +1,46 @@
 "use server";
 
 import { signOut } from "@/auth";
+import { createSmtpMailSender } from "@/lib/mail/smtp-mail-sender";
 import { requireAuth } from "@/lib/permissions/require-auth";
+import { prisma } from "@/lib/prisma";
 import { deleteAccountWithOtp } from "./delete-account";
+import { PrismaOtpRepository } from "./prisma-otp-repository";
+import { requestDeleteCode } from "./request-delete-code";
 
 export type DeleteAccountActionResult =
   | { success: true }
   | { success: false; error: string };
+
+export type RequestDeleteCodeActionResult =
+  | { success: true }
+  | { success: false; error: string; retryAfterSeconds?: number };
+
+// Takes no input on purpose: the recipient is the session user's email, so a
+// request cannot send the code anywhere else
+export async function requestDeleteCodeAction(): Promise<RequestDeleteCodeActionResult> {
+  // Outside try/catch: requireAuth redirects by throwing
+  const user = await requireAuth();
+
+  let mailer;
+  try {
+    mailer = createSmtpMailSender();
+  } catch {
+    // Missing or invalid SMTP settings: nothing was issued, so no cooldown runs
+    return { success: false, error: "No se pudo enviar el código. Inténtalo más tarde." };
+  }
+
+  const result = await requestDeleteCode(user, new PrismaOtpRepository(prisma), mailer);
+  if (result.sent) return { success: true };
+  if (result.reason === "cooldown") {
+    return {
+      success: false,
+      error: "Ya se envió un código hace poco. Espera antes de pedir otro.",
+      retryAfterSeconds: result.retryAfterSeconds,
+    };
+  }
+  return { success: false, error: "No se pudo enviar el código. Espera un minuto antes de reintentarlo." };
+}
 
 export async function deleteAccountAction(
   _prevState: unknown,

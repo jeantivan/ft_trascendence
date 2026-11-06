@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { verifyPassword } from "@/lib/auth/password";
 import { issueOtp, OTP_MAX_ATTEMPTS, verifyOtp } from "@/lib/gdpr/otp";
@@ -7,6 +8,12 @@ import { InMemoryOtpRepository } from "../support/in-memory-otp-repository";
 vi.mock("@/lib/auth/password", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth/password")>();
   return { ...actual, verifyPassword: vi.fn(actual.verifyPassword) };
+});
+
+// Same behaviour as the real module, but a test can pin the digits of the next code
+vi.mock("node:crypto", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:crypto")>();
+  return { ...actual, randomInt: vi.fn(actual.randomInt) };
 });
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -273,6 +280,21 @@ describe("issueOtp: enfriamiento entre emisiones", () => {
     const second = await issueOtp(USER_ID, "delete_account", repo, after(60));
 
     expect(second).toMatchObject({ issued: true });
+  });
+
+  it("tras emitir un segundo código, el primero se rechaza y el nuevo sigue siendo válido", async () => {
+    // Two known, different codes: this tests which one verifyOtp accepts, not the generator
+    vi.mocked(randomInt).mockImplementationOnce(() => 111111).mockImplementationOnce(() => 222222);
+    const first = await issueCode(USER_ID, "delete_account", repo, issuedAt);
+    const second = await issueCode(USER_ID, "delete_account", repo, after(60));
+    expect([first, second]).toEqual(["111111", "222222"]);
+
+    // verifyOtp uses the latest code: the first one no longer matches
+    expect(await verifyOtp(USER_ID, "delete_account", first, repo, after(61))).toEqual({
+      success: false,
+      reason: "invalid",
+    });
+    expect(await verifyOtp(USER_ID, "delete_account", second, repo, after(61))).toEqual({ success: true });
   });
 
   it("no mezcla propósitos ni usuarios", async () => {
