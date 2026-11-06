@@ -56,7 +56,12 @@ export type VerifyOtpWithoutConsumingResult =
 let dummyHash: Promise<string> | undefined;
 
 async function rejectInvalid(code: string): Promise<{ success: false; reason: "invalid" }> {
-  dummyHash ??= hashPassword(randomUUID());
+  // If the hash fails, forget it so the next rejection tries again instead of
+  // awaiting the same rejected promise forever
+  dummyHash ??= hashPassword(randomUUID()).catch((error) => {
+    dummyHash = undefined;
+    throw error;
+  });
   await verifyPassword(code, await dummyHash);
   return { success: false, reason: "invalid" };
 }
