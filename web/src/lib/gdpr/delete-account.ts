@@ -55,6 +55,11 @@ export async function deleteAccountWithOtp(
           new Date(),
         );
         if (!consumed) throw new OtpNotConsumedError();
+        // Written before the rest on purpose: if anything below fails, this row rolls back too.
+        // Ids only, no email, nick or code. No foreign key: the row outlives the user (12 months)
+        await tx.auditLog.create({
+          data: { actorId: userId, subjectId: userId, actorRole: null, action: "account_deleted", resource: "account" },
+        });
         const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
         avatarPaths = avatars.map((avatar) => avatar.path);
         await deleteAccountRows(userId, tx);

@@ -551,6 +551,8 @@ enum AuditAction {
   update
   consent_given
   consent_withdrawn
+  // The person deleted their own account (resource "account", ids only)
+  account_deleted
 }
 
 // Who read or changed sensitive data of an Athlete (RPE, Feedback, reported
