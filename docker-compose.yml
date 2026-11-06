@@ -36,6 +36,9 @@ services:
       AUTH_TRUST_HOST: ${AUTH_TRUST_HOST}
       # Read from .env; off unless it is exactly "true". See .env.example.
       LEGAL_DRAFTS_ENABLED: ${LEGAL_DRAFTS_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      MAIL_FROM: ${MAIL_FROM}
     volumes:
       # Uploaded files (avatars/, and exports/ later). Never served by NGINX:
       # only by Route Handlers that check the session (issue #23).
@@ -48,8 +51,19 @@ services:
     # No ports: only nginx is reachable from outside Docker (HTTPS only)
     restart: unless-stopped
 
+  # Test mail inbox: mail sent to mailpit:1025 never leaves Docker
+  # (#93). No ports and no volume: read it through nginx at /mailpit/, with the user
+  # demo and MAILPIT_PASSWORD, because the codes in the mail must not be open to anyone
+  # on the network. Its mail is lost when the container is recreated.
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    environment:
+      MP_WEBROOT: mailpit
+      MP_UI_AUTH: demo:${MAILPIT_PASSWORD:?run make to generate it}
+    restart: unless-stopped
+
   # The only entry point: HTTPS on the host port HTTPS_PORT (8443 by default),
-  # forwarded to app:3000 over Docker's internal network. See nginx/app.conf.
+  # forwarded to app:3000 and mailpit:8025 over Docker's internal network. See nginx/app.conf.
   nginx:
     build: ./nginx
     ports:
@@ -60,6 +74,8 @@ services:
       - certs:/etc/nginx/certs
     depends_on:
       - app
+      # nginx refuses to start if it cannot resolve the name in a proxy_pass
+      - mailpit
     restart: unless-stopped
 
 volumes:

@@ -64,17 +64,19 @@ if [ "$server" = "nginx" ]; then pass "Server header without version"; else fail
 code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' "http://localhost:$port/login")
 if [ "$code" = "200" ]; then fail "plain HTTP answers 200 on port $port"; else pass "plain HTTP not served on port $port"; fi
 
-# 6. Only nginx publishes ports: the app is reachable only inside Docker
-# docker port lists the published ports of the app container: none expected
-app_id=$(docker compose ps -q app)
-published=$(docker port "$app_id" 2>/dev/null | tr "\n" " ")
-if [ -z "$app_id" ]; then
-  fail "app container not found, cannot check its ports"
-elif [ -n "$published" ]; then
-  fail "app publishes ports ($published): only nginx may publish ports"
-else
-  pass "app publishes no ports"
-fi
+# 6. Only nginx publishes ports: the other services are reachable only inside Docker
+# docker port lists the published ports of a container: none expected
+for service in app mailpit; do
+  container_id=$(docker compose ps -q "$service")
+  published=$(docker port "$container_id" 2>/dev/null | tr "\n" " ")
+  if [ -z "$container_id" ]; then
+    fail "$service container not found, cannot check its ports"
+  elif [ -n "$published" ]; then
+    fail "$service publishes ports ($published): only nginx may publish ports"
+  else
+    pass "$service publishes no ports"
+  fi
+done
 
 # 7. Body size limit: 5 MB (profile photos, #23)
 # The path does not exist on purpose: nginx checks the size before forwarding,
@@ -132,6 +134,24 @@ for host in "localhost:$port" "10.11.1.5:$port"; do
     fail "redirect through $host goes to '$location', expected '$expected'"
   fi
 done
+
+# 12. The test mail inbox (#93) needs its password: the mail carries one-time codes.
+# The credentials come from the container, so this still reads nothing from .env.
+code=$(curl_https -o /dev/null -w '%{http_code}' "$url/mailpit/")
+if [ "$code" = "401" ]; then pass "mail inbox refuses a visitor without the password (401)"; else fail "mail inbox without the password answers $code, expected 401"; fi
+credentials=$(docker compose exec -T mailpit printenv MP_UI_AUTH 2>/dev/null)
+# Empty credentials must not reach curl: -u "" would wait for a password forever
+if [ -z "$credentials" ]; then
+  fail "mailpit has no MP_UI_AUTH: the inbox has no password"
+else
+  code=$(curl_https -o /dev/null -w '%{http_code}' -u "$credentials" "$url/mailpit/")
+  if [ "$code" = "200" ]; then pass "mail inbox opens with the password"; else fail "mail inbox with the password answers $code, expected 200"; fi
+fi
+
+# 13. /mailpit redirects without naming a port: only the path, so it works whichever
+# host port or address the visitor used
+location=$(curl_https -o /dev/null -D - "$url/mailpit" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')
+if [ "$location" = "/mailpit/" ]; then pass "/mailpit redirects to /mailpit/"; else fail "/mailpit redirects to '$location', expected '/mailpit/'"; fi
 
 if [ "$failures" -eq 0 ]; then
   echo "All nginx checks passed"
