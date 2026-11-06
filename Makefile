@@ -25,6 +25,10 @@ check-compose: env
 	$(COMPOSE) config --quiet
 	$(COMPOSE_DEV) config --quiet
 
+# Check that nginx is the only way in, over HTTPS. Needs make or make dev running.
+test-nginx:
+	sh scripts/nginx.test.sh
+
 # Create a migration from the changes in web/prisma/schema.prisma and apply it.
 # Needs make dev running (the app container has the Prisma CLI and ./web mounted,
 # so the new file lands in web/prisma/migrations/). Usage: make migrate name=add_users
@@ -57,4 +61,4 @@ fclean:
 re: clean
 	$(MAKE) all
 
-.PHONY: all dev env check-compose migrate down logs ps clean fclean re
+.PHONY: all dev env check-compose test-nginx migrate down logs ps clean fclean re

@@ -51,3 +51,17 @@ jobs:
         working-directory: .
       - run: sh scripts/db-password-hint.test.sh
         working-directory: .
+
+  # nginx is the only way in, over HTTPS (#59): start everything as make does,
+  # then run the checks of make test-nginx (it waits for the app to start).
+  # Runs in parallel with web.
+  nginx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: make
+      - run: make test-nginx
+      - if: failure()
+        run: docker compose logs
+      - if: always()
+        run: make down
