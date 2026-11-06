@@ -1,5 +1,6 @@
-COMPOSE     = docker compose
-COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE      = docker compose
+COMPOSE_DEV  = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE_TEST = $(COMPOSE) -f docker-compose.test.yml
 
 # Production: build the images and start everything in the background
 all: env
@@ -17,10 +18,21 @@ dev: env
 env:
 	sh scripts/env-sync.sh
 
-# Check that both compose setups parse (the CI runs this too)
+# Check that the three compose setups parse (the CI runs this too)
 check-compose: env
 	$(COMPOSE) config --quiet
 	$(COMPOSE_DEV) config --quiet
+	$(COMPOSE_TEST) config --quiet
+
+# Run every test (normal and *.db.test.ts) in Docker against an empty test
+# database (docker-compose.test.yml, #83). The EXIT trap removes db-test and test
+# whatever happens (tests fail, Ctrl+C), and make exits with the tests' result;
+# Ctrl+C only has to exit, then the EXIT trap cleans up once.
+# --volumes only removes this project's anonymous volumes (the database is in
+# memory): never pgdata. Safe with make dev running: it is another compose project.
+test: env
+	trap '$(COMPOSE_TEST) down --volumes --remove-orphans' EXIT; trap 'exit 130' INT TERM; \
+	$(COMPOSE_TEST) run --build --rm test
 
 # Check that nginx is the only way in, over HTTPS. Needs make or make dev running.
 test-nginx:
@@ -58,4 +70,4 @@ fclean:
 re: clean
 	$(MAKE) all
 
-.PHONY: all dev env check-compose test-nginx migrate down logs ps clean fclean re
+.PHONY: all dev env check-compose test test-nginx migrate down logs ps clean fclean re
