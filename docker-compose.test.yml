@@ -1,0 +1,44 @@
+# Test setup: use with `make test`, never together with docker-compose.yml.
+# Its own project name, so make test never touches the make / make dev containers
+# or the pgdata volume, and can run while make dev is up (#83).
+name: transcendence-test
+
+services:
+  # Same Postgres as production, empty on every run: data lives in memory (tmpfs)
+  # and disappears when the container is removed. No ports: only "test" reaches it.
+  db-test:
+    image: postgres:18.4-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Always ends in _test: the tests refuse any other database name
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set in .env}_test
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  # Runs every test (normal and *.db.test.ts) with the make dev image and ./web
+  # mounted: applies the migrations to the empty database first, no seed.
+  test:
+    image: transcendence-app-dev
+    build:
+      context: ./web
+      target: dev
+    environment:
+      # Both point to db-test: this container cannot reach the development database.
+      # DATABASE_URL too, because prisma migrate deploy reads it before Vitest starts.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db-test:5432/${POSTGRES_DB}_test
+      DATABASE_URL_TEST: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db-test:5432/${POSTGRES_DB}_test
+    volumes:
+      - ./web:/app
+      # Keep the container's node_modules (Linux/Alpine binaries) instead of the host's
+      - /app/node_modules
+    command: ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm test"]
+    depends_on:
+      db-test:
+        condition: service_healthy
+    restart: "no"

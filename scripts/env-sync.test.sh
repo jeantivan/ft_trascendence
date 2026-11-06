@@ -4,6 +4,7 @@
 # .env.example and .env files: the real .env is never read or changed.
 
 SCRIPT="$(cd "$(dirname "$0")" && pwd)/env-sync.sh"
+EXAMPLE="$(cd "$(dirname "$0")/.." && pwd)/.env.example"
 failures=0
 
 # Create an empty temporary folder and move into it
@@ -99,9 +100,76 @@ test_keeps_existing_auth_secret() {
   teardown
 }
 
+test_generates_empty_postgres_password() {
+  setup
+  printf 'A=1\nPOSTGRES_PASSWORD=\n' > .env.example
+  sh "$SCRIPT"
+  # Hexadecimal: it goes inside DATABASE_URL, where symbols break the URL
+  if ! grep -Eq '^POSTGRES_PASSWORD=[0-9a-f]{64}$' .env; then
+    fail "fills an empty POSTGRES_PASSWORD with 64 hexadecimal characters"
+  fi
+  teardown
+}
+
+test_generates_a_different_postgres_password_each_time() {
+  setup
+  printf 'POSTGRES_PASSWORD=\n' > .env.example
+  sh "$SCRIPT"
+  first=$(cat .env)
+  rm .env
+  sh "$SCRIPT"
+  if [ "$(cat .env)" = "$first" ]; then
+    fail "generates a different POSTGRES_PASSWORD for each new .env"
+  fi
+  teardown
+}
+
+test_generates_empty_postgres_password_with_windows_line_ending() {
+  setup
+  printf 'POSTGRES_PASSWORD=\n' > .env.example
+  printf 'POSTGRES_PASSWORD=\r\n' > .env
+  sh "$SCRIPT"
+  if ! grep -Eq '^POSTGRES_PASSWORD=[0-9a-f]{64}$' .env; then
+    fail "fills an empty POSTGRES_PASSWORD saved with a Windows line ending"
+  fi
+  teardown
+}
+
+test_keeps_existing_postgres_password() {
+  setup
+  printf 'POSTGRES_PASSWORD=\n' > .env.example
+  # Changing it would break the connection: Postgres only reads it when it creates its data
+  printf 'POSTGRES_PASSWORD=dev_password_local_only\n' > .env
+  cp .env before
+  sh "$SCRIPT"
+  if ! cmp -s .env before; then
+    fail "never changes a POSTGRES_PASSWORD that already has a value"
+  fi
+  teardown
+}
+
+test_fails_when_postgres_password_cannot_be_generated() {
+  setup
+  printf 'POSTGRES_PASSWORD=\n' > .env.example
+  # Fake openssl that always fails, found first in PATH
+  mkdir bin
+  printf '#!/bin/sh\nexit 1\n' > bin/openssl
+  chmod +x bin/openssl
+  if PATH="$tmp/bin:$PATH" sh "$SCRIPT" 2> /dev/null; then
+    fail "stops with an error when openssl cannot generate POSTGRES_PASSWORD"
+  fi
+  teardown
+}
+
+test_example_leaves_postgres_password_empty() {
+  if ! grep -q '^POSTGRES_PASSWORD=$' "$EXAMPLE"; then
+    fail "the real .env.example leaves POSTGRES_PASSWORD empty"
+  fi
+}
+
 test_second_run_changes_nothing() {
   setup
-  printf 'A=1\nAUTH_SECRET=\n' > .env.example
+  printf 'A=1\nAUTH_SECRET=\nPOSTGRES_PASSWORD=\n' > .env.example
   sh "$SCRIPT"
   cp .env first-run
   sh "$SCRIPT"
@@ -194,6 +262,12 @@ test_generates_empty_auth_secret
 test_generates_empty_auth_secret_with_windows_line_ending
 test_keeps_existing_auth_secret
 test_keeps_existing_auth_secret_with_windows_line_ending
+test_generates_empty_postgres_password
+test_generates_a_different_postgres_password_each_time
+test_generates_empty_postgres_password_with_windows_line_ending
+test_keeps_existing_postgres_password
+test_fails_when_postgres_password_cannot_be_generated
+test_example_leaves_postgres_password_empty
 test_second_run_changes_nothing
 test_adds_on_new_line_when_last_line_has_no_newline
 test_fails_when_secret_cannot_be_generated

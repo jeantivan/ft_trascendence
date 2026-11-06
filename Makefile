@@ -1,26 +1,45 @@
-COMPOSE     = docker compose
-COMPOSE_DEV = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE      = docker compose
+COMPOSE_DEV  = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE_TEST = $(COMPOSE) -f docker-compose.test.yml
+
+# Run when the start fails: explains it if Postgres rejected the password
+DB_PASSWORD_HINT = $(COMPOSE) logs migrate 2>/dev/null | sh scripts/db-password-hint.sh
 
 # Production: build the images and start everything in the background
 all: env
-	$(COMPOSE) up --build -d
+	$(COMPOSE) up --build -d || { $(DB_PASSWORD_HINT); exit 1; }
 
 # Development: hot reload without rebuilding (make logs to see the output)
 # Removing the old app container with its anonymous node_modules volume gives
 # a fresh install every time (new dependencies) without leaving orphan volumes
 dev: env
 	$(COMPOSE_DEV) rm --stop --force --volumes app
-	$(COMPOSE_DEV) up --build -d
+	$(COMPOSE_DEV) up --build -d || { $(DB_PASSWORD_HINT); exit 1; }
 
-# Create .env or add the variables it is missing, and generate AUTH_SECRET if empty.
+# Create .env or add the variables it is missing, and generate the secrets if empty.
 # Runs every time (not only when .env is missing) so new variables reach everyone.
 env:
 	sh scripts/env-sync.sh
 
-# Check that both compose setups parse (the CI runs this too)
+# Check that the three compose setups parse (the CI runs this too)
 check-compose: env
 	$(COMPOSE) config --quiet
 	$(COMPOSE_DEV) config --quiet
+	$(COMPOSE_TEST) config --quiet
+
+# Run every test (normal and *.db.test.ts) in Docker against an empty test
+# database (docker-compose.test.yml, #83). The EXIT trap removes db-test and test
+# whatever happens (tests fail, Ctrl+C), and make exits with the tests' result;
+# Ctrl+C only has to exit, then the EXIT trap cleans up once.
+# --volumes only removes this project's anonymous volumes (the database is in
+# memory): never pgdata. Safe with make dev running: it is another compose project.
+test: env
+	trap '$(COMPOSE_TEST) down --volumes --remove-orphans' EXIT; trap 'exit 130' INT TERM; \
+	$(COMPOSE_TEST) run --build --rm test
+
+# Check that nginx is the only way in, over HTTPS. Needs make or make dev running.
+test-nginx:
+	sh scripts/nginx.test.sh
 
 # Create a migration from the changes in web/prisma/schema.prisma and apply it.
 # Needs make dev running (the app container has the Prisma CLI and ./web mounted,
@@ -54,4 +73,4 @@ fclean:
 re: clean
 	$(MAKE) all
 
-.PHONY: all dev env check-compose migrate down logs ps clean fclean re
+.PHONY: all dev env check-compose test test-nginx migrate down logs ps clean fclean re
