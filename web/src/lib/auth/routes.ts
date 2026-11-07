@@ -19,6 +19,8 @@ const PUBLIC_EXACT_ROUTES = [
   "/register",
   "/auth/signed-out",
   "/account-deleted",
+  "/privacy",
+  "/terms",
 ];
 
 export function checkRouteAccess({

@@ -82,6 +82,18 @@ describe("checkRouteAccess - Route Protection", () => {
     ).toEqual({ allowed: true });
   });
 
+  it("allows anyone to access /privacy and /terms", () => {
+    for (const pathname of ["/privacy", "/privacy/", "/terms", "/terms/"]) {
+      expect(
+        checkRouteAccess({ pathname, isLoggedIn: false })
+      ).toEqual({ allowed: true });
+
+      expect(
+        checkRouteAccess({ pathname, isLoggedIn: true })
+      ).toEqual({ allowed: true });
+    }
+  });
+
   it("handles paths with trailing slashes gracefully", () => {
     expect(
       checkRouteAccess({ pathname: "/login/", isLoggedIn: false })
