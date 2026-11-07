@@ -1,5 +1,7 @@
 #!/bin/sh
-# Checks that nginx is the only way in, over HTTPS (issue #59).
+# Checks that nginx is the only way in, over HTTPS (issue #59), keeps the
+# visitor's address (#60), guards the test mail inbox (#93) and carries the
+# real-time stream (#61).
 # Usage: make test-nginx, with the app running (make or make dev).
 # Reads nothing from .env: the port comes from Docker.
 
@@ -60,9 +62,11 @@ fi
 server=$(curl_https -I "$url/login" | tr -d '\r' | sed -n 's/^[Ss]erver: //p')
 if [ "$server" = "nginx" ]; then pass "Server header without version"; else fail "Server header is '$server', expected 'nginx'"; fi
 
-# 5. No plain HTTP on the HTTPS port
+# 5. No plain HTTP on the HTTPS port: nginx itself refuses it with 400
+# ("plain HTTP request was sent to HTTPS port"). Any other code (000, 301, 404)
+# means something else answered or nothing did
 code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' "http://localhost:$port/login")
-if [ "$code" = "200" ]; then fail "plain HTTP answers 200 on port $port"; else pass "plain HTTP not served on port $port"; fi
+if [ "$code" = "400" ]; then pass "plain HTTP refused by nginx (400) on port $port"; else fail "plain HTTP on port $port answered $code, expected 400"; fi
 
 # 6. Only nginx publishes ports: the other services are reachable only inside Docker
 # docker port lists the published ports of a container: none expected
@@ -152,6 +156,32 @@ fi
 # host port or address the visitor used
 location=$(curl_https -o /dev/null -D - "$url/mailpit" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')
 if [ "$location" = "/mailpit/" ]; then pass "/mailpit redirects to /mailpit/"; else fail "/mailpit redirects to '$location', expected '/mailpit/'"; fi
+
+# 14. HTTP/2 to the browser (#61): with HTTP/1.1 the browser opens at most 6
+# connections per address, and every tab keeps one busy with /api/events
+version=$(curl_https -o /dev/null -w '%{http_version}' --http2 "$url/login")
+if [ "$version" = "2" ]; then pass "HTTP/2 offered"; else fail "HTTP version is '$version', expected 2"; fi
+
+# 15. The real-time stream has its own location in nginx (#61): it must still reach
+# the app. Without a session the app answers 401 (nginx alone would not)
+code=$(curl_https -o /dev/null -w '%{http_code}' "$url/api/events")
+if [ "$code" = "401" ]; then pass "/api/events reaches the app (401 without a session)"; else fail "/api/events answered $code, expected 401"; fi
+
+# 16. nginx looks up the app's address on each request, not once at start (#61).
+# Otherwise a recreated app container on a new IP gives 502 until nginx restarts.
+# Reads the loaded config: a resolver, and no proxy_pass to the app with a fixed
+# address (other services, such as Mailpit, may keep one).
+# Comment lines are dropped first, so a commented-out directive does not count.
+config=$(docker compose exec -T nginx nginx -T 2>/dev/null | grep -v '^[[:space:]]*#')
+if [ -z "$config" ]; then
+  fail "could not read the nginx config (docker compose exec nginx nginx -T)"
+elif ! printf '%s\n' "$config" | grep -q 'resolver 127\.0\.0\.11'; then
+  fail "no resolver 127.0.0.11 in the nginx config"
+elif printf '%s\n' "$config" | grep -Eq 'proxy_pass[[:space:]]+https?://app[:/;]'; then
+  fail "a proxy_pass to the app has a fixed address: use \$app_upstream"
+else
+  pass "app address looked up on each request (resolver + \$app_upstream)"
+fi
 
 if [ "$failures" -eq 0 ]; then
   echo "All nginx checks passed"
