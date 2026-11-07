@@ -12,7 +12,7 @@ export async function LegalDraftPage({ file }: { file: string }) {
 
   return (
     <main className="mx-auto w-full max-w-3xl p-4 md:p-8">
-      <p className="mb-6 rounded-lg border border-border-subtle p-3 text-sm">
+      <p className="mb-6 rounded border border-border-subtle p-3 text-sm">
         Borrador interno para validar la maquetación. No es un texto legal
         aprobado.
       </p>

@@ -12,7 +12,7 @@ export default function Forbidden() {
     >
       <Link
         href="/dashboard"
-        className="rounded-lg bg-volt px-7 py-3 font-heading font-bold text-surface-base transition-all hover:shadow-[0_0_20px_rgba(204,255,0,0.35)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volt"
+        className="rounded bg-volt px-7 py-3 font-heading font-bold text-surface-base transition-all hover:shadow-[0_0_20px_rgba(204,255,0,0.35)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volt"
       >
         Volver al Dashboard
       </Link>

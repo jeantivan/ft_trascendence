@@ -8,7 +8,7 @@ export function PublicHeader() {
       </span>
       <Link
         href="/dashboard"
-        className="rounded-lg px-3 py-2 text-sm text-text-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:outline-volt"
+        className="rounded px-3 py-2 text-sm text-text-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:outline-volt"
       >
         Volver a la aplicación
       </Link>
