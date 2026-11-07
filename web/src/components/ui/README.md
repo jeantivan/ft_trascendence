@@ -25,8 +25,10 @@ Componentes reutilizables y tokens de la app. Fuente de verdad del diseño:
 
 ## Componentes
 
-Aún no hay ninguno; se añaden por oleadas (ver el ticket del módulo). Al crear uno, añade una fila:
+Se añaden por oleadas (ver el ticket del módulo). Al crear uno, añade una fila:
 
 | Componente | Fichero | Para qué | Props principales |
 |---|---|---|---|
-| _(vacío)_ | | | |
+| `Button` | `Button.tsx` | Acciones y enlaces con aspecto de botón (48px) | `variant`: `primary` (por defecto), `ghost`, `destructive`. Con `href` es un `Link`; sin `href`, un `<button type="button">` (pasa `type="submit"` para enviar formularios). Acepta el resto de props de `<button>` o `Link` y `className` |
+
+Ejemplo: `<Button variant="ghost" href="/events">Ver Events</Button>`.

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 import { ErrorPage } from "@/components/ErrorPage";
 
 export default function Error({ retry }: { retry: () => void }) {
@@ -12,19 +12,12 @@ export default function Error({ retry }: { retry: () => void }) {
       description="Ha fallado algo en nuestro lado y no hemos podido cargar esta página. Reintenta; si sigue fallando, vuelve al Dashboard."
       tone="red"
     >
-      <button
-        type="button"
-        onClick={() => retry()}
-        className="rounded bg-rpe-max px-7 py-3 font-heading font-bold text-text-primary transition-all hover:shadow-error-glow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rpe-max"
-      >
+      <Button variant="destructive" onClick={() => retry()}>
         Reintentar
-      </button>
-      <Link
-        href="/dashboard"
-        className="rounded border border-border-strong px-6 py-3 font-heading font-semibold text-text-primary transition-colors hover:border-volt hover:text-volt focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volt"
-      >
+      </Button>
+      <Button href="/dashboard" variant="ghost">
         Volver al Dashboard
-      </Link>
+      </Button>
     </ErrorPage>
   );
 }

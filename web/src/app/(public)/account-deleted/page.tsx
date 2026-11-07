@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 
 export default function AccountDeletedPage() {
   return (
@@ -12,12 +12,7 @@ export default function AccountDeletedPage() {
           zapatillas. Cuando vuelvas a tener ganas de salir a correr, aquí
           tendrás la puerta abierta y la línea de salida preparada.
         </p>
-        <Link
-          href="/register"
-          className="inline-flex h-12 items-center justify-center rounded bg-volt px-6 font-heading font-bold text-surface-base hover:scale-[1.01] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volt"
-        >
-          Volver a registrarme
-        </Link>
+        <Button href="/register">Volver a registrarme</Button>
       </section>
     </main>
   );
