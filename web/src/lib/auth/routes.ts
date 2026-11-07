@@ -11,7 +11,15 @@ export type RouteAccessResult =
 // /auth/signed-out must stay public: otherwise the proxy would drop
 // ?reason=blocked, or store it in callbackUrl and sign the user out again
 // right after login
-const PUBLIC_EXACT_ROUTES = ["/", "/login", "/register", "/auth/signed-out"];
+// /account-deleted is the post-deletion confirmation: the session is already
+// closed when the user lands there
+const PUBLIC_EXACT_ROUTES = [
+  "/",
+  "/login",
+  "/register",
+  "/auth/signed-out",
+  "/account-deleted",
+];
 
 export function checkRouteAccess({
   pathname,

@@ -39,6 +39,7 @@ Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "M
 | `membership_requests.created_by` (invitación hecha por el usuario) | La solicitud se conserva, con `created_by = null` | Decidido | SetNull |
 | `membership_requests.user_id` (solicitud del propio usuario) | Se borran | Derivado | Cascade |
 | `audit_log` (`actor_id`, `subject_id`) | **Se conserva el registro** de quién miró datos de quién | Decidido | Sin FK real, ver nota |
+| `audit_log`: fila `account_deleted` | **Se crea** al borrar: `actor_id` = `subject_id` = id del usuario, `actor_role` y `resource_id` vacíos, `resource` = `account`. Sin email, nick ni código. Se escribe en la misma transacción del borrado y se conserva 12 meses | Decidido (Rebeca, #34) | Sin FK |
 | Archivo de avatar en el volumen (`avatar_url`) | Hay que borrar el archivo del disco, no solo la fila | Derivado | n/a (acción de servidor) |
 | ZIP de exportación GDPR pendiente | Hay que borrarlo | Derivado | n/a (acción de servidor) |
 | Logs técnicos (IP, navegador, accesos) | No se borran al momento; máximo 3 meses después | Spec | n/a |
