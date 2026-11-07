@@ -167,9 +167,49 @@ test_example_leaves_postgres_password_empty() {
   fi
 }
 
+test_generates_empty_mailpit_password() {
+  setup
+  printf 'A=1\nMAILPIT_PASSWORD=\n' > .env.example
+  sh "$SCRIPT"
+  if ! grep -Eq '^MAILPIT_PASSWORD=[0-9a-f]{8}$' .env; then
+    fail "fills an empty MAILPIT_PASSWORD with 8 hexadecimal characters"
+  fi
+  teardown
+}
+
+test_adds_and_generates_mailpit_password_in_existing_env() {
+  setup
+  printf 'A=1\nMAILPIT_PASSWORD=\n' > .env.example
+  # A .env from before Mailpit existed: the variable is added and then generated
+  printf 'A=mine\n' > .env
+  sh "$SCRIPT"
+  if ! grep -q '^A=mine$' .env || ! grep -Eq '^MAILPIT_PASSWORD=[0-9a-f]{8}$' .env; then
+    fail "adds MAILPIT_PASSWORD to a .env without it, generated and keeping the rest"
+  fi
+  teardown
+}
+
+test_keeps_existing_mailpit_password() {
+  setup
+  printf 'MAILPIT_PASSWORD=\n' > .env.example
+  printf 'MAILPIT_PASSWORD=mine\n' > .env
+  cp .env before
+  sh "$SCRIPT"
+  if ! cmp -s .env before; then
+    fail "never changes a MAILPIT_PASSWORD that already has a value"
+  fi
+  teardown
+}
+
+test_example_leaves_mailpit_password_empty() {
+  if ! grep -q '^MAILPIT_PASSWORD=$' "$EXAMPLE"; then
+    fail "the real .env.example leaves MAILPIT_PASSWORD empty"
+  fi
+}
+
 test_second_run_changes_nothing() {
   setup
-  printf 'A=1\nAUTH_SECRET=\nPOSTGRES_PASSWORD=\n' > .env.example
+  printf 'A=1\nAUTH_SECRET=\nPOSTGRES_PASSWORD=\nMAILPIT_PASSWORD=\n' > .env.example
   sh "$SCRIPT"
   cp .env first-run
   sh "$SCRIPT"
@@ -268,6 +308,10 @@ test_generates_empty_postgres_password_with_windows_line_ending
 test_keeps_existing_postgres_password
 test_fails_when_postgres_password_cannot_be_generated
 test_example_leaves_postgres_password_empty
+test_generates_empty_mailpit_password
+test_adds_and_generates_mailpit_password_in_existing_env
+test_keeps_existing_mailpit_password
+test_example_leaves_mailpit_password_empty
 test_second_run_changes_nothing
 test_adds_on_new_line_when_last_line_has_no_newline
 test_fails_when_secret_cannot_be_generated
