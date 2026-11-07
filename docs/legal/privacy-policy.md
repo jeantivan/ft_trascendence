@@ -93,6 +93,8 @@ Si eres el Athlete afectado, el contenido denunciado puede incluir datos tuyos. 
 
 Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ejemplo, un Manager leyendo RPE o Feedback, o el Admin leyendo un contenido denunciado), **cuándo** y **sobre qué recurso**. No registramos el valor del RPE, el contenido del Feedback ni el texto de los mensajes.
 
+También registramos que has borrado tu cuenta, para poder demostrar que atendimos tu solicitud. Este registro contiene solo tu identificador de usuario y la fecha: no incluye tu email, tu nick ni el código de confirmación.
+
 - **Finalidad:** seguridad y poder responder ante reclamaciones.
 - **Base legal:** interés legítimo (art. 6.1.f).
 - **Plazo:** 12 meses desde la fecha del registro. Se conserva aunque borres tu cuenta y después contiene solo identificadores, sin tu perfil.

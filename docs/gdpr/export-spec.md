@@ -124,7 +124,7 @@ Convenciones:
 | `feedback_received` | `feedback` donde `athlete_id` = usuario | **Sin** `manager_id` ni nombre del Manager. El usuario sabe que lo escribió un Manager de ese Event |
 | `contacts` | `contacts` donde el usuario es `user_a` o `user_b` | **Sin** id, nick ni email del otro. Solo estado, quién lo pidió y fecha |
 | `notifications` | `notifications` del usuario | Sin `payload` (solo ids, y no aportan nada al usuario) |
-| `access_log` | `audit_log` donde `subject_id` = usuario | Fecha, acción, recurso y **rol** del actor (`manager` o `admin`). **Sin** `actor_id` |
+| `access_log` | `audit_log` donde `subject_id` = usuario | Fecha, acción, recurso y **rol** del actor (`manager` o `admin`). **Sin** `actor_id`. El evento `account_deleted` **no se incluye** (acordado con Rebeca en #34). Especificado, **aún no implementado**: lo implementará #36 |
 
 El `access_log` cubre el derecho a saber quién ha accedido a tus datos (art. 15.1.c). Solo existe 12 meses (Privacy Policy, sección 7).
 

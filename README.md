@@ -21,6 +21,7 @@ Key Features:
 
 ### Conventions
 - **Frontend tests**: automated frontend tests live in `web/tests/`, grouped by component or feature. Component tests go in `web/tests/components/` and import the code through the `@/` alias.
+- **Test mail inbox**: mail sent by the app goes to a test inbox at `/mailpit/`, and nothing leaves Docker. See [docs/mail.md](docs/mail.md).
 - **Running the tests**: `make test` runs every test in Docker against an empty PostgreSQL test database. See [docs/testing.md](docs/testing.md).
 
 ## Resources

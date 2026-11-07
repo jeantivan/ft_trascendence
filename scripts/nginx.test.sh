@@ -1,6 +1,7 @@
 #!/bin/sh
 # Checks that nginx is the only way in, over HTTPS (issue #59), keeps the
-# visitor's address (#60) and carries the real-time stream (#61).
+# visitor's address (#60), guards the test mail inbox (#93) and carries the
+# real-time stream (#61).
 # Usage: make test-nginx, with the app running (make or make dev).
 # Reads nothing from .env: the port comes from Docker.
 
@@ -67,17 +68,19 @@ if [ "$server" = "nginx" ]; then pass "Server header without version"; else fail
 code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' "http://localhost:$port/login")
 if [ "$code" = "400" ]; then pass "plain HTTP refused by nginx (400) on port $port"; else fail "plain HTTP on port $port answered $code, expected 400"; fi
 
-# 6. Only nginx publishes ports: the app is reachable only inside Docker
-# docker port lists the published ports of the app container: none expected
-app_id=$(docker compose ps -q app)
-published=$(docker port "$app_id" 2>/dev/null | tr "\n" " ")
-if [ -z "$app_id" ]; then
-  fail "app container not found, cannot check its ports"
-elif [ -n "$published" ]; then
-  fail "app publishes ports ($published): only nginx may publish ports"
-else
-  pass "app publishes no ports"
-fi
+# 6. Only nginx publishes ports: the other services are reachable only inside Docker
+# docker port lists the published ports of a container: none expected
+for service in app mailpit; do
+  container_id=$(docker compose ps -q "$service")
+  published=$(docker port "$container_id" 2>/dev/null | tr "\n" " ")
+  if [ -z "$container_id" ]; then
+    fail "$service container not found, cannot check its ports"
+  elif [ -n "$published" ]; then
+    fail "$service publishes ports ($published): only nginx may publish ports"
+  else
+    pass "$service publishes no ports"
+  fi
+done
 
 # 7. Body size limit: 5 MB (profile photos, #23)
 # The path does not exist on purpose: nginx checks the size before forwarding,
@@ -136,17 +139,35 @@ for host in "localhost:$port" "10.11.1.5:$port"; do
   fi
 done
 
-# 12. HTTP/2 to the browser (#61): with HTTP/1.1 the browser opens at most 6
+# 12. The test mail inbox (#93) needs its password: the mail carries one-time codes.
+# The credentials come from the container, so this still reads nothing from .env.
+code=$(curl_https -o /dev/null -w '%{http_code}' "$url/mailpit/")
+if [ "$code" = "401" ]; then pass "mail inbox refuses a visitor without the password (401)"; else fail "mail inbox without the password answers $code, expected 401"; fi
+credentials=$(docker compose exec -T mailpit printenv MP_UI_AUTH 2>/dev/null)
+# Empty credentials must not reach curl: -u "" would wait for a password forever
+if [ -z "$credentials" ]; then
+  fail "mailpit has no MP_UI_AUTH: the inbox has no password"
+else
+  code=$(curl_https -o /dev/null -w '%{http_code}' -u "$credentials" "$url/mailpit/")
+  if [ "$code" = "200" ]; then pass "mail inbox opens with the password"; else fail "mail inbox with the password answers $code, expected 200"; fi
+fi
+
+# 13. /mailpit redirects without naming a port: only the path, so it works whichever
+# host port or address the visitor used
+location=$(curl_https -o /dev/null -D - "$url/mailpit" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')
+if [ "$location" = "/mailpit/" ]; then pass "/mailpit redirects to /mailpit/"; else fail "/mailpit redirects to '$location', expected '/mailpit/'"; fi
+
+# 14. HTTP/2 to the browser (#61): with HTTP/1.1 the browser opens at most 6
 # connections per address, and every tab keeps one busy with /api/events
 version=$(curl_https -o /dev/null -w '%{http_version}' --http2 "$url/login")
 if [ "$version" = "2" ]; then pass "HTTP/2 offered"; else fail "HTTP version is '$version', expected 2"; fi
 
-# 13. The real-time stream has its own location in nginx (#61): it must still reach
+# 15. The real-time stream has its own location in nginx (#61): it must still reach
 # the app. Without a session the app answers 401 (nginx alone would not)
 code=$(curl_https -o /dev/null -w '%{http_code}' "$url/api/events")
 if [ "$code" = "401" ]; then pass "/api/events reaches the app (401 without a session)"; else fail "/api/events answered $code, expected 401"; fi
 
-# 14. nginx looks up the app's address on each request, not once at start (#61).
+# 16. nginx looks up the app's address on each request, not once at start (#61).
 # Otherwise a recreated app container on a new IP gives 502 until nginx restarts.
 # Reads the loaded config: a resolver, and no proxy_pass to the app with a fixed
 # address (other services, such as Mailpit, may keep one).

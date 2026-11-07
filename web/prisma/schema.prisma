@@ -112,13 +112,22 @@ model Account {
   @@map("accounts")
 }
 
+// What a one-time code authorises. A code is only valid for the purpose it was
+// issued for. The login 2FA adds its own value in its own PR.
+enum OtpPurpose {
+  delete_account
+  export_data
+}
+
 model EmailOtpCode {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  codeHash   String    @map("code_hash")
-  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
-  attempts   Int       @default(0)
-  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @map("user_id") @db.Uuid
+  purpose    OtpPurpose
+  codeHash   String     @map("code_hash")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt  DateTime   @map("expires_at") @db.Timestamptz(3)
+  attempts   Int        @default(0)
+  consumedAt DateTime?  @map("consumed_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -542,6 +551,8 @@ enum AuditAction {
   update
   consent_given
   consent_withdrawn
+  // The person deleted their own account (resource "account", ids only)
+  account_deleted
 }
 
 // Who read or changed sensitive data of an Athlete (RPE, Feedback, reported
