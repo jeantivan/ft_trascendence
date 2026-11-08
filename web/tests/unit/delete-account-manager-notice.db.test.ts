@@ -52,6 +52,8 @@ describe("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000
 
   // Deleting the users cascades to memberships and notifications
   afterEach(async () => {
+    // account_deleted rows have no FK to User, so deleting the users does not remove them
+    await db.auditLog.deleteMany({ where: { actorId: { in: USER_IDS } } });
     await db.user.deleteMany({ where: { id: { in: USER_IDS } } });
     await db.organization.deleteMany({ where: { id: { in: ORG_IDS } } });
   });

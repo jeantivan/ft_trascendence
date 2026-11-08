@@ -53,7 +53,7 @@ describe("borrado de cuenta: auditoría", { timeout: 30_000 }, () => {
   });
 
   it("no deja fila si la transacción se revierte", async () => {
-    // Same failure as the rollback test in delete-account.test.ts: a Manager of a club with an Admin
+    // Same failure as the rollback test in delete-account.db.test.ts: a Manager of a club with an Admin
     // to notify, every notification write throwing. The audit row is written before that point
     await db.user.create({ data: { id: ADMIN_ID, email: "audit-admin@example.test", roleGlobal: "admin" } });
     const org = await db.organization.create({ data: { name: "audit-rollback-club", timezone: "Europe/Madrid" } });
