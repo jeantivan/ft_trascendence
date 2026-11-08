@@ -5,12 +5,10 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
 import { OTHER_USER_ID, runOtpRepositoryContract, USER_ID } from "../support/otp-repository-contract";
 
-// These tests delete rows, so they only run against a database whose name ends
-// in _test (the db-test container). Without DATABASE_URL_TEST they are skipped.
+// These tests delete rows. vitest.config.mts only runs them against a database ending in _test
 const url = process.env.DATABASE_URL_TEST;
-const isTestDatabase = url !== undefined && new URL(url).pathname.endsWith("_test");
 
-describe.skipIf(!isTestDatabase)("PrismaOtpRepository", () => {
+describe("PrismaOtpRepository", () => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
   beforeAll(async () => {

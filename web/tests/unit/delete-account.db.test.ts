@@ -10,19 +10,17 @@ import { hashPassword } from "@/lib/auth/password";
 import { deleteAccountWithOtp } from "@/lib/gdpr/delete-account";
 import { issueOtp, OTP_MAX_ATTEMPTS } from "@/lib/gdpr/otp";
 import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
-import { deleteWithFreshOtp, issueDeleteCode } from "../support/delete-account-helper";
+import { deleteWithFreshOtp, failNotifications, issueDeleteCode } from "../support/delete-account-helper";
 
-// These tests delete rows, so they only run against a database whose name ends
-// in _test (the db-test container). Without DATABASE_URL_TEST they are skipped.
+// These tests delete rows. vitest.config.mts only runs them against a database ending in _test
 const url = process.env.DATABASE_URL_TEST;
-const isTestDatabase = url !== undefined && new URL(url).pathname.endsWith("_test");
 
 const LEAVING_ID = "44444444-4444-4444-8444-444444444444";
 const STAYING_ID = "55555555-5555-4555-8555-555555555555";
 const ADMIN_ID = "66666666-6666-4666-8666-666666666666";
 
 // Real password hashing on every OTP: with other test files running in parallel the 5 s default is too tight
-describe.skipIf(!isTestDatabase)("deleteAccountWithOtp", { timeout: 30_000 }, () => {
+describe("deleteAccountWithOtp", { timeout: 30_000 }, () => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
   // An OTP written straight to the table, for states issueOtp never produces
@@ -67,6 +65,8 @@ describe.skipIf(!isTestDatabase)("deleteAccountWithOtp", { timeout: 30_000 }, ()
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    // account_deleted rows have no FK to User, so deleting the users does not remove them
+    await db.auditLog.deleteMany({ where: { actorId: { in: [LEAVING_ID, STAYING_ID, ADMIN_ID] } } });
     await db.user.deleteMany({ where: { id: { in: [LEAVING_ID, STAYING_ID, ADMIN_ID] } } });
     await rm(uploadsDir, { recursive: true, force: true });
   });
@@ -153,16 +153,7 @@ describe.skipIf(!isTestDatabase)("deleteAccountWithOtp", { timeout: 30_000 }, ()
     await db.user.create({ data: { id: ADMIN_ID, email: "delete-account-admin@example.test", roleGlobal: "admin" } });
     const org = await db.organization.create({ data: { name: "rollback-club", timezone: "Europe/Madrid" } });
     await db.membership.create({ data: { userId: LEAVING_ID, orgId: org.id, role: "manager" } });
-    const injected = new Error("notification write failed");
-    const failing = db.$extends({
-      query: {
-        notification: {
-          $allOperations() {
-            throw injected;
-          },
-        },
-      },
-    }) as unknown as PrismaClient;
+    const { injected, failing } = failNotifications(db);
 
     try {
       await expect(deleteWithFreshOtp(LEAVING_ID, db, failing)).rejects.toBe(injected);
@@ -221,16 +212,7 @@ describe.skipIf(!isTestDatabase)("deleteAccountWithOtp", { timeout: 30_000 }, ()
       const org = await db.organization.create({ data: { name: "avatar-rollback-club", timezone: "Europe/Madrid" } });
       await db.membership.create({ data: { userId: LEAVING_ID, orgId: org.id, role: "manager" } });
       await seedAvatar(LEAVING_ID, "avatars/a.png");
-      const injected = new Error("notification write failed");
-      const failing = db.$extends({
-        query: {
-          notification: {
-            $allOperations() {
-              throw injected;
-            },
-          },
-        },
-      }) as unknown as PrismaClient;
+      const { injected, failing } = failNotifications(db);
 
       try {
         await expect(deleteWithFreshOtp(LEAVING_ID, db, failing, uploadsDir)).rejects.toBe(injected);
