@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/ui/Logo";
 import { NAV_ITEMS } from "@/config/navigation";
 import { LogoutButton } from "./LogoutButton";
 import { NavLink } from "./NavLink";
@@ -20,7 +21,7 @@ export function MobileNav() {
   return (
     <header className="border-b border-border-subtle bg-surface-elevated md:hidden">
       <div className="flex items-center justify-between p-4">
-        <span className="font-heading text-lg font-bold">StrideSync</span>
+        <Logo className="h-8 w-auto" />
         <button
           type="button"
           aria-expanded={open}
