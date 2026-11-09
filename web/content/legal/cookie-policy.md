@@ -33,7 +33,7 @@ Estas cookies no guardan tus datos de salud (RPE, Feedback) ni tus mensajes. La 
 
 Usamos las cookies descritas para gestionar el inicio de sesión, proteger los formularios y recordar la página de retorno.
 
-[PENDIENTE ANTES DE PUBLICAR: verificar si todas estas cookies están exceptuadas del consentimiento. En particular, revisar la necesidad y proporcionalidad de mantener la autenticación durante 30 días: hoy se aplica siempre al iniciar sesión, sin que el usuario la solicite.]
+[PENDIENTE ANTES DE PUBLICAR: verificar si todas estas cookies están exceptuadas del consentimiento.]
 
 Si incorporamos cookies que requieran consentimiento, lo solicitaremos antes de instalarlas o utilizarlas y actualizaremos esta política.
 
