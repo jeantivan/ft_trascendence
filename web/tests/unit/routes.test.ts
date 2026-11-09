@@ -94,6 +94,14 @@ describe("checkRouteAccess - Route Protection", () => {
     }
   });
 
+  it("keeps subpaths and prefix matches of /privacy and /terms protected", () => {
+    for (const pathname of ["/privacy/x", "/privacy-admin", "/terms/edit"]) {
+      expect(
+        checkRouteAccess({ pathname, isLoggedIn: false })
+      ).toEqual({ allowed: false, redirectTo: "/login" });
+    }
+  });
+
   it("handles paths with trailing slashes gracefully", () => {
     expect(
       checkRouteAccess({ pathname: "/login/", isLoggedIn: false })
