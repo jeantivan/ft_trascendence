@@ -2,6 +2,8 @@
 
 > **BORRADOR INTERNO, NO PUBLICAR (sub-issue #27, parte de #8).** Los datos del responsable, el nombre de la plataforma, el CIF y el NIF son **ficticios, de ejercicio** (no corresponden a una empresa real). Los textos entre `[CORCHETES]` son decisiones o datos que el equipo debe confirmar antes de publicar; no se han inventado. Este documento no sirve como Términos definitivos mientras queden corchetes. El issue #27 sigue abierto hasta completarlos.
 
+> **Proyecto académico de 42.** Los datos identificativos del responsable y de contacto son ficticios y se utilizan exclusivamente para este ejercicio; no identifican a una empresa real responsable de este servicio.
+
 **Última actualización:** 24 de octubre de 2026
 
 ## 1. Quiénes somos y qué aceptas

@@ -2,14 +2,19 @@
 
 > **BORRADOR INTERNO, NO PUBLICAR (sub-issue #27, parte de #8).** Los textos entre `[CORCHETES]` son decisiones o datos que el equipo debe confirmar antes de publicar; no se han inventado. Este documento no sirve como Términos definitivos mientras queden corchetes. El issue #27 sigue abierto hasta completarlos.
 
+> **Proyecto académico de 42.** Los datos identificativos del responsable y de contacto son ficticios y se utilizan exclusivamente para este ejercicio; no identifican a una empresa real responsable de este servicio.
+
 **Última actualización:** [FECHA DE PUBLICACIÓN]
 
 ## 1. Quiénes somos y qué aceptas
 
-Estos términos regulan el uso de **[NOMBRE DE LA PLATAFORMA]** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Estos términos regulan el uso de **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
-- **Responsable del servicio:** [IDENTIDAD DEL RESPONSABLE: persona, asociación o entidad que presta el servicio, y domicilio]
-- **Contacto:** [EMAIL DE CONTACTO]
+- **Responsable del servicio:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242
+- **Domicilio:** Calle De La Trancendencia, 42. 28042 Madrid, España
+- **Representante:** Marvin Gaye, NIF 42424242A
+- **Teléfono:** +34 642 42 42 42
+- **Contacto:** legal@stridesync.fit
 
 Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la plataforma. Antes de crear la cuenta podrás leerlos, guardarlos y aceptarlos de forma expresa.
 
@@ -21,7 +26,7 @@ Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la
 
 - Eres responsable de tu contraseña y de la actividad que se realice desde tu cuenta.
 - No compartas tus credenciales ni tu segundo factor de verificación.
-- Avísanos sin demora si sospechas de un acceso no autorizado: [EMAIL DE CONTACTO].
+- Avísanos sin demora si sospechas de un acceso no autorizado: legal@stridesync.fit.
 - Los datos que das al registrarte (email, nick) deben ser tuyos y veraces.
 
 ## 3. Roles y clubes
@@ -52,7 +57,7 @@ Nada de lo anterior excluye ni limita la responsabilidad que la ley no permite e
 
 ## 5. Privacidad de tus datos
 
-El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a [EMAIL DE CONTACTO] para que la corrijamos en los dos. En resumen:
+El tratamiento de tus datos personales se rige por la [Política de Privacidad](privacy-policy.md). Si encuentras una contradicción entre ambos documentos, escríbenos a legal@stridesync.fit para que la corrijamos en los dos. En resumen:
 
 - El RPE lo ven tú y los Managers de tu club. El Feedback, solo tú y el Manager que lo escribió.
 - Para registrar RPE o recibir Feedback te pedimos un consentimiento explícito aparte, que no se da al aceptar estos términos. Puedes retirarlo en Ajustes > Privacidad.
@@ -116,7 +121,7 @@ Podemos retrasar o limitar esta comunicación solo si la ley o la seguridad de o
 
 ### Cómo recurrir
 
-Escribe a [EMAIL DE CONTACTO] indicando la decisión y tus motivos. Una persona revisa tu caso y te responde [PLAZO DE RESPUESTA: pendiente de decidir]. Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
+Escribe a legal@stridesync.fit indicando la decisión y tus motivos. Una persona revisa tu caso y te responde [PLAZO DE RESPUESTA: pendiente de decidir]. Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
 
 ## 9. Disponibilidad y responsabilidad
 
@@ -137,4 +142,4 @@ Se respetan las normas imperativas y el foro que corresponda al consumidor. [LEY
 
 ## 12. Contacto
 
-[EMAIL DE CONTACTO]
+legal@stridesync.fit

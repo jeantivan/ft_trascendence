@@ -2,14 +2,16 @@
 
 > **Borrador para revisión del equipo (sub-issue #26, parte de #8).** Los textos entre `[CORCHETES]` son datos que el equipo debe confirmar antes de publicar; no se han inventado.
 
+> **Proyecto académico de 42.** Los datos identificativos del responsable y de contacto son ficticios y se utilizan exclusivamente para este ejercicio; no identifican a una empresa real responsable de este servicio.
+
 **Última actualización:** [FECHA DE PUBLICACIÓN]
 
 ## 1. Quiénes somos
 
-Esta política describe cómo trata tus datos personales **[NOMBRE DE LA PLATAFORMA]** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Esta política describe cómo trata tus datos personales **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
-- **Responsable del tratamiento:** [IDENTIDAD DEL RESPONSABLE: persona o entidad y dirección]
-- **Contacto de privacidad:** [EMAIL DE CONTACTO]
+- **Responsable del tratamiento:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242. Calle De La Trancendencia, 42. 28042 Madrid, España. Teléfono +34 642 42 42 42
+- **Contacto de privacidad:** legal@stridesync.fit
 
 ## 2. Qué datos tratamos
 
@@ -125,9 +127,9 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días |
 | **Rectificación** (art. 16) | Ajustes > Perfil: email, foto y nick |
 | **Supresión** (art. 17) | Ajustes > Privacidad > Borrar cuenta. Confirmas con un código enviado a tu email, que caduca en 10 minutos. **Es permanente y no tiene marcha atrás** |
-| **Limitación del tratamiento** (art. 18) | Escríbenos a [EMAIL DE CONTACTO] |
+| **Limitación del tratamiento** (art. 18) | Escríbenos a legal@stridesync.fit |
 | **Portabilidad** (art. 20) | La descarga incluye los datos en JSON y CSV |
-| **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a [EMAIL DE CONTACTO] |
+| **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a legal@stridesync.fit |
 | **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile, notificaciones y datos de salud (RPE y Feedback) |
 
 La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
@@ -160,4 +162,4 @@ Si la modificamos de forma relevante, te avisaremos por email con al menos 30 d�
 
 ## 14. Contacto
 
-[EMAIL DE CONTACTO]
+legal@stridesync.fit
