@@ -38,5 +38,7 @@ Se añaden por oleadas (ver el ticket del módulo). Al crear uno, añade una fil
 | Componente | Fichero | Para qué | Props principales |
 |---|---|---|---|
 | `Button` | `Button.tsx` | Acciones y enlaces con aspecto de botón (48px) | `variant`: `primary` (por defecto), `ghost`, `destructive`. Con `href` es un `Link`; sin `href`, un `<button type="button">` (pasa `type="submit"` para enviar formularios). Acepta el resto de props de `<button>` o `Link` y `className` |
+| `Icon` | `Icon.tsx` | Iconos SVG propios de StrideSync (20, en `icons.ts`), pintados con `currentColor` | `name`: clave de `icons.ts` (`dashboard`, `calendar`, `logout`...). `size` en px (24 por defecto). Sin `title` es decorativo (`aria-hidden`); con `title` es una imagen con ese nombre accesible. Acepta el resto de props de `<svg>` |
 
 Ejemplo: `<Button variant="ghost" href="/events">Ver Events</Button>`.
+Ejemplo: `<Icon name="logout" className="text-text-secondary" />`, o `<Icon name="help" size={20} title="Ayuda" />` si el icono va solo, sin texto al lado.
