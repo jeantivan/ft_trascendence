@@ -13,12 +13,16 @@ export type RouteAccessResult =
 // right after login
 // /account-deleted is the post-deletion confirmation: the session is already
 // closed when the user lands there
+// /privacy and /terms must stay public so visitors can read them before
+// registering (GDPR prior-information requirement)
 const PUBLIC_EXACT_ROUTES = [
   "/",
   "/login",
   "/register",
   "/auth/signed-out",
   "/account-deleted",
+  "/privacy",
+  "/terms",
 ];
 
 export function checkRouteAccess({
