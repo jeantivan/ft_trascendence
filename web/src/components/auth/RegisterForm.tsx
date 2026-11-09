@@ -27,7 +27,7 @@ export function RegisterForm() {
           required
           autoComplete="username"
           placeholder="fastrunner"
-          className="px-3 py-2 border rounded-md dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
+          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 
@@ -42,7 +42,7 @@ export function RegisterForm() {
           required
           autoComplete="email"
           placeholder="runner@42madrid.com"
-          className="px-3 py-2 border rounded-md dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
+          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 
@@ -58,14 +58,14 @@ export function RegisterForm() {
           minLength={8}
           autoComplete="new-password"
           placeholder="••••••••"
-          className="px-3 py-2 border rounded-md dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
+          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 
       <button
         type="submit"
         disabled={isPending}
-        className="mt-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-md transition"
+        className="mt-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded transition"
       >
         {isPending ? "Registrando..." : "Crear cuenta"}
       </button>

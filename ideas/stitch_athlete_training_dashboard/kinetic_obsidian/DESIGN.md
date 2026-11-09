@@ -225,6 +225,7 @@ Visual hierarchy does not rely on muddy, generic drop shadows. Instead, it uses 
 - **Surface Tier 1 (`#131923`):** Performance cards, session rows, calendar blocks. Outlined by hairline border `#253047` (1px solid).
 - **Surface Tier 2 (`#1E2638`):** Hover states, active dropdown trays, spot request modals, and flyout sheets.
 - **Kinetic Glow (Active States):** High-priority components (e.g., active running session in progress, next upcoming Event) receive a directional diffuse ambient glow: `0px 0px 24px -4px rgba(204, 255, 0, 0.18)`.
+- **Error Glow (Error States):** Error pages and destructive primary actions use the same halo in `#EF4444`: `0px 0px 20px rgba(239, 68, 68, 0.35)`.
 - **Dividers:** Thin, low-contrast rules (`1px solid #253047`) cleanly demarcate sub-sections without breaking visual continuity.
 
 ## Shapes

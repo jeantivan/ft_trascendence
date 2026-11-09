@@ -9,7 +9,7 @@ export function NavLink({ href, label }: NavItem) {
   const isActive = pathname === href || pathname.startsWith(`${href}/`);
 
   const base =
-    "flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-volt";
+    "flex items-center rounded px-3 py-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-volt";
   const state = isActive
     ? "border-l-2 border-volt bg-surface-overlay font-heading font-semibold text-volt"
     : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary";

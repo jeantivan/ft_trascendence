@@ -5,7 +5,7 @@ export function LogoutButton() {
     <form action={logoutAction}>
       <button
         type="submit"
-        className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-text-muted transition-colors hover:bg-surface-overlay hover:text-red-400"
+        className="flex w-full items-center gap-2.5 rounded px-3 py-2 text-sm text-text-muted transition-colors hover:bg-surface-overlay hover:text-red-400"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

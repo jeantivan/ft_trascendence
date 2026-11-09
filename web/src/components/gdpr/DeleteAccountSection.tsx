@@ -11,7 +11,7 @@ const COOLDOWN_SECONDS = 60;
 type RequestFeedback = { kind: "sent" } | { kind: "error"; message: string };
 
 const buttonBase =
-  "inline-flex h-12 items-center justify-center rounded-lg px-6 font-heading font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-12 items-center justify-center rounded px-6 font-heading font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 // Drop-in section for Ajustes > Privacidad: it needs no props and no route of its own
 export function DeleteAccountSection() {
@@ -45,7 +45,7 @@ export function DeleteAccountSection() {
   return (
     <section
       aria-labelledby="delete-account-title"
-      className="flex flex-col gap-4 rounded-2xl border border-border-subtle bg-surface-elevated p-6"
+      className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface-elevated p-6"
     >
       <h2 id="delete-account-title" className="font-heading text-xl font-bold text-text-primary">
         Borrar cuenta
@@ -91,7 +91,7 @@ export function DeleteAccountSection() {
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={CODE_LENGTH}
-            className="h-12 rounded-lg border border-border-subtle bg-surface-overlay px-3 text-text-primary focus:border-volt focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-12 rounded border border-border-subtle bg-surface-overlay px-3 text-text-primary focus:border-volt focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
         {!deleteState.success && (

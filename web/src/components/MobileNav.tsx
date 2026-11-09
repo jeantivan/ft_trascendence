@@ -26,7 +26,7 @@ export function MobileNav() {
           aria-expanded={open}
           aria-controls="mobile-menu"
           onClick={() => setOpen(!open)}
-          className="rounded-lg border border-border-strong px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-volt"
+          className="rounded border border-border-strong px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-volt"
         >
           {open ? "Cerrar" : "Menú"}
         </button>
