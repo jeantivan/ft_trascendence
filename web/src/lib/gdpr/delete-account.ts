@@ -32,6 +32,7 @@ class OtpNotConsumedError extends Error {}
 // 3. After the commit: the avatar files are deleted from uploadsDir. The paths are
 //    read inside the transaction, before the user row goes, because the cascade
 //    removes the Avatar rows and without them nobody knows which files to delete.
+//    The user row is locked before reading them, so no upload can add one in between.
 //    If the code is rejected or the transaction fails, the disk is never touched.
 //    A file that cannot be deleted does not undo the deletion: the result stays
 //    deleted: true (the session must be closed) and carries avatarCleanupFailed.
@@ -60,6 +61,13 @@ export async function deleteAccountWithOtp(
         await tx.auditLog.create({
           data: { actorId: userId, subjectId: userId, actorRole: null, action: "account_deleted", resource: "account" },
         });
+        // Locked before reading the avatars (#122): an upload that commits after this read
+        // would lose its Avatar row to the cascade and leave its file behind. FOR UPDATE, not
+        // user.update: it also waits for the upload's avatar insert (its foreign key check
+        // holds a KEY SHARE lock), which user.update does not, and that ends in a deadlock.
+        // Lock order: this user first, then clubs, then conversations (deleteAccountRows).
+        // The wait for this lock counts against the transaction timeout (5 s by default)
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
         const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
         avatarPaths = avatars.map((avatar) => avatar.path);
         await deleteAccountRows(userId, tx);
