@@ -1,6 +1,5 @@
-import type { MembershipRole } from "@/generated/prisma/client";
 import type { CurrentUser } from "./current-user";
-import { getOrgRole, type OrgRoleCheck } from "./org-role";
+import { getOrgRole, type OrgRole, type OrgRoleCheck } from "./org-role";
 import { requireApiOrgRole } from "./require-api-org-role";
 
 // For a Route Handler that receives a resource id. Same rules as
@@ -8,9 +7,9 @@ import { requireApiOrgRole } from "./require-api-org-role";
 // 403 without the role), answered as JSON like requireApiOrgRole.
 export async function requireApiOrgResource<T extends { orgId: string }>(
   resource: T | null,
-  roles: readonly MembershipRole[],
+  roles: readonly OrgRole[],
   checkOrgRole: OrgRoleCheck = getOrgRole
-): Promise<{ resource: T; user: CurrentUser; role: MembershipRole } | Response> {
+): Promise<{ resource: T; user: CurrentUser; role: OrgRole } | Response> {
   const result = await requireApiOrgRole(resource?.orgId ?? "", roles, checkOrgRole);
   if (result instanceof Response) {
     return result;

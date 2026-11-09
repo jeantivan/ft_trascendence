@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MembershipRole } from "@/generated/prisma/client";
 import { requireApiOrgResource } from "@/lib/permissions/require-api-org-resource";
 import type { CurrentUserResult } from "@/lib/permissions/current-user";
-import { getOrgRole } from "@/lib/permissions/org-role";
+import { getOrgRole, type OrgRole } from "@/lib/permissions/org-role";
 import { InMemoryMembershipRepository } from "../../support/in-memory-membership-repository";
 
 // Every test passes its own user: the mock only keeps next-auth from loading
@@ -30,7 +29,7 @@ describe("requireApiOrgResource", () => {
   });
 
   it("checks the session before the resource: 401, not 404, when there is no session", async () => {
-    const noSession = (orgId: string, roles: readonly MembershipRole[]) =>
+    const noSession = (orgId: string, roles: readonly OrgRole[]) =>
       getOrgRole(orgId, roles, async () => ({ ok: false, reason: "no-session" }), repo);
 
     const result = await requireApiOrgResource(null, ["manager"], noSession);
@@ -43,7 +42,7 @@ describe("requireApiOrgResource", () => {
   it("answers 404 JSON when the resource belongs to another club, as if it did not exist", async () => {
     repo.add(USER.id, OTHER_CLUB, "manager");
     const event = { id: EVENT_ID, orgId: CLUB, title: "Tirada larga del domingo" };
-    const decide = (orgId: string, roles: readonly MembershipRole[]) =>
+    const decide = (orgId: string, roles: readonly OrgRole[]) =>
       getOrgRole(orgId, roles, activeUser, repo);
 
     const result = await requireApiOrgResource(event, ["manager"], decide);
@@ -69,7 +68,7 @@ describe("requireApiOrgResource", () => {
   it("returns the resource, the user and their role when the user may act on it", async () => {
     repo.add(USER.id, CLUB, "athlete");
     const event = { id: EVENT_ID, orgId: CLUB, title: "Tirada larga del domingo" };
-    const decide = (orgId: string, roles: readonly MembershipRole[]) =>
+    const decide = (orgId: string, roles: readonly OrgRole[]) =>
       getOrgRole(orgId, roles, activeUser, repo);
 
     const result = await requireApiOrgResource(event, ["manager", "athlete"], decide);

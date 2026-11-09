@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { forbidden, notFound, redirect } from "next/navigation";
-import type { MembershipRole } from "@/generated/prisma/client";
 import { requireOrgResource } from "@/lib/permissions/require-org-resource";
 import type { CurrentUserResult } from "@/lib/permissions/current-user";
-import { getOrgRole } from "@/lib/permissions/org-role";
+import { getOrgRole, type OrgRole } from "@/lib/permissions/org-role";
 import { InMemoryMembershipRepository } from "../../support/in-memory-membership-repository";
 
 // Every test passes its own user: the mock only keeps next-auth from loading
@@ -39,7 +38,7 @@ async function activeUser(): Promise<CurrentUserResult> {
 describe("requireOrgResource", () => {
   let repo: InMemoryMembershipRepository;
   // The real getOrgRole, with the user and memberships of each test
-  let decide: (orgId: string, roles: readonly MembershipRole[]) => ReturnType<typeof getOrgRole>;
+  let decide: (orgId: string, roles: readonly OrgRole[]) => ReturnType<typeof getOrgRole>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,7 +63,7 @@ describe("requireOrgResource", () => {
 
   it("checks the session before the resource: no session redirects even if it does not exist", async () => {
     // Otherwise a visitor could tell existing ids (redirect) from missing ones (404)
-    const noSession = (orgId: string, roles: readonly MembershipRole[]) =>
+    const noSession = (orgId: string, roles: readonly OrgRole[]) =>
       getOrgRole(orgId, roles, async () => ({ ok: false, reason: "no-session" }), repo);
 
     await expect(requireOrgResource(null, ["manager"], noSession)).rejects.toThrow("NEXT_REDIRECT");

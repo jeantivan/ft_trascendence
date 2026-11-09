@@ -4,6 +4,8 @@ import type { MembershipRole, PrismaClient } from "@/generated/prisma/client";
 export interface MembershipRepository {
   // The user's role in that club, or null when they are not a member
   findRole(userId: string, orgId: string): Promise<MembershipRole | null>;
+  // Whether the club exists: an Admin who is not a member has no membership to prove it
+  organizationExists(orgId: string): Promise<boolean>;
 }
 
 export class PrismaMembershipRepository implements MembershipRepository {
@@ -15,6 +17,11 @@ export class PrismaMembershipRepository implements MembershipRepository {
       select: { role: true },
     });
     return membership?.role ?? null;
+  }
+
+  async organizationExists(orgId: string): Promise<boolean> {
+    // count, not findUnique: only whether it exists, no club data is read
+    return (await this.db.organization.count({ where: { id: orgId } })) > 0;
   }
 }
 
