@@ -16,8 +16,11 @@ beforeAll(async () => {
 }, 30_000);
 
 // Lints a file with the project's own eslint.config.mjs, as npm run lint does
-async function restrictedSyntaxMessages(code: string): Promise<string[]> {
-  const [result] = await eslint.lintText(code, { filePath: PAGE_PATH });
+async function restrictedSyntaxMessages(
+  code: string,
+  filePath = PAGE_PATH
+): Promise<string[]> {
+  const [result] = await eslint.lintText(code, { filePath });
   return result.messages
     .filter((message) => message.ruleId === "no-restricted-syntax")
     .map((message) => message.message);
@@ -39,6 +42,24 @@ describe("lint rule for requireAdmin", () => {
     `;
 
     expect(await restrictedSyntaxMessages(page)).toEqual([MESSAGE]);
+  });
+
+  it("rejects requireAdmin() inside a try block in a .ts Server Action", async () => {
+    const action = `
+      "use server";
+      import { requireAdmin } from "@/lib/permissions/require-admin";
+
+      export async function blockAccount() {
+        try {
+          const admin = await requireAdmin();
+          return { ok: true, by: admin.id };
+        } catch {
+          return { ok: false };
+        }
+      }
+    `;
+
+    expect(await restrictedSyntaxMessages(action, "src/app/example/actions.ts")).toEqual([MESSAGE]);
   });
 
   it("accepts requireAdmin() before a try block", async () => {
