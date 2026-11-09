@@ -6,7 +6,10 @@ const variants = {
   primary: "bg-volt text-surface-base hover:scale-[1.01] hover:shadow-button-glow",
   ghost:
     "border border-border-strong text-text-primary hover:border-volt hover:bg-volt/5 hover:text-volt",
-  destructive: "border border-rpe-max bg-surface-overlay text-rpe-max hover:shadow-error-glow",
+  // Red focus, as the delete button had before the Button component. DESIGN.md does not
+  // say; Marta proposes it
+  destructive:
+    "border border-rpe-max bg-surface-overlay text-rpe-max hover:shadow-error-glow focus-visible:outline-rpe-max",
 };
 
 const base =
