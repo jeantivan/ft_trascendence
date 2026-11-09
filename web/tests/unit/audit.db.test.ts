@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { PrismaPg } from "@prisma/adapter-pg";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
 import { listAccessesToUser, purgeOldAuditRows, recordAudit } from "@/lib/gdpr/audit";
+import { deleteWithFreshOtp } from "../support/delete-account-helper";
 
 // These tests write and delete rows, so they only run against a database whose name ends in _test
 const url = process.env.DATABASE_URL_TEST;
@@ -104,5 +105,43 @@ describe.skipIf(!isTestDatabase)("listAccessesToUser", { timeout: 30_000 }, () =
     expect(await listAccessesToUser(db, SUBJECT_ID)).toEqual([
       { created_at: "2026-10-05T09:10:00.000Z", action: "read", resource: "session_log", actor_role: "manager" },
     ]);
+  });
+});
+
+describe.skipIf(!isTestDatabase)("audit rows and account deletion", { timeout: 30_000 }, () => {
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  const WATCHER_ID = "99999999-9999-4999-8999-999999999994";
+  const WATCHED_ID = "99999999-9999-4999-8999-999999999995";
+
+  // The row of the access itself: deleting an account also writes its own account_deleted row
+  const accessRows = () => db.auditLog.findMany({ where: { actorId: WATCHER_ID, resource: "session_log" } });
+
+  beforeEach(async () => {
+    await db.user.create({ data: { id: WATCHER_ID, email: "audit-watcher@example.test" } });
+    await db.user.create({ data: { id: WATCHED_ID, email: "audit-watched@example.test" } });
+    await db.auditLog.create({
+      data: { actorId: WATCHER_ID, subjectId: WATCHED_ID, actorRole: "manager", action: "read", resource: "session_log" },
+    });
+  });
+
+  afterEach(async () => {
+    await db.auditLog.deleteMany({ where: { actorId: { in: [WATCHER_ID, WATCHED_ID] } } });
+    await db.user.deleteMany({ where: { id: { in: [WATCHER_ID, WATCHED_ID] } } });
+  });
+
+  afterAll(async () => {
+    await db.$disconnect();
+  });
+
+  it("keeps the row when the subject deletes their account", async () => {
+    expect(await deleteWithFreshOtp(WATCHED_ID, db)).toEqual({ deleted: true });
+
+    expect(await accessRows()).toHaveLength(1);
+  });
+
+  it("keeps the row when the actor deletes their account", async () => {
+    expect(await deleteWithFreshOtp(WATCHER_ID, db)).toEqual({ deleted: true });
+
+    expect(await accessRows()).toHaveLength(1);
   });
 });
