@@ -70,6 +70,14 @@ async function adminReasonFor(allowed: readonly OrgRole[]) {
   return result.role === "admin" ? "ok" : `entered as ${result.role}`;
 }
 
+// An Admin who is also a member of the club: the role they enter with, or the reason
+async function adminMemberResultFor(memberRole: MembershipRole, allowed: readonly OrgRole[]) {
+  const repo = new InMemoryMembershipRepository();
+  repo.add(USER_ID, CLUB, memberRole);
+  const result = await getOrgRole(CLUB, allowed, admin, repo);
+  return result.ok ? result.role : result.reason;
+}
+
 async function reasonFor(memberRole: MembershipRole, allowed: readonly OrgRole[]) {
   const repo = new InMemoryMembershipRepository();
   repo.add(USER_ID, CLUB, memberRole);
@@ -88,5 +96,14 @@ describe("ORG_ROLES", () => {
     expect(await reasonFor("manager", allowed)).toBe(expected.manager ? "ok" : "wrong-role");
     expect(await reasonFor("athlete", allowed)).toBe(expected.athlete ? "ok" : "wrong-role");
     expect(await adminReasonFor(allowed)).toBe(expected.admin ? "ok" : "not-member");
+    // An Admin who is an Athlete acts as Admin where the matrix lets the Admin in,
+    // and as Athlete everywhere else
+    expect(await adminMemberResultFor("athlete", allowed)).toBe(
+      expected.admin ? "admin" : expected.athlete ? "athlete" : "wrong-role",
+    );
+    // An Admin who is a Manager never loses what the Manager can do
+    expect(await adminMemberResultFor("manager", allowed)).toBe(
+      expected.manager ? "manager" : expected.admin ? "admin" : "wrong-role",
+    );
   });
 });

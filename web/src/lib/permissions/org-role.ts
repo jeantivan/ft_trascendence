@@ -41,9 +41,15 @@ export async function getOrgRole(
 
   // Membership read from the database on every call, never from the JWT or the client
   const role = await repo.findRole(current.user.id, orgId);
-  // The Admin first, only in the rows that allow it: an Admin who is also an
-  // Athlete of the club still acts as Admin there (sees every Group, not only
-  // theirs). Those rows hold no RPE or Feedback
+  // A Manager of the club enters as Manager, Admin or not: in the rows that allow
+  // the Admin, the Manager can always do at least as much (e.g. delete any chat
+  // message, not only reported ones)
+  if (role === "manager" && roles.includes(role)) {
+    return { ok: true, user: current.user, role };
+  }
+  // Then the Admin, only in the rows that allow it: an Admin who is also an
+  // Athlete of the club acts as Admin there (sees every Group, not only theirs).
+  // Those rows hold no RPE or Feedback
   if (
     current.user.roleGlobal === "admin" &&
     roles.includes("admin") &&

@@ -181,6 +181,15 @@ describe("getOrgRole", () => {
       expect(result).toEqual({ ok: true, user: ADMIN_USER, role: "admin" });
     });
 
+    it("keeps an Admin who is a Manager of the club as role manager when the row allows manager and admin", async () => {
+      // eventChat.moderate: as Manager they delete any message, as Admin only reported ones
+      repo.add(ADMIN_ID, CLUB, "manager");
+
+      const result = await getOrgRole(CLUB, ["manager", "admin"], admin, repo);
+
+      expect(result).toEqual({ ok: true, user: ADMIN_USER, role: "manager" });
+    });
+
     it("rejects an Admin who is an Athlete of the club as wrong-role when the row allows neither", async () => {
       repo.add(ADMIN_ID, CLUB, "athlete");
 
