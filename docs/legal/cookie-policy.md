@@ -33,7 +33,7 @@ Estas cookies no guardan tus datos de salud (RPE, Feedback) ni tus mensajes. La 
 
 Usamos las cookies descritas para gestionar el inicio de sesión, proteger los formularios y recordar la página de retorno.
 
-[PENDIENTE ANTES DE PUBLICAR: verificar si todas estas cookies están exceptuadas del consentimiento.]
+Todas son cookies técnicas, necesarias para prestar el servicio que solicitas (iniciar y mantener tu sesión y proteger los formularios), por lo que están exceptuadas del consentimiento (art. 22.2 LSSI). No usamos cookies analíticas, publicitarias ni de terceros.
 
 Si incorporamos cookies que requieran consentimiento, lo solicitaremos antes de instalarlas o utilizarlas y actualizaremos esta política.
 
