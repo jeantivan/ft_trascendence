@@ -63,19 +63,21 @@ describe("Integration: recordAdminAction", () => {
   });
 
   // Every value the migration added, plus update (nick) and read (reported content).
-  // read goes on a reported message, the only thing the Admin reads (matrix #2)
+  // read goes on a reported message and create on a club, the only places they are allowed.
   it.each(ADMIN_AUDIT_ACTIONS)("saves the action %s", async (action) => {
     const entry: AdminActionEntry =
       action === "read"
         ? { adminId: ADMIN_ID, action, resource: "message", resourceId: MESSAGE_ID, subjectId: SUBJECT_ID }
-        : { adminId: ADMIN_ID, action, resource: "account", subjectId: SUBJECT_ID };
+        : action === "create"
+          ? { adminId: ADMIN_ID, action, resource: "organization", resourceId: CLUB_ID }
+          : { adminId: ADMIN_ID, action, resource: "account", subjectId: SUBJECT_ID };
 
     await prisma.$transaction((tx) => recordAdminAction(tx, entry));
 
     await expect(adminRows()).resolves.toMatchObject([{ action, resource: entry.resource }]);
   });
 
-  it("does not compile an action about a person without subjectId, or an unknown resource", () => {
+  it("rejects invalid entries at compile time", () => {
     // Checked by tsc: without subjectId the row would never reach the person's export (#36)
     // @ts-expect-error subjectId is required for account
     const account: AdminActionEntry = { adminId: ADMIN_ID, action: "block", resource: "account" };
@@ -83,9 +85,20 @@ describe("Integration: recordAdminAction", () => {
     const membership: AdminActionEntry = { adminId: ADMIN_ID, action: "delete", resource: "membership" };
     // @ts-expect-error subjectId (the author) is required for message
     const message: AdminActionEntry = { adminId: ADMIN_ID, action: "read", resource: "message", resourceId: MESSAGE_ID };
+    // @ts-expect-error resourceId (which message) is required for message
+    const messageWithoutId: AdminActionEntry = { adminId: ADMIN_ID, action: "delete", resource: "message", subjectId: SUBJECT_ID };
+    // @ts-expect-error the Admin only reads reported messages
+    const readAccount: AdminActionEntry = { adminId: ADMIN_ID, action: "read", resource: "account", subjectId: SUBJECT_ID };
+    // @ts-expect-error on a membership the Admin only changes the role or expels
+    const blockMembership: AdminActionEntry = { adminId: ADMIN_ID, action: "block", resource: "membership", subjectId: SUBJECT_ID };
+    // @ts-expect-error create is only for a club
+    const createGroup: AdminActionEntry = { adminId: ADMIN_ID, action: "create", resource: "group", resourceId: GROUP_ID };
     // @ts-expect-error resource must be one of the known ones
     const typo: AdminActionEntry = { adminId: ADMIN_ID, action: "delete", resource: "groups", resourceId: GROUP_ID };
 
-    expect([account, membership, message, typo]).toHaveLength(4);
+    // At runtime they are plain objects: the check that matters is tsc on the lines above.
+    for (const entry of [account, membership, message, messageWithoutId, readAccount, blockMembership, createGroup, typo]) {
+      expect(entry).toBeDefined();
+    }
   });
 });
