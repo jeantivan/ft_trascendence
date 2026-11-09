@@ -146,13 +146,13 @@ Si crees que tratamos tus datos de forma incorrecta, tienes derecho a reclamar a
 
 ## 10. Destinatarios y transferencias
 
-No vendemos tus datos. Pueden acceder a ellos proveedores que nos prestan servicios técnicos, siempre por cuenta nuestra:
+No vendemos tus datos.
 
-- Alojamiento y base de datos: [PROVEEDOR O CONFIRMAR]
-- Envío de correo electrónico: [PROVEEDOR O CONFIRMAR]
-- Inicio de sesión con proveedor externo (OAuth): [PROVEEDOR O NINGUNO]
+- Alojamiento y base de datos: la aplicación y la base de datos se ejecutan en contenedores Docker en las máquinas de 42 Madrid, gestionadas por el equipo del proyecto, en el marco de un proyecto académico.
+- Envío de correo electrónico: los códigos de verificación y los avisos se envían mediante un servidor de correo gestionado por el equipo dentro de la infraestructura del proyecto. No utilizamos un proveedor externo para prestar el servicio de envío de correo.
+- Inicio de sesión: actualmente puedes acceder con email y contraseña. Está previsto incorporar el inicio de sesión con 42 (Intra), Google y GitHub, pero estas opciones todavía no están disponibles. Antes de activarlas, actualizaremos esta política para explicar los datos que recibimos de cada proveedor, los intercambios necesarios para autenticarte y, cuando corresponda, las transferencias internacionales y sus garantías.
 
-**Transferencias internacionales:** [CONFIRMAR si algún proveedor trata datos fuera del Espacio Económico Europeo y con qué garantías; si no hay, decirlo aquí].
+**Transferencias internacionales:** actualmente no se transfieren datos personales fuera del Espacio Económico Europeo.
 
 ## 11. Seguridad
 
