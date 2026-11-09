@@ -553,6 +553,18 @@ enum AuditAction {
   consent_withdrawn
   // The person deleted their own account (resource "account", ids only)
   account_deleted
+  // Admin actions (#101), always with actor_role admin. They also use update
+  // (editing a nick) and read (only reported content, matrix #2)
+  block
+  unblock
+  // Global role (resource "account") or Manager role in a club (resource "membership")
+  role_change
+  // Also expelling a member (resource "membership"). An Admin deleting someone
+  // else's account is delete on "account"; account_deleted is only the person
+  // deleting their own (actor_role null)
+  delete
+  // e.g. creating a club (resource "organization")
+  create
 }
 
 // Who read or changed sensitive data of an Athlete (RPE, Feedback, reported
@@ -568,7 +580,8 @@ model AuditLog {
   // applies (it does not mean "unknown")
   actorRole  ActorRole?  @map("actor_role")
   action     AuditAction
-  // e.g. "session_log", "feedback", "message"
+  // e.g. "session_log", "feedback", "message". Admin actions (#101): "account",
+  // "membership", "message", "organization", "group" or "event"
   resource   String
   resourceId String?     @map("resource_id")
   createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
