@@ -40,6 +40,10 @@ describe.skipIf(!isTestDatabase)("recordAudit", { timeout: 30_000 }, () => {
     const found = await rows();
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({ subjectId: SUBJECT_ID, actorRole: "manager", action: "read", resource: "feedback", resourceId: "abc" });
+    // The exact columns of the row: a new column would make this test fail
+    expect(Object.keys(found[0]).sort()).toEqual(
+      ["action", "actorId", "actorRole", "createdAt", "id", "resource", "resourceId", "subjectId"],
+    );
   });
 
   it("leaves no row if the transaction rolls back", async () => {
@@ -104,6 +108,18 @@ describe.skipIf(!isTestDatabase)("listAccessesToUser", { timeout: 30_000 }, () =
 
     expect(await listAccessesToUser(db, SUBJECT_ID)).toEqual([
       { created_at: "2026-10-05T09:10:00.000Z", action: "read", resource: "session_log", actor_role: "manager" },
+    ]);
+  });
+
+  it("returns the accesses from oldest to newest", async () => {
+    const base = { actorId: ACTOR_ID, subjectId: SUBJECT_ID, resource: "session_log" };
+    // Inserted newest first, so the order of the result cannot come from the insertion order
+    await db.auditLog.create({ data: { ...base, actorRole: "admin", action: "update", createdAt: new Date("2026-10-07T09:10:00Z") } });
+    await db.auditLog.create({ data: { ...base, actorRole: "manager", action: "read", createdAt: new Date("2026-10-05T09:10:00Z") } });
+
+    expect(await listAccessesToUser(db, SUBJECT_ID)).toEqual([
+      { created_at: "2026-10-05T09:10:00.000Z", action: "read", resource: "session_log", actor_role: "manager" },
+      { created_at: "2026-10-07T09:10:00.000Z", action: "update", resource: "session_log", actor_role: "admin" },
     ]);
   });
 });

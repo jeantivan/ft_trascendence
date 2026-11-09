@@ -1,7 +1,8 @@
 import { Prisma, type ActorRole, type AuditAction, type PrismaClient } from "@/generated/prisma/client";
 
-// One audit_log row. There is no field for the data itself (RPE value, Feedback
-// body, message text): the type makes it impossible to pass one by mistake
+// Audit metadata only. The table has no dedicated column for RPE values,
+// Feedback bodies or message text. Never put sensitive content in any field;
+// resource and resourceId must contain only resource names and identifiers.
 export type AuditEntry = {
   actorId: string;
   subjectId: string | null;
@@ -38,7 +39,11 @@ export type AccessLogEntry = {
 };
 
 // Accesses by a Manager or an Admin to the data of subjectId, oldest first.
-// Rows without an actor role (consent events, account_deleted) are not accesses by a third party
+// Rows without an actor role (consent events, account_deleted) are not accesses by a third party.
+// This function does not authorize access to subjectId.
+// For self-export (#33), the caller must derive it from the authenticated
+// session and validate the current user in the database, never trust a
+// subjectId supplied by the client.
 export async function listAccessesToUser(db: PrismaClient, subjectId: string): Promise<AccessLogEntry[]> {
   const rows = await db.auditLog.findMany({
     where: { subjectId, actorRole: { not: null } },
