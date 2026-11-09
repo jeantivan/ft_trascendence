@@ -95,6 +95,8 @@ Registramos **quién** consulta o modifica datos sensibles de un Athlete (por ej
 
 También registramos que has borrado tu cuenta, para poder demostrar que atendimos tu solicitud. Este registro contiene solo tu identificador de usuario y la fecha: no incluye tu email, tu nick ni el código de confirmación.
 
+También registramos las acciones que el Admin realiza sobre cuentas y contenido: bloquear o desbloquear una cuenta, cambiar su rol, editar su nick, borrarla, y borrar Groups, Events o contenido denunciado. Cada registro indica quién actuó (con rol de Admin), cuándo y sobre qué recurso, sin copiar el contenido afectado. En la exportación de tus datos se incluyen los registros de acciones del Admin asociados a tu cuenta. Se muestran la fecha, la acción, el recurso y el rol de Admin, sin incluir el identificador de quien actuó ni el contenido del recurso.
+
 - **Finalidad:** seguridad y poder responder ante reclamaciones.
 - **Base legal:** interés legítimo (art. 6.1.f).
 - **Plazo:** 12 meses desde la fecha del registro. Se conserva aunque borres tu cuenta y después contiene solo identificadores, sin tu perfil.
