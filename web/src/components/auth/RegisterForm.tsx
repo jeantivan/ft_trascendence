@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { registerAction, type AuthActionResult } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
@@ -21,14 +22,13 @@ export function RegisterForm() {
         <label htmlFor="nick" className="text-sm font-medium">
           Nick
         </label>
-        <input
+        <Input
           id="nick"
           name="nick"
           type="text"
           required
           autoComplete="username"
           placeholder="fastrunner"
-          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 
@@ -36,14 +36,13 @@ export function RegisterForm() {
         <label htmlFor="email" className="text-sm font-medium">
           Email
         </label>
-        <input
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
           placeholder="runner@42madrid.com"
-          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 
@@ -51,7 +50,7 @@ export function RegisterForm() {
         <label htmlFor="password" className="text-sm font-medium">
           Contraseña (mínimo 8 caracteres)
         </label>
-        <input
+        <Input
           id="password"
           name="password"
           type="password"
@@ -59,7 +58,6 @@ export function RegisterForm() {
           minLength={8}
           autoComplete="new-password"
           placeholder="••••••••"
-          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 
