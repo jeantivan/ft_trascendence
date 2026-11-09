@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getOrgRole } from "@/lib/permissions/org-role";
-import type { CurrentUserResult } from "@/lib/permissions/current-user";
+import { getCurrentUser, type CurrentUserResult } from "@/lib/permissions/current-user";
+import type { CurrentUserRecord, CurrentUserRepository } from "@/lib/permissions/current-user-repository";
 import { InMemoryMembershipRepository } from "../../support/in-memory-membership-repository";
 
 // Every test passes its own user: the mock only keeps next-auth from loading
@@ -103,15 +104,106 @@ describe("getOrgRole", () => {
     });
   });
 
-  it("rejects an Admin as not-member when they have no membership in the club", async () => {
-    // Admin is a platform role: its own permissions go through requireAdmin (#50)
-    const admin = async (): Promise<CurrentUserResult> => ({
-      ok: true,
-      user: { id: USER_ID, email: "admin@42madrid.com", nick: "admin42", roleGlobal: "admin" },
+  describe("Admin", () => {
+    const ADMIN_ID = "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e";
+
+    const ADMIN_USER = { id: ADMIN_ID, email: "admin@42madrid.com", nick: "admin42", roleGlobal: "admin" } as const;
+
+    // getCurrentUser already passed: roleGlobal comes from the database
+    async function admin(): Promise<CurrentUserResult> {
+      return { ok: true, user: ADMIN_USER };
+    }
+
+    it("rejects a blocked Admin as blocked, even in a row that allows admin", async () => {
+      // The real getCurrentUser, with an Admin account that is blocked in the database
+      const blockedAdmin: CurrentUserRecord = { ...ADMIN_USER, blockedAt: new Date("2026-11-09T10:00:00Z") };
+      const users: CurrentUserRepository = { findById: async (id) => (id === ADMIN_ID ? blockedAdmin : null) };
+      const session = async () => ({ user: { id: ADMIN_ID }, expires: "2099-01-01T00:00:00.000Z" });
+      repo.addOrganization(CLUB);
+
+      const result = await getOrgRole(CLUB, ["manager", "admin"], () => getCurrentUser(session, users), repo);
+
+      expect(result).toEqual({ ok: false, reason: "blocked" });
     });
 
-    const result = await getOrgRole(CLUB, ["manager", "athlete"], admin, repo);
+    it("lets in an Admin who is not a member when the row allows admin, as role admin", async () => {
+      repo.addOrganization(CLUB);
 
-    expect(result).toEqual({ ok: false, reason: "not-member" });
+      const result = await getOrgRole(CLUB, ["manager", "admin"], admin, repo);
+
+      expect(result).toEqual({ ok: true, user: ADMIN_USER, role: "admin" });
+    });
+
+    it("rejects an Admin who is not a member as not-member when the row does not allow admin", async () => {
+      repo.addOrganization(CLUB);
+
+      const result = await getOrgRole(CLUB, ["manager", "athlete"], admin, repo);
+
+      expect(result).toEqual({ ok: false, reason: "not-member" });
+    });
+
+    it("rejects an Admin as not-member when the club does not exist", async () => {
+      const result = await getOrgRole(CLUB, ["manager", "admin"], admin, repo);
+
+      expect(result).toEqual({ ok: false, reason: "not-member" });
+    });
+
+    it("rejects an Admin as not-member when the club id is not a UUID, without asking the database", async () => {
+      // The id check returns first; the in-memory repository would throw, like Prisma
+      const result = await getOrgRole("not-a-uuid", ["manager", "admin"], admin, repo);
+
+      expect(result).toEqual({ ok: false, reason: "not-member" });
+    });
+
+    it("lets in an Admin who is an Athlete of the club as role admin when the row allows admin, even if it allows athlete too", async () => {
+      // group.read: as Admin they see every Group, as Athlete only their own
+      repo.add(ADMIN_ID, CLUB, "athlete");
+
+      const result = await getOrgRole(CLUB, ["manager", "athlete", "admin"], admin, repo);
+
+      expect(result).toEqual({ ok: true, user: ADMIN_USER, role: "admin" });
+    });
+
+    it("lets in an Admin who is an Athlete of the club with their club role when the row does not allow admin", async () => {
+      // session.read: their own sessions, as any Athlete
+      repo.add(ADMIN_ID, CLUB, "athlete");
+
+      const result = await getOrgRole(CLUB, ["manager", "athlete"], admin, repo);
+
+      expect(result).toEqual({ ok: true, user: ADMIN_USER, role: "athlete" });
+    });
+
+    it("lets in an Admin who is an Athlete of the club as role admin when only Managers and Admins may act", async () => {
+      repo.add(ADMIN_ID, CLUB, "athlete");
+
+      const result = await getOrgRole(CLUB, ["manager", "admin"], admin, repo);
+
+      expect(result).toEqual({ ok: true, user: ADMIN_USER, role: "admin" });
+    });
+
+    it("keeps an Admin who is a Manager of the club as role manager when the row allows manager and admin", async () => {
+      // eventChat.moderate: as Manager they delete any message, as Admin only reported ones
+      repo.add(ADMIN_ID, CLUB, "manager");
+
+      const result = await getOrgRole(CLUB, ["manager", "admin"], admin, repo);
+
+      expect(result).toEqual({ ok: true, user: ADMIN_USER, role: "manager" });
+    });
+
+    it("rejects an Admin who is an Athlete of the club as wrong-role when the row allows neither", async () => {
+      repo.add(ADMIN_ID, CLUB, "athlete");
+
+      const result = await getOrgRole(CLUB, ["manager"], admin, repo);
+
+      expect(result).toEqual({ ok: false, reason: "wrong-role" });
+    });
+
+    it("rejects a user who is not an Admin as not-member when the row allows admin", async () => {
+      repo.addOrganization(CLUB);
+
+      const result = await getOrgRole(CLUB, ["manager", "admin"], activeUser, repo);
+
+      expect(result).toEqual({ ok: false, reason: "not-member" });
+    });
   });
 });

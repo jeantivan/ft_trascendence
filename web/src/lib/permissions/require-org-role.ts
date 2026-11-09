@@ -1,7 +1,6 @@
 import { forbidden, notFound, redirect } from "next/navigation";
-import type { MembershipRole } from "@/generated/prisma/client";
 import type { CurrentUser } from "./current-user";
-import { getOrgRole, type OrgRoleCheck } from "./org-role";
+import { getOrgRole, type OrgRole, type OrgRoleCheck } from "./org-role";
 
 // For pages and Server Actions. Same redirects as requireAuth for the session;
 // not a member → 404 (hides which clubs exist), member without the role → 403.
@@ -9,9 +8,9 @@ import { getOrgRole, type OrgRoleCheck } from "./org-role";
 // and a catch would swallow them (eslint.config.mjs rejects it inside a try block)
 export async function requireOrgRole(
   orgId: string,
-  roles: readonly MembershipRole[],
+  roles: readonly OrgRole[],
   checkOrgRole: OrgRoleCheck = getOrgRole
-): Promise<{ user: CurrentUser; role: MembershipRole }> {
+): Promise<{ user: CurrentUser; role: OrgRole }> {
   const result = await checkOrgRole(orgId, roles);
   if (!result.ok) {
     switch (result.reason) {

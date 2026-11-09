@@ -4,7 +4,11 @@ import type { PrismaClient } from "@/generated/prisma/client";
 
 describe("PrismaMembershipRepository", () => {
   const mockPrismaMembership = { findUnique: vi.fn() };
-  const mockDb = { membership: mockPrismaMembership } as unknown as PrismaClient;
+  const mockPrismaOrganization = { count: vi.fn() };
+  const mockDb = {
+    membership: mockPrismaMembership,
+    organization: mockPrismaOrganization,
+  } as unknown as PrismaClient;
   const repo = new PrismaMembershipRepository(mockDb);
 
   beforeEach(() => {
@@ -29,5 +33,14 @@ describe("PrismaMembershipRepository", () => {
     const role = await repo.findRole("u1", "club-1");
 
     expect(role).toBeNull();
+  });
+
+  it("asks whether the club exists by its id only", async () => {
+    mockPrismaOrganization.count.mockResolvedValueOnce(1);
+
+    const exists = await repo.organizationExists("club-1");
+
+    expect(mockPrismaOrganization.count).toHaveBeenCalledWith({ where: { id: "club-1" } });
+    expect(exists).toBe(true);
   });
 });

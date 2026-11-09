@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { PrismaMembershipRepository } from "@/lib/permissions/membership-repository";
 
 const PREFIX = "membership-repository-";
+// A valid id that no club in the test database has
+const MISSING_CLUB = "6f1c2a4e-8b3d-4c5e-9f7a-1b2c3d4e5f60";
 const repository = new PrismaMembershipRepository(prisma);
 
 function createClub(name: string) {
@@ -46,5 +48,13 @@ describe("Integration: PrismaMembershipRepository", () => {
     await prisma.membership.create({ data: { userId, orgId: otherClub.id, role: "manager" } });
 
     await expect(repository.findRole(userId, orgId)).resolves.toBeNull();
+  });
+
+  it("says a club exists when it is in the database", async () => {
+    await expect(repository.organizationExists(orgId)).resolves.toBe(true);
+  });
+
+  it("says a club does not exist when no club has that id", async () => {
+    await expect(repository.organizationExists(MISSING_CLUB)).resolves.toBe(false);
   });
 });

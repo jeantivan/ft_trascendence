@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
-import type { MembershipRole } from "@/generated/prisma/client";
 import type { CurrentUser } from "./current-user";
-import { getOrgRole, type OrgRoleCheck } from "./org-role";
+import { getOrgRole, type OrgRole, type OrgRoleCheck } from "./org-role";
 import { requireOrgRole } from "./require-org-role";
 
 // For a page or Server Action that receives a resource id (a Group, an Event...).
@@ -13,9 +12,9 @@ import { requireOrgRole } from "./require-org-role";
 // resource and for one from another club.
 export async function requireOrgResource<T extends { orgId: string }>(
   resource: T | null,
-  roles: readonly MembershipRole[],
+  roles: readonly OrgRole[],
   checkOrgRole: OrgRoleCheck = getOrgRole
-): Promise<{ resource: T; user: CurrentUser; role: MembershipRole }> {
+): Promise<{ resource: T; user: CurrentUser; role: OrgRole }> {
   const { user, role } = await requireOrgRole(resource?.orgId ?? "", roles, checkOrgRole);
   // Today "" already ended in not-member above; this check does not depend on it
   if (!resource) {
