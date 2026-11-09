@@ -12,6 +12,14 @@ Componentes reutilizables y tokens de la app. Fuente de verdad del diseño:
 5. Fuentes: `font-heading` (Space Grotesk) y `font-sans` (Hanken Grotesk). No usar otras.
 6. Al añadir un componente, actualizar la tabla de este README en el mismo PR.
 
+## Definition of Done (un ticket de componente)
+
+- Cumple sus criterios de aceptación y usa solo tokens (regla 3).
+- Está en la tabla de componentes de este README, con su ejemplo de uso.
+- Las pantallas que ya tenían ese elemento lo usan (nada de duplicados con clases sueltas).
+- `make test` pasa y se ha comprobado en el navegador (`https://localhost:8443`).
+- El PR dice qué se ha comprobado y qué no, y el CI pasa. El merge lo hace Jean.
+
 ## Tokens (`web/src/app/globals.css`)
 
 | Qué | Clases de Tailwind | Notas |
@@ -25,8 +33,10 @@ Componentes reutilizables y tokens de la app. Fuente de verdad del diseño:
 
 ## Componentes
 
-Aún no hay ninguno; se añaden por oleadas (ver el ticket del módulo). Al crear uno, añade una fila:
+Se añaden por oleadas (ver el ticket del módulo). Al crear uno, añade una fila:
 
 | Componente | Fichero | Para qué | Props principales |
 |---|---|---|---|
-| _(vacío)_ | | | |
+| `Button` | `Button.tsx` | Acciones y enlaces con aspecto de botón (48px) | `variant`: `primary` (por defecto), `ghost`, `destructive`. Con `href` es un `Link`; sin `href`, un `<button type="button">` (pasa `type="submit"` para enviar formularios). Acepta el resto de props de `<button>` o `Link` y `className` |
+
+Ejemplo: `<Button variant="ghost" href="/events">Ver Events</Button>`.

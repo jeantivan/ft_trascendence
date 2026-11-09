@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { registerAction, type AuthActionResult } from "@/lib/auth/actions";
+import { Button } from "@/components/ui/Button";
 import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
@@ -62,13 +63,9 @@ export function RegisterForm() {
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="mt-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded transition"
-      >
+      <Button type="submit" disabled={isPending} className="mt-2">
         {isPending ? "Registrando..." : "Crear cuenta"}
-      </button>
+      </Button>
 
       <p className="text-sm text-center text-neutral-500 mt-2">
         ¿Ya tienes cuenta?{" "}

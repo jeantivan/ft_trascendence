@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
+import { Button } from "@/components/ui/Button";
 import { deleteAccountAction, requestDeleteCodeAction } from "@/lib/gdpr/actions";
 
 const CODE_LENGTH = 6;
@@ -9,9 +10,6 @@ const CODE_LENGTH = 6;
 const COOLDOWN_SECONDS = 60;
 
 type RequestFeedback = { kind: "sent" } | { kind: "error"; message: string };
-
-const buttonBase =
-  "inline-flex h-12 items-center justify-center rounded px-6 font-heading font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 // Drop-in section for Ajustes > Privacidad: it needs no props and no route of its own
 export function DeleteAccountSection() {
@@ -57,14 +55,9 @@ export function DeleteAccountSection() {
       </p>
 
       <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={requestCode}
-          disabled={busy || cooldown > 0}
-          className={`${buttonBase} bg-volt text-surface-base hover:scale-[1.01] focus-visible:outline-volt`}
-        >
+        <Button onClick={requestCode} disabled={busy || cooldown > 0}>
           {isRequesting ? "Enviando…" : cooldown > 0 ? `Reenviar en ${cooldown} s` : "Enviar código"}
-        </button>
+        </Button>
         {feedback?.kind === "sent" && (
           <p role="status" className="text-sm text-text-secondary">
             Te hemos enviado un código a tu correo. Caduca en 10 minutos.
@@ -99,13 +92,9 @@ export function DeleteAccountSection() {
             {deleteState.error}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={busy || code.length !== CODE_LENGTH}
-          className={`${buttonBase} border border-red-500 bg-surface-overlay text-red-500 focus-visible:outline-red-500`}
-        >
+        <Button type="submit" variant="destructive" disabled={busy || code.length !== CODE_LENGTH}>
           {isDeleting ? "Borrando…" : "Borrar mi cuenta definitivamente"}
-        </button>
+        </Button>
       </form>
     </section>
   );
