@@ -22,6 +22,13 @@ const eslintConfig = defineConfig([
           message:
             "Call requireOrgRole() and requireOrgResource() outside try/catch: redirect(), notFound() and forbidden() throw, and a catch would swallow them.",
         },
+        {
+          // The API version (requireApiAdmin) returns a Response instead
+          selector:
+            "TryStatement[handler] > BlockStatement.block CallExpression[callee.name='requireAdmin']",
+          message:
+            "Call requireAdmin() outside try/catch: redirect() and forbidden() throw, and a catch would swallow them.",
+        },
       ],
     },
   },
