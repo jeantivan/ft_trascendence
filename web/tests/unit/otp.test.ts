@@ -194,7 +194,8 @@ describe("verifyOtp", () => {
     expect(record?.consumedAt).toBeNull();
   });
 
-  it("no comprueba más de cinco intentos aunque lleguen a la vez", async () => {
+  // 20 real hash checks at once: with other test files running in parallel the 5 s default is too tight
+  it("no comprueba más de cinco intentos aunque lleguen a la vez", { timeout: 30_000 }, async () => {
     const code = await issueCode(USER_ID, "delete_account", repo);
     const wrongCode = code === "000000" ? "000001" : "000000";
     const { codeHash } = (await repo.findLatest(USER_ID, "delete_account"))!;

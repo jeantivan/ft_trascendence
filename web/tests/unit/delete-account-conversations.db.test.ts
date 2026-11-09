@@ -4,16 +4,15 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
 import { deleteWithFreshOtp } from "../support/delete-account-helper";
 
-// These tests delete rows, so they only run against a database whose name ends in _test
+// These tests delete rows. vitest.config.mts only runs them against a database ending in _test
 const url = process.env.DATABASE_URL_TEST;
-const isTestDatabase = url !== undefined && new URL(url).pathname.endsWith("_test");
 
 const USER_A = "77777777-7777-4777-8777-777777777771";
 const USER_B = "77777777-7777-4777-8777-777777777772";
 
 // Conversations and messages after an account is deleted (docs/gdpr/account-deletion-table.md).
 // Plain participants only: what removed_at means for a deletion is still an open question.
-describe.skipIf(!isTestDatabase)("borrado de cuenta: conversaciones y mensajes", { timeout: 30_000 }, () => {
+describe("borrado de cuenta: conversaciones y mensajes", { timeout: 30_000 }, () => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
   let conversationId: string;
@@ -60,6 +59,8 @@ describe.skipIf(!isTestDatabase)("borrado de cuenta: conversaciones y mensajes",
   afterEach(async () => {
     // Conversations first: a failing test may leave one behind, and it has no owner left to cascade from
     await db.conversation.deleteMany({ where: { id: conversationId } });
+    // account_deleted rows have no FK to User, so deleting the users does not remove them
+    await db.auditLog.deleteMany({ where: { actorId: { in: [USER_A, USER_B] } } });
     await db.user.deleteMany({ where: { id: { in: [USER_A, USER_B] } } });
     if (orgId) await db.organization.deleteMany({ where: { id: orgId } });
     orgId = undefined;

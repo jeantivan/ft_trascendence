@@ -3,17 +3,16 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
 import { deleteAccountWithOtp } from "@/lib/gdpr/delete-account";
-import { deleteWithFreshOtp } from "../support/delete-account-helper";
+import { deleteWithFreshOtp, failNotifications } from "../support/delete-account-helper";
 
-// These tests delete rows, so they only run against a database whose name ends in _test
+// These tests delete rows. vitest.config.mts only runs them against a database ending in _test
 const url = process.env.DATABASE_URL_TEST;
-const isTestDatabase = url !== undefined && new URL(url).pathname.endsWith("_test");
 
 const LEAVING_ID = "88888888-8888-4888-8888-888888888881";
 const ADMIN_ID = "88888888-8888-4888-8888-888888888882";
 
 // The account_deleted audit row (docs/gdpr/account-deletion-table.md, Privacy Policy section 7)
-describe.skipIf(!isTestDatabase)("borrado de cuenta: auditoría", { timeout: 30_000 }, () => {
+describe("borrado de cuenta: auditoría", { timeout: 30_000 }, () => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
   const auditRows = () => db.auditLog.findMany({ where: { actorId: LEAVING_ID, action: "account_deleted" } });
@@ -54,21 +53,12 @@ describe.skipIf(!isTestDatabase)("borrado de cuenta: auditoría", { timeout: 30_
   });
 
   it("no deja fila si la transacción se revierte", async () => {
-    // Same failure as the rollback test in delete-account.test.ts: a Manager of a club with an Admin
+    // Same failure as the rollback test in delete-account.db.test.ts: a Manager of a club with an Admin
     // to notify, every notification write throwing. The audit row is written before that point
     await db.user.create({ data: { id: ADMIN_ID, email: "audit-admin@example.test", roleGlobal: "admin" } });
     const org = await db.organization.create({ data: { name: "audit-rollback-club", timezone: "Europe/Madrid" } });
     await db.membership.create({ data: { userId: LEAVING_ID, orgId: org.id, role: "manager" } });
-    const injected = new Error("notification write failed");
-    const failing = db.$extends({
-      query: {
-        notification: {
-          $allOperations() {
-            throw injected;
-          },
-        },
-      },
-    }) as unknown as PrismaClient;
+    const { injected, failing } = failNotifications(db);
 
     try {
       await expect(deleteWithFreshOtp(LEAVING_ID, db, failing)).rejects.toBe(injected);

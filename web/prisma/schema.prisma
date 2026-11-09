@@ -564,8 +564,8 @@ model AuditLog {
   id         BigInt      @id @default(autoincrement())
   actorId    String      @map("actor_id") @db.Uuid
   subjectId  String?     @map("subject_id") @db.Uuid
-  // Null in consent events: the person acts on their own behalf, so no role
-  // applies (it does not mean "unknown")
+  // Null in consent events and in account_deleted (#34): the person acts on
+  // their own behalf, so no role applies (it does not mean "unknown")
   actorRole  ActorRole?  @map("actor_role")
   action     AuditAction
   // e.g. "session_log", "feedback", "message"

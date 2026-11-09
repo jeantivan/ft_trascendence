@@ -3,12 +3,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterEach, afterAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
 import { deleteAccountWithOtp } from "@/lib/gdpr/delete-account";
-import { deleteWithFreshOtp, issueDeleteCode } from "../support/delete-account-helper";
+import { deleteWithFreshOtp, failNotifications, issueDeleteCode } from "../support/delete-account-helper";
 
-// These tests delete rows, so they only run against a database whose name ends
-// in _test (the db-test container). Without DATABASE_URL_TEST they are skipped.
+// These tests delete rows. vitest.config.mts only runs them against a database ending in _test
 const url = process.env.DATABASE_URL_TEST;
-const isTestDatabase = url !== undefined && new URL(url).pathname.endsWith("_test");
 
 const ADMIN_1 = "a0000000-0000-4000-8000-000000000001";
 const ADMIN_2 = "a0000000-0000-4000-8000-000000000002";
@@ -21,7 +19,7 @@ const USER_IDS = [ADMIN_1, ADMIN_2, MANAGER_A, MANAGER_B];
 const ORG_IDS = [ORG_1, ORG_2];
 
 // Real password hashing on every OTP: with other test files running in parallel the 5 s default is too tight
-describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000 }, () => {
+describe("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000 }, () => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
   async function createUser(id: string, roleGlobal: "admin" | "user") {
@@ -54,6 +52,8 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
 
   // Deleting the users cascades to memberships and notifications
   afterEach(async () => {
+    // account_deleted rows have no FK to User, so deleting the users does not remove them
+    await db.auditLog.deleteMany({ where: { actorId: { in: USER_IDS } } });
     await db.user.deleteMany({ where: { id: { in: USER_IDS } } });
     await db.organization.deleteMany({ where: { id: { in: ORG_IDS } } });
   });
@@ -117,17 +117,7 @@ describe.skipIf(!isTestDatabase)("deleteAccount: aviso al Admin por club sin Man
 
   it("si falla crear las notificaciones, el borrado también se revierte", async () => {
     await createClub(ORG_1, [MANAGER_A]);
-    const injected = new Error("notification write failed");
-    // Every notification write throws; the extended client still runs inside transactions
-    const failing = db.$extends({
-      query: {
-        notification: {
-          $allOperations() {
-            throw injected;
-          },
-        },
-      },
-    }) as unknown as PrismaClient;
+    const { injected, failing } = failNotifications(db);
 
     // toBe: it must be the injected error itself, not another failure that happens to share text
     await expect(deleteWithFreshOtp(MANAGER_A, db, failing)).rejects.toBe(injected);
