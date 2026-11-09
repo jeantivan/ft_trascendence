@@ -100,6 +100,8 @@ describe("account deletion and avatar upload at the same time", { timeout: 30_00
       await waitUntilBlockedBy(await uploadPid);
     } finally {
       openGate(); // also on failure, or the open transaction would hang the cleanup
+      // Both finished before afterEach cleans up; allSettled never throws, so a failure above keeps its error
+      await Promise.allSettled([upload, deletion]);
     }
     await upload;
 
@@ -152,6 +154,8 @@ describe("account deletion and avatar upload at the same time", { timeout: 30_00
       await waitUntilBlocked(await uploadPid);
     } finally {
       openGate();
+      // As in the first test; uploadOutcome is undefined if the failure came before the upload started
+      await Promise.allSettled([holder, deletion, uploadOutcome]);
     }
     await holder;
 

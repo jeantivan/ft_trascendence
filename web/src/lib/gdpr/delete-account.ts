@@ -65,7 +65,8 @@ export async function deleteAccountWithOtp(
         // would lose its Avatar row to the cascade and leave its file behind. FOR UPDATE, not
         // user.update: it also waits for the upload's avatar insert (its foreign key check
         // holds a KEY SHARE lock), which user.update does not, and that ends in a deadlock.
-        // Lock order: this user first, then clubs, then conversations (deleteAccountRows)
+        // Lock order: this user first, then clubs, then conversations (deleteAccountRows).
+        // The wait for this lock counts against the transaction timeout (5 s by default)
         await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
         const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
         avatarPaths = avatars.map((avatar) => avatar.path);
