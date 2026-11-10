@@ -49,7 +49,7 @@ describe("UserSettingsService", () => {
         nick: "oauthuser",
       });
       // Simulate passwordHash === null
-      await repo.updatePassword(user.id, null as unknown as string);
+      await repo.updatePassword(user.id, null);
 
       const profile = await service.getProfile(user.id);
 
@@ -112,7 +112,7 @@ describe("UserSettingsService", () => {
         passwordHash: "",
         nick: "oauthuser",
       });
-      await repo.updatePassword(user.id, null as unknown as string);
+      await repo.updatePassword(user.id, null);
 
       const updated = await service.updateEmail(user.id, {
         email: "NEW-OAUTH@42.COM",
@@ -180,7 +180,7 @@ describe("UserSettingsService", () => {
         passwordHash: "",
         nick: "user2",
       });
-      await repo.updatePassword(user2.id, null as unknown as string);
+      await repo.updatePassword(user2.id, null);
 
       await expect(
         service.updateEmail(user2.id, { email: "existing@42.com" })
@@ -195,7 +195,7 @@ describe("UserSettingsService", () => {
         passwordHash: "",
         nick: "oauthuser",
       });
-      await repo.updatePassword(user.id, null as unknown as string);
+      await repo.updatePassword(user.id, null);
 
       await service.updatePassword(user.id, {
         newPassword: "nuevaPasswordSegura123",
@@ -246,7 +246,7 @@ describe("UserSettingsService", () => {
         passwordHash: "",
         nick: "oauthuser",
       });
-      await repo.updatePassword(user.id, null as unknown as string);
+      await repo.updatePassword(user.id, null);
 
       await expect(
         service.updatePassword(user.id, {

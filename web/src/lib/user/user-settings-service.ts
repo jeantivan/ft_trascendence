@@ -55,7 +55,7 @@ export class UserSettingsService {
       email: user.email,
       nick: user.nick,
       image: user.image ?? null,
-      hasPassword: user.passwordHash !== null && user.passwordHash.length > 0,
+      hasPassword: user.passwordHash !== null,
       statsPublic: user.statsPublic ?? false,
       showOnline: user.showOnline ?? true,
       notificationsEnabled: user.notificationsEnabled ?? true,
@@ -69,6 +69,21 @@ export class UserSettingsService {
       throw new UserNotFoundError();
     }
     return user;
+  }
+
+  private async verifyCurrentPasswordIfRequired(
+    user: AuthUser,
+    currentPassword?: string
+  ): Promise<void> {
+    if (user.passwordHash === null) return;
+
+    if (!currentPassword) {
+      throw new InvalidCurrentPasswordError("Se requiere la contraseña actual");
+    }
+    const matches = await this.hasher.verify(currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new InvalidCurrentPasswordError("La contraseña actual es incorrecta");
+    }
   }
 
   async getProfile(userId: string): Promise<SettingsProfile> {
@@ -87,16 +102,7 @@ export class UserSettingsService {
     const validated = updateEmailSchema.parse(input);
     const user = await this.getActiveUser(userId);
 
-    const hasPassword = user.passwordHash !== null && user.passwordHash.length > 0;
-    if (hasPassword) {
-      if (!validated.currentPassword) {
-        throw new InvalidCurrentPasswordError("Se requiere la contraseña actual");
-      }
-      const matches = await this.hasher.verify(validated.currentPassword, user.passwordHash!);
-      if (!matches) {
-        throw new InvalidCurrentPasswordError("La contraseña actual es incorrecta");
-      }
-    }
+    await this.verifyCurrentPasswordIfRequired(user, validated.currentPassword);
 
     const updated = await this.repo.updateEmail(userId, validated.email);
     return this.toSettingsProfile(updated);
@@ -106,16 +112,7 @@ export class UserSettingsService {
     const validated = updatePasswordSchema.parse(input);
     const user = await this.getActiveUser(userId);
 
-    const hasPassword = user.passwordHash !== null && user.passwordHash.length > 0;
-    if (hasPassword) {
-      if (!validated.currentPassword) {
-        throw new InvalidCurrentPasswordError("Se requiere la contraseña actual");
-      }
-      const matches = await this.hasher.verify(validated.currentPassword, user.passwordHash!);
-      if (!matches) {
-        throw new InvalidCurrentPasswordError("La contraseña actual es incorrecta");
-      }
-    }
+    await this.verifyCurrentPasswordIfRequired(user, validated.currentPassword);
 
     const newHash = await this.hasher.hash(validated.newPassword);
     await this.repo.updatePassword(userId, newHash);

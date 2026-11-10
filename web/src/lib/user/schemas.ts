@@ -4,8 +4,8 @@ export const updateNickSchema = z.object({
   nick: z
     .string()
     .trim()
-    .min(2, "El alias debe tener al menos 2 caracteres")
-    .max(30, "El alias no puede superar los 30 caracteres"),
+    .min(2, "El nick debe tener al menos 2 caracteres")
+    .max(30, "El nick no puede superar los 30 caracteres"),
 });
 
 export const updateEmailSchema = z.object({

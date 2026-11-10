@@ -72,7 +72,7 @@ export class InMemoryUserRepository implements UserRepository {
     return updated;
   }
 
-  async updatePassword(id: string, passwordHash: string): Promise<AuthUser> {
+  async updatePassword(id: string, passwordHash: string | null): Promise<AuthUser> {
     const user = this.users.get(id);
     if (!user) {
       throw new Error(`User with id ${id} not found`);

@@ -34,7 +34,7 @@ export interface UserRepository {
   createUser(input: CreateUserInput): Promise<AuthUser>;
   updateNick(id: string, nick: string): Promise<AuthUser>;
   updateEmail(id: string, email: string): Promise<AuthUser>;
-  updatePassword(id: string, passwordHash: string): Promise<AuthUser>;
+  updatePassword(id: string, passwordHash: string | null): Promise<AuthUser>;
 }
 
 export class PrismaUserRepository implements UserRepository {
@@ -125,7 +125,7 @@ export class PrismaUserRepository implements UserRepository {
     }
   }
 
-  async updatePassword(id: string, passwordHash: string): Promise<AuthUser> {
+  async updatePassword(id: string, passwordHash: string | null): Promise<AuthUser> {
     const user = await this.db.user.update({
       where: { id },
       data: { passwordHash },
