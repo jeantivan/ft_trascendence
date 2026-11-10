@@ -47,6 +47,7 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. T
 
 - No leer, mostrar ni versionar `.env`, tokens, claves privadas ni certificados. Si se añade una variable, actualizar `.env.example` con valores vacíos o ficticios.
 - RPE y Feedback son datos de salud: no van a logs ni dentro del payload de eventos SSE o notificaciones. El evento lleva solo ids; el cliente pide el dato a un endpoint que comprueba permisos.
+- Un token en un enlace va siempre en el parámetro `token` (`?token=...`), nunca en la ruta: así NGINX y `next dev` lo dejan fuera de sus logs (#185). Su ruta necesita además su propio bloque `location` en `nginx/app.conf`, como el de la descarga de la exportación, para que el log de errores de NGINX tampoco lo copie.
 
 ## Operaciones destructivas
 
