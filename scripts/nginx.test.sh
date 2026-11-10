@@ -31,9 +31,15 @@ curl_https() {
 }
 
 # make dev is detected by the app's image name (image: transcendence-app-dev in
-# docker-compose.dev.yml): if that name changes, update this line. Used by checks 10 and 19
+# docker-compose.dev.yml): if that name changes, update this line. Used by checks 10 and 19.
+# Read from the container, not from docker compose ps: make test builds an image with
+# the same name, and then ps can show the running container's image as a bare sha256
 is_dev=false
-if docker compose ps app --format '{{.Image}}' | grep -q -- '-dev$'; then is_dev=true; fi
+app_container=$(docker compose ps -q app 2>/dev/null)
+if [ -n "$app_container" ] &&
+  docker inspect -f '{{.Config.Image}}' "$app_container" 2>/dev/null | grep -q -- '-dev$'; then
+  is_dev=true
+fi
 
 # The last minute of a service's log: enough for one check's requests, and quick
 # after a long make dev
