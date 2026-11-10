@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type AuthActionResult } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
@@ -31,14 +32,13 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
         <label htmlFor="email" className="text-sm font-medium">
           Email
         </label>
-        <input
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
           placeholder="runner@42madrid.com"
-          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 
@@ -46,14 +46,13 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
         <label htmlFor="password" className="text-sm font-medium">
           Contraseña
         </label>
-        <input
+        <Input
           id="password"
           name="password"
           type="password"
           required
           autoComplete="current-password"
           placeholder="••••••••"
-          className="px-3 py-2 border rounded dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700"
         />
       </div>
 

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { deleteAccountAction, requestDeleteCodeAction } from "@/lib/gdpr/actions";
 
 const CODE_LENGTH = 6;
@@ -75,7 +76,7 @@ export function DeleteAccountSection() {
           <label htmlFor="delete-account-code" className="text-sm font-medium text-text-primary">
             Código de confirmación
           </label>
-          <input
+          <Input
             id="delete-account-code"
             name="code"
             value={code}
@@ -84,7 +85,6 @@ export function DeleteAccountSection() {
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={CODE_LENGTH}
-            className="h-12 rounded border border-border-subtle bg-surface-overlay px-3 text-text-primary focus:border-volt focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
         {!deleteState.success && (
