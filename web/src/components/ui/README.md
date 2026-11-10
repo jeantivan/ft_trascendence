@@ -40,7 +40,9 @@ Se añaden por oleadas (ver el ticket del módulo). Al crear uno, añade una fil
 | `Button` | `Button.tsx` | Acciones y enlaces con aspecto de botón (48px) | `variant`: `primary` (por defecto), `ghost`, `destructive`. Con `href` es un `Link`; sin `href`, un `<button type="button">` (pasa `type="submit"` para enviar formularios). Acepta el resto de props de `<button>` o `Link` y `className` |
 | `Logo` | `Logo.tsx` | Logo de StrideSync (SVG inline, con sus colores propios: no usa tokens, a propósito) | `variant`: `full` (por defecto, marca + texto) o `mark` (solo el cuadrado con el rayo, para la barra lateral colapsada). El tamaño lo da `className` (`h-8 w-auto`). Acepta el resto de props de `<svg>` |
 | `Input` | `Input.tsx` | Campo de texto de una línea (48px) | Acepta las props de `<input>` y `className`. Con `aria-invalid="true"` muestra borde y foco en rojo (`rpe-max`); en reposo, foco `volt`. `disabled` lo atenúa. La etiqueta (`<label htmlFor>`) va fuera del componente |
+| `Avatar` | `Avatar.tsx` | Foto de perfil o silueta genérica determinista (#130) | `image`: URL de la imagen o `null`/`undefined` (renderiza silueta); `alt`: texto accesible; `size`: `sm` (32px), `md` (48px, por defecto), `lg` (64px). Acepta el resto de props de `<div>` y `className` |
 
 Ejemplo: `<Button variant="ghost" href="/events">Ver Events</Button>`.
 Ejemplo: `<Logo className="h-8 w-auto" />`, o `<Logo variant="mark" className="size-10" />` para solo la marca.
 Ejemplo: `<label htmlFor="email">Email</label>` y `<Input id="email" name="email" type="email" aria-invalid={Boolean(error)} />`.
+Ejemplo: `<Avatar image={user.image} alt={user.nick ?? "Usuario"} size="md" />`.
