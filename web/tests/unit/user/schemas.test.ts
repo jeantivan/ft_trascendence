@@ -87,5 +87,19 @@ describe("User settings Zod schemas", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("accepts new password of exactly 72 bytes with 2-byte characters", () => {
+      const result = updatePasswordSchema.safeParse({
+        newPassword: "ñ".repeat(36),
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects new password exceeding 72 bytes even if character count is under 72", () => {
+      const result = updatePasswordSchema.safeParse({
+        newPassword: "ñ".repeat(36) + "A",
+      });
+      expect(result.success).toBe(false);
+    });
   });
 });

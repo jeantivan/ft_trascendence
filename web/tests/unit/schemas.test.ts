@@ -85,6 +85,24 @@ describe("Auth Zod schemas", () => {
       expect(result.success).toBe(false);
     });
 
+    it("accepts password of exactly 72 bytes with 2-byte characters", () => {
+      const result = registerSchema.safeParse({
+        email: "newrunner@42madrid.com",
+        password: "ñ".repeat(36),
+        nick: "fastrunner",
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects password exceeding 72 bytes even if character count is under 72", () => {
+      const result = registerSchema.safeParse({
+        email: "newrunner@42madrid.com",
+        password: "ñ".repeat(36) + "A",
+        nick: "fastrunner",
+      });
+      expect(result.success).toBe(false);
+    });
+
     it("normalizes email to lowercase", () => {
       const result = registerSchema.safeParse({
         email: "NEWRUNNER@42Madrid.COM",

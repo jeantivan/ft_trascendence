@@ -32,7 +32,7 @@ export class InvalidCurrentPasswordError extends Error {
 
 export class EmailChangeNotAllowedForOAuthError extends Error {
   constructor(
-    message = "No se permite cambiar el email en cuentas registradas exclusivamente con OAuth"
+    message = "Email change is not allowed for OAuth-only accounts"
   ) {
     super(message);
     this.name = "EmailChangeNotAllowedForOAuthError";
