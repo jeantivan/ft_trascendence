@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { InMemoryUserRepository } from "../../support/in-memory-user-repository";
 import {
+  EmailChangeNotAllowedForOAuthError,
   InvalidCurrentPasswordError,
+  MissingCurrentPasswordError,
   UserNotFoundError,
   UserSettingsService,
 } from "@/lib/user/user-settings-service";
@@ -37,19 +39,17 @@ describe("UserSettingsService", () => {
         showOnline: true,
         notificationsEnabled: true,
         healthConsentAt: null,
+        healthConsentVersion: null,
       });
       expect(profile).not.toHaveProperty("passwordHash");
     });
 
     it("returns profile with hasPassword: false for solo-OAuth accounts", async () => {
-      // Create user without password (simulating solo OAuth creation)
       const user = await repo.createUser({
         email: "oauth@42.com",
-        passwordHash: "",
+        passwordHash: null,
         nick: "oauthuser",
       });
-      // Simulate passwordHash === null
-      await repo.updatePassword(user.id, null);
 
       const profile = await service.getProfile(user.id);
 
@@ -106,21 +106,18 @@ describe("UserSettingsService", () => {
   });
 
   describe("updateEmail", () => {
-    it("updates email for solo-OAuth accounts without current password", async () => {
+    it("rejects email change for solo-OAuth accounts with EmailChangeNotAllowedForOAuthError", async () => {
       const user = await repo.createUser({
         email: "oauth@42.com",
-        passwordHash: "",
+        passwordHash: null,
         nick: "oauthuser",
       });
-      await repo.updatePassword(user.id, null);
 
-      const updated = await service.updateEmail(user.id, {
-        email: "NEW-OAUTH@42.COM",
-      });
-
-      expect(updated.email).toBe("new-oauth@42.com");
-      const found = await repo.findById(user.id);
-      expect(found?.email).toBe("new-oauth@42.com");
+      await expect(
+        service.updateEmail(user.id, {
+          email: "new-oauth@42.com",
+        })
+      ).rejects.toThrow(EmailChangeNotAllowedForOAuthError);
     });
 
     it("updates email for password accounts when current password matches", async () => {
@@ -140,7 +137,7 @@ describe("UserSettingsService", () => {
       expect(updated.email).toBe("newemail@42.com");
     });
 
-    it("throws InvalidCurrentPasswordError when current password is missing for password accounts", async () => {
+    it("throws MissingCurrentPasswordError when current password is missing for password accounts", async () => {
       const hash = await hashPassword("pass12345");
       const user = await repo.createUser({
         email: "runner@42.com",
@@ -150,7 +147,7 @@ describe("UserSettingsService", () => {
 
       await expect(
         service.updateEmail(user.id, { email: "newemail@42.com" })
-      ).rejects.toThrow(InvalidCurrentPasswordError);
+      ).rejects.toThrow(MissingCurrentPasswordError);
     });
 
     it("throws InvalidCurrentPasswordError when current password is wrong", async () => {
@@ -175,15 +172,19 @@ describe("UserSettingsService", () => {
         passwordHash: "hash1",
         nick: "user1",
       });
+      const password = "validPassword123";
+      const hash = await hashPassword(password);
       const user2 = await repo.createUser({
         email: "user2@42.com",
-        passwordHash: "",
+        passwordHash: hash,
         nick: "user2",
       });
-      await repo.updatePassword(user2.id, null);
 
       await expect(
-        service.updateEmail(user2.id, { email: "existing@42.com" })
+        service.updateEmail(user2.id, {
+          email: "existing@42.com",
+          currentPassword: password,
+        })
       ).rejects.toThrow(UserAlreadyExistsError);
     });
   });
@@ -192,10 +193,9 @@ describe("UserSettingsService", () => {
     it("sets first password for solo-OAuth accounts without current password", async () => {
       const user = await repo.createUser({
         email: "oauth@42.com",
-        passwordHash: "",
+        passwordHash: null,
         nick: "oauthuser",
       });
-      await repo.updatePassword(user.id, null);
 
       await service.updatePassword(user.id, {
         newPassword: "nuevaPasswordSegura123",
@@ -243,10 +243,9 @@ describe("UserSettingsService", () => {
     it("rejects new password shorter than 8 characters", async () => {
       const user = await repo.createUser({
         email: "oauth@42.com",
-        passwordHash: "",
+        passwordHash: null,
         nick: "oauthuser",
       });
-      await repo.updatePassword(user.id, null);
 
       await expect(
         service.updatePassword(user.id, {

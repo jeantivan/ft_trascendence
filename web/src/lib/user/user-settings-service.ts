@@ -16,10 +16,26 @@ export class UserNotFoundError extends Error {
   }
 }
 
+export class MissingCurrentPasswordError extends Error {
+  constructor(message = "Current password is required") {
+    super(message);
+    this.name = "MissingCurrentPasswordError";
+  }
+}
+
 export class InvalidCurrentPasswordError extends Error {
   constructor(message = "Current password is incorrect") {
     super(message);
     this.name = "InvalidCurrentPasswordError";
+  }
+}
+
+export class EmailChangeNotAllowedForOAuthError extends Error {
+  constructor(
+    message = "No se permite cambiar el email en cuentas registradas exclusivamente con OAuth"
+  ) {
+    super(message);
+    this.name = "EmailChangeNotAllowedForOAuthError";
   }
 }
 
@@ -33,6 +49,7 @@ export interface SettingsProfile {
   showOnline: boolean;
   notificationsEnabled: boolean;
   healthConsentAt: Date | null;
+  healthConsentVersion: number | null;
 }
 
 export interface PasswordHasher {
@@ -40,6 +57,11 @@ export interface PasswordHasher {
   verify(password: string, hash: string): Promise<boolean>;
 }
 
+/**
+ * Domain service for managing profile and credentials settings (#129).
+ * Precondition: callers (Server Actions or API route handlers) must invoke
+ * `requireAuth()` (#46) first to guarantee `userId` comes from an authenticated session.
+ */
 export class UserSettingsService {
   constructor(
     private readonly repo: UserRepository = userRepository,
@@ -60,6 +82,7 @@ export class UserSettingsService {
       showOnline: user.showOnline ?? true,
       notificationsEnabled: user.notificationsEnabled ?? true,
       healthConsentAt: user.healthConsentAt ?? null,
+      healthConsentVersion: user.healthConsentVersion ?? null,
     };
   }
 
@@ -78,7 +101,7 @@ export class UserSettingsService {
     if (user.passwordHash === null) return;
 
     if (!currentPassword) {
-      throw new InvalidCurrentPasswordError("Se requiere la contraseña actual");
+      throw new MissingCurrentPasswordError("Se requiere la contraseña actual");
     }
     const matches = await this.hasher.verify(currentPassword, user.passwordHash);
     if (!matches) {
@@ -98,9 +121,18 @@ export class UserSettingsService {
     return this.toSettingsProfile(updated);
   }
 
+  /**
+   * Updates the user's email address.
+   * Callers must verify session via `requireAuth()` (#46).
+   * Solo-OAuth accounts (passwordHash === null) cannot change email directly (anti-takeover security #66).
+   */
   async updateEmail(userId: string, input: UpdateEmailInput): Promise<SettingsProfile> {
     const validated = updateEmailSchema.parse(input);
     const user = await this.getActiveUser(userId);
+
+    if (user.passwordHash === null) {
+      throw new EmailChangeNotAllowedForOAuthError();
+    }
 
     await this.verifyCurrentPasswordIfRequired(user, validated.currentPassword);
 

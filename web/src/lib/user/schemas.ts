@@ -1,26 +1,17 @@
 import { z } from "zod";
+import { emailSchema, nickSchema, passwordSchema } from "@/lib/auth/schemas";
 
 export const updateNickSchema = z.object({
-  nick: z
-    .string()
-    .trim()
-    .min(2, "El nick debe tener al menos 2 caracteres")
-    .max(30, "El nick no puede superar los 30 caracteres"),
+  nick: nickSchema,
 });
 
 export const updateEmailSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .email("Formato de email no válido")
-    .toLowerCase(),
+  email: emailSchema,
   currentPassword: z.string().optional(),
 });
 
 export const updatePasswordSchema = z.object({
-  newPassword: z
-    .string()
-    .min(8, "La nueva contraseña debe tener al menos 8 caracteres"),
+  newPassword: passwordSchema,
   currentPassword: z.string().optional(),
 });
 

@@ -67,6 +67,24 @@ describe("Auth Zod schemas", () => {
       expect(result.success).toBe(false);
     });
 
+    it("rejects nick longer than 30 characters", () => {
+      const result = registerSchema.safeParse({
+        email: "newrunner@42madrid.com",
+        password: "securePassword123!",
+        nick: "a".repeat(31),
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects password longer than 72 characters", () => {
+      const result = registerSchema.safeParse({
+        email: "newrunner@42madrid.com",
+        password: "a".repeat(73),
+        nick: "fastrunner",
+      });
+      expect(result.success).toBe(false);
+    });
+
     it("normalizes email to lowercase", () => {
       const result = registerSchema.safeParse({
         email: "NEWRUNNER@42Madrid.COM",

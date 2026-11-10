@@ -80,5 +80,12 @@ describe("User settings Zod schemas", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("rejects new password longer than 72 characters", () => {
+      const result = updatePasswordSchema.safeParse({
+        newPassword: "a".repeat(73),
+      });
+      expect(result.success).toBe(false);
+    });
   });
 });

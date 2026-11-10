@@ -31,7 +31,7 @@ export class InMemoryUserRepository implements UserRepository {
     const newUser: AuthUser = {
       id: crypto.randomUUID(),
       email: input.email.toLowerCase().trim(),
-      passwordHash: input.passwordHash,
+      passwordHash: input.passwordHash ?? null,
       nick: input.nick.trim(),
       roleGlobal: "user",
       image: null,
@@ -40,6 +40,7 @@ export class InMemoryUserRepository implements UserRepository {
       showOnline: true,
       notificationsEnabled: true,
       healthConsentAt: null,
+      healthConsentVersion: null,
     };
 
     this.users.set(newUser.id, newUser);
@@ -72,7 +73,7 @@ export class InMemoryUserRepository implements UserRepository {
     return updated;
   }
 
-  async updatePassword(id: string, passwordHash: string | null): Promise<AuthUser> {
+  async updatePassword(id: string, passwordHash: string): Promise<AuthUser> {
     const user = this.users.get(id);
     if (!user) {
       throw new Error(`User with id ${id} not found`);

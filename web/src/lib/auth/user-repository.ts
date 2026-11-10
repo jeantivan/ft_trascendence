@@ -20,11 +20,12 @@ export interface AuthUser {
   showOnline?: boolean;
   notificationsEnabled?: boolean;
   healthConsentAt?: Date | null;
+  healthConsentVersion?: number | null;
 }
 
 export interface CreateUserInput {
   email: string;
-  passwordHash: string;
+  passwordHash?: string | null;
   nick: string;
 }
 
@@ -34,8 +35,23 @@ export interface UserRepository {
   createUser(input: CreateUserInput): Promise<AuthUser>;
   updateNick(id: string, nick: string): Promise<AuthUser>;
   updateEmail(id: string, email: string): Promise<AuthUser>;
-  updatePassword(id: string, passwordHash: string | null): Promise<AuthUser>;
+  updatePassword(id: string, passwordHash: string): Promise<AuthUser>;
 }
+
+export const authUserSelect = {
+  id: true,
+  email: true,
+  passwordHash: true,
+  nick: true,
+  roleGlobal: true,
+  image: true,
+  blockedAt: true,
+  statsPublic: true,
+  showOnline: true,
+  notificationsEnabled: true,
+  healthConsentAt: true,
+  healthConsentVersion: true,
+} as const;
 
 export class PrismaUserRepository implements UserRepository {
   constructor(private readonly db: PrismaClient = prisma) {}
@@ -52,6 +68,7 @@ export class PrismaUserRepository implements UserRepository {
     showOnline?: boolean;
     notificationsEnabled?: boolean;
     healthConsentAt?: Date | null;
+    healthConsentVersion?: number | null;
   }): AuthUser {
     return {
       id: user.id,
@@ -65,12 +82,14 @@ export class PrismaUserRepository implements UserRepository {
       showOnline: user.showOnline ?? true,
       notificationsEnabled: user.notificationsEnabled ?? true,
       healthConsentAt: user.healthConsentAt ?? null,
+      healthConsentVersion: user.healthConsentVersion ?? null,
     };
   }
 
   async findByEmail(email: string): Promise<AuthUser | null> {
     const user = await this.db.user.findUnique({
       where: { email: email.toLowerCase().trim() },
+      select: authUserSelect,
     });
     if (!user) return null;
     return this.toAuthUser(user);
@@ -79,6 +98,7 @@ export class PrismaUserRepository implements UserRepository {
   async findById(id: string): Promise<AuthUser | null> {
     const user = await this.db.user.findUnique({
       where: { id },
+      select: authUserSelect,
     });
     if (!user) return null;
     return this.toAuthUser(user);
@@ -89,9 +109,10 @@ export class PrismaUserRepository implements UserRepository {
       const user = await this.db.user.create({
         data: {
           email: input.email.toLowerCase().trim(),
-          passwordHash: input.passwordHash,
+          passwordHash: input.passwordHash ?? null,
           nick: input.nick.trim(),
         },
+        select: authUserSelect,
       });
       return this.toAuthUser(user);
     } catch (error: unknown) {
@@ -106,6 +127,7 @@ export class PrismaUserRepository implements UserRepository {
     const user = await this.db.user.update({
       where: { id },
       data: { nick: nick.trim() },
+      select: authUserSelect,
     });
     return this.toAuthUser(user);
   }
@@ -115,6 +137,7 @@ export class PrismaUserRepository implements UserRepository {
       const user = await this.db.user.update({
         where: { id },
         data: { email: email.toLowerCase().trim() },
+        select: authUserSelect,
       });
       return this.toAuthUser(user);
     } catch (error: unknown) {
@@ -125,10 +148,11 @@ export class PrismaUserRepository implements UserRepository {
     }
   }
 
-  async updatePassword(id: string, passwordHash: string | null): Promise<AuthUser> {
+  async updatePassword(id: string, passwordHash: string): Promise<AuthUser> {
     const user = await this.db.user.update({
       where: { id },
       data: { passwordHash },
+      select: authUserSelect,
     });
     return this.toAuthUser(user);
   }

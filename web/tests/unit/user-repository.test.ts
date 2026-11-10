@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PrismaUserRepository } from "@/lib/auth/user-repository";
+import { authUserSelect, PrismaUserRepository } from "@/lib/auth/user-repository";
 import { InMemoryUserRepository } from "../support/in-memory-user-repository";
 import type { PrismaClient } from "@/generated/prisma/client";
 
@@ -123,6 +123,7 @@ describe("PrismaUserRepository", () => {
 
     expect(mockPrismaUser.findUnique).toHaveBeenCalledWith({
       where: { email: "runner@42.com" },
+      select: authUserSelect,
     });
     expect(user).toEqual({
       id: "u1",
@@ -136,6 +137,7 @@ describe("PrismaUserRepository", () => {
       showOnline: true,
       notificationsEnabled: true,
       healthConsentAt: null,
+      healthConsentVersion: null,
     });
   });
 
@@ -162,6 +164,7 @@ describe("PrismaUserRepository", () => {
         passwordHash: "newHash",
         nick: "newrunner",
       },
+      select: authUserSelect,
     });
   });
 
@@ -178,6 +181,7 @@ describe("PrismaUserRepository", () => {
     const user = await repo.findById("u123");
     expect(mockPrismaUser.findUnique).toHaveBeenCalledWith({
       where: { id: "u123" },
+      select: authUserSelect,
     });
     expect(user?.id).toBe("u123");
   });
@@ -196,6 +200,7 @@ describe("PrismaUserRepository", () => {
     expect(mockPrismaUser.update).toHaveBeenCalledWith({
       where: { id: "u123" },
       data: { nick: "trimmed-nick" },
+      select: authUserSelect,
     });
     expect(user.nick).toBe("trimmed-nick");
   });
@@ -214,6 +219,7 @@ describe("PrismaUserRepository", () => {
     expect(mockPrismaUser.update).toHaveBeenCalledWith({
       where: { id: "u123" },
       data: { email: "newemail@42.com" },
+      select: authUserSelect,
     });
     expect(user.email).toBe("newemail@42.com");
 
@@ -237,6 +243,7 @@ describe("PrismaUserRepository", () => {
     expect(mockPrismaUser.update).toHaveBeenCalledWith({
       where: { id: "u123" },
       data: { passwordHash: "newHash321" },
+      select: authUserSelect,
     });
     expect(user.passwordHash).toBe("newHash321");
   });

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PrismaUserRepository, UserAlreadyExistsError } from "@/lib/auth/user-repository";
 
 const email = "user-repository-same-email@example.com";
+const email2 = "user-repository-other-email@example.com";
 const repository = new PrismaUserRepository(prisma);
 
 function register() {
@@ -12,7 +13,7 @@ function register() {
 
 describe("Integration: PrismaUserRepository", () => {
   afterEach(async () => {
-    await prisma.user.deleteMany({ where: { email } });
+    await prisma.user.deleteMany({ where: { email: { in: [email, email2] } } });
   });
   afterAll(async () => {
     await prisma.$disconnect();
@@ -27,5 +28,18 @@ describe("Integration: PrismaUserRepository", () => {
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toBeInstanceOf(UserAlreadyExistsError);
     await expect(prisma.user.count({ where: { email } })).resolves.toBe(1);
+  });
+
+  it("throws UserAlreadyExistsError when updating email to an existing email", async () => {
+    await register();
+    const user2 = await repository.createUser({
+      email: email2,
+      passwordHash: "hash2",
+      nick: "runner2",
+    });
+
+    await expect(repository.updateEmail(user2.id, email)).rejects.toThrow(
+      UserAlreadyExistsError
+    );
   });
 });
