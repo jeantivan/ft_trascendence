@@ -83,7 +83,9 @@ describe("Integration: removeAvatar against real Postgres", () => {
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const result = await removeAvatar(TEST_USER_ID, prisma, uploadsDir);
-    expect(warnSpy).toHaveBeenCalledWith("Avatar removed, but 1 file(s) could not be deleted");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Avatar removed, but 1 file(s) could not be deleted: avatars/unremovable.png",
+    );
     warnSpy.mockRestore();
 
     expect(result).toEqual({ removed: true, avatarCleanupFailed: 1 });

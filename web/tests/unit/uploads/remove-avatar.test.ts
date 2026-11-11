@@ -8,9 +8,9 @@ describe("removeAvatar", () => {
     const queries: string[] = [];
 
     const fakeTx = {
-      $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      $queryRaw: vi.fn(async (strings: TemplateStringsArray, ..._values: unknown[]) => {
         queries.push(strings.join("?"));
-        return [];
+        return [{ id: userId }];
       }),
       avatar: {
         findMany: vi.fn(async () => [{ path: "avatars/sample.png" }]),
@@ -25,7 +25,7 @@ describe("removeAvatar", () => {
       $transaction: vi.fn(async (cb: (tx: typeof fakeTx) => Promise<unknown>) => cb(fakeTx)),
     };
 
-    const fakeDeleteFiles = vi.fn(async () => 0);
+    const fakeDeleteFiles = vi.fn(async () => []);
 
     const result = await removeAvatar(userId, fakeDb as never, "/fake/uploads", fakeDeleteFiles);
 
@@ -49,7 +49,7 @@ describe("removeAvatar", () => {
   it("handles user without avatars cleanly without calling deleteMany", async () => {
     const userId = "00000000-0000-0000-0000-000000000001";
     const fakeTx = {
-      $queryRaw: vi.fn(async () => []),
+      $queryRaw: vi.fn(async () => [{ id: userId }]),
       avatar: {
         findMany: vi.fn(async () => []),
         deleteMany: vi.fn(async () => ({ count: 0 })),
@@ -61,7 +61,7 @@ describe("removeAvatar", () => {
     const fakeDb = {
       $transaction: vi.fn(async (cb: (tx: typeof fakeTx) => Promise<unknown>) => cb(fakeTx)),
     };
-    const fakeDeleteFiles = vi.fn(async () => 0);
+    const fakeDeleteFiles = vi.fn(async () => []);
 
     const result = await removeAvatar(userId, fakeDb as never, "/fake/uploads", fakeDeleteFiles);
 
@@ -70,11 +70,11 @@ describe("removeAvatar", () => {
     expect(fakeDeleteFiles).toHaveBeenCalledWith([], "/fake/uploads");
   });
 
-  it("warns and returns avatarCleanupFailed when file removal fails", async () => {
+  it("warns with file paths and returns avatarCleanupFailed when file removal fails", async () => {
     const userId = "00000000-0000-0000-0000-000000000001";
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const fakeTx = {
-      $queryRaw: vi.fn(async () => []),
+      $queryRaw: vi.fn(async () => [{ id: userId }]),
       avatar: {
         findMany: vi.fn(async () => [{ path: "avatars/sample.png" }]),
         deleteMany: vi.fn(async () => ({ count: 1 })),
@@ -86,12 +86,39 @@ describe("removeAvatar", () => {
     const fakeDb = {
       $transaction: vi.fn(async (cb: (tx: typeof fakeTx) => Promise<unknown>) => cb(fakeTx)),
     };
-    const fakeDeleteFiles = vi.fn(async () => 1);
+    const fakeDeleteFiles = vi.fn(async () => ["avatars/sample.png"]);
 
     const result = await removeAvatar(userId, fakeDb as never, "/fake/uploads", fakeDeleteFiles);
 
     expect(result).toEqual({ removed: true, avatarCleanupFailed: 1 });
-    expect(warnSpy).toHaveBeenCalledWith("Avatar removed, but 1 file(s) could not be deleted");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Avatar removed, but 1 file(s) could not be deleted: avatars/sample.png",
+    );
     warnSpy.mockRestore();
+  });
+
+  it("returns cleanly without updating user when user row is gone (account deleted while waiting for lock)", async () => {
+    const userId = "00000000-0000-0000-0000-000000000001";
+    const fakeTx = {
+      $queryRaw: vi.fn(async () => []),
+      avatar: {
+        findMany: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      user: {
+        update: vi.fn(),
+      },
+    };
+    const fakeDb = {
+      $transaction: vi.fn(async (cb: (tx: typeof fakeTx) => Promise<unknown>) => cb(fakeTx)),
+    };
+    const fakeDeleteFiles = vi.fn(async () => []);
+
+    const result = await removeAvatar(userId, fakeDb as never, "/fake/uploads", fakeDeleteFiles);
+
+    expect(result).toEqual({ removed: true });
+    expect(fakeTx.avatar.findMany).not.toHaveBeenCalled();
+    expect(fakeTx.user.update).not.toHaveBeenCalled();
+    expect(fakeDeleteFiles).toHaveBeenCalledWith([], "/fake/uploads");
   });
 });
