@@ -18,3 +18,14 @@ export const createEventSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Fecha y hora no válidas"),
   sessionId: z.guid().nullable(),
 });
+
+// Every field again, not only the changed ones. Never cancelledAt: cancelling is
+// its own action, so an edit cannot undo a cancellation
+export const updateEventSchema = createEventSchema.extend({
+  eventId: z.guid(),
+});
+
+// The server sets cancelledAt to now; there is no action to undo it
+export const cancelEventSchema = z.object({
+  eventId: z.guid(),
+});

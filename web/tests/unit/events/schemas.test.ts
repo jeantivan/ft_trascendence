@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createEventSchema } from "@/lib/events/schemas";
+import { cancelEventSchema, createEventSchema, updateEventSchema } from "@/lib/events/schemas";
+
+const EVENT_ID = "00000000-0000-4000-8000-000000000201";
 
 describe("Events Zod schemas", () => {
   describe("createEventSchema", () => {
@@ -165,6 +167,51 @@ describe("Events Zod schemas", () => {
         // Caught by the regex
         expect(messageFor({ ...valid, startsAt: "2026-11-14T09:00Z" })).toBe("Fecha y hora no válidas");
       });
+    });
+  });
+
+  describe("updateEventSchema", () => {
+    const valid = {
+      eventId: EVENT_ID,
+      title: "Series en el Retiro",
+      location: "Puerta de Alcalá",
+      startsAt: "2026-11-14T09:00",
+      sessionId: null,
+    };
+
+    it("accepts a valid edit with its eventId", () => {
+      const result = updateEventSchema.safeParse(valid);
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(valid);
+    });
+
+    it("rejects an edit without an eventId or with a malformed one", () => {
+      expect(updateEventSchema.safeParse({ ...valid, eventId: undefined }).success).toBe(false);
+      expect(updateEventSchema.safeParse({ ...valid, eventId: "abc" }).success).toBe(false);
+    });
+
+    it("drops cancelledAt, so an edit cannot cancel or uncancel", () => {
+      const result = updateEventSchema.safeParse({ ...valid, cancelledAt: null });
+
+      expect(result.success).toBe(true);
+      expect(result.data).not.toHaveProperty("cancelledAt");
+    });
+  });
+
+  describe("cancelEventSchema", () => {
+    it("takes only the eventId: the server sets cancelledAt", () => {
+      const result = cancelEventSchema.safeParse({
+        eventId: EVENT_ID,
+        cancelledAt: "2026-11-01T10:00",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ eventId: EVENT_ID });
+    });
+
+    it("rejects a malformed eventId", () => {
+      expect(cancelEventSchema.safeParse({ eventId: "abc" }).success).toBe(false);
     });
   });
 });
