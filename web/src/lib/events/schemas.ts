@@ -1,4 +1,6 @@
 import { z } from "zod";
+// enums.ts, not client.ts: only the values, no database client, so forms can import it too
+import { SpotRequestStatus } from "@/generated/prisma/enums";
 
 export const createEventSchema = z.object({
   title: z
@@ -28,4 +30,25 @@ export const updateEventSchema = createEventSchema.extend({
 // The server sets cancelledAt to now; there is no action to undo it
 export const cancelEventSchema = z.object({
   eventId: z.guid(),
+});
+
+// From the Prisma enum: a new state in the database reaches the schema by itself
+export const spotRequestStatusSchema = z.enum(SpotRequestStatus);
+
+// The Athlete who asks or withdraws comes from the session, never from the client
+export const requestSpotSchema = z.object({
+  eventId: z.guid(),
+});
+
+export const withdrawSpotSchema = z.object({
+  eventId: z.guid(),
+});
+
+// The Manager only decides on pending requests, and only approves or rejects.
+// rejected is final; the transitions are applied by EventRepository (#147)
+export const reviewSpotSchema = z.object({
+  eventId: z.guid(),
+  // The Athlete whose request is reviewed
+  userId: z.guid(),
+  decision: spotRequestStatusSchema.extract(["approved", "rejected"]),
 });

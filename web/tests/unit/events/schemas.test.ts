@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { cancelEventSchema, createEventSchema, updateEventSchema } from "@/lib/events/schemas";
+import {
+  cancelEventSchema,
+  createEventSchema,
+  requestSpotSchema,
+  reviewSpotSchema,
+  spotRequestStatusSchema,
+  updateEventSchema,
+  withdrawSpotSchema,
+} from "@/lib/events/schemas";
 
 const EVENT_ID = "00000000-0000-4000-8000-000000000201";
 
@@ -212,6 +220,57 @@ describe("Events Zod schemas", () => {
 
     it("rejects a malformed eventId", () => {
       expect(cancelEventSchema.safeParse({ eventId: "abc" }).success).toBe(false);
+    });
+  });
+
+  describe("spotRequestStatusSchema", () => {
+    it("accepts the four states of a Spot Request and nothing else", () => {
+      for (const status of ["pending", "approved", "rejected", "withdrawn"]) {
+        expect(spotRequestStatusSchema.safeParse(status).success).toBe(true);
+      }
+      expect(spotRequestStatusSchema.safeParse("cancelled").success).toBe(false);
+    });
+  });
+
+  // The Athlete comes from the session, never from the client
+  describe.each([
+    ["requestSpotSchema", requestSpotSchema],
+    ["withdrawSpotSchema", withdrawSpotSchema],
+  ])("%s", (_name, schema) => {
+    it("takes only the eventId and drops a userId sent by the client", () => {
+      const result = schema.safeParse({
+        eventId: EVENT_ID,
+        userId: "00000000-0000-4000-8000-000000000024",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ eventId: EVENT_ID });
+    });
+
+    it("rejects a malformed eventId", () => {
+      expect(schema.safeParse({ eventId: "abc" }).success).toBe(false);
+    });
+  });
+
+  describe("reviewSpotSchema", () => {
+    const valid = {
+      eventId: EVENT_ID,
+      userId: "00000000-0000-4000-8000-000000000024",
+      decision: "approved",
+    };
+
+    it("accepts approving or rejecting a Spot Request", () => {
+      expect(reviewSpotSchema.safeParse(valid).success).toBe(true);
+      expect(reviewSpotSchema.safeParse({ ...valid, decision: "rejected" }).success).toBe(true);
+    });
+
+    it("rejects any other decision: the Manager only approves or rejects", () => {
+      expect(reviewSpotSchema.safeParse({ ...valid, decision: "pending" }).success).toBe(false);
+      expect(reviewSpotSchema.safeParse({ ...valid, decision: "withdrawn" }).success).toBe(false);
+    });
+
+    it("rejects a malformed userId", () => {
+      expect(reviewSpotSchema.safeParse({ ...valid, userId: "abc" }).success).toBe(false);
     });
   });
 });
