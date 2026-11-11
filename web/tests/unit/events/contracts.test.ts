@@ -62,7 +62,7 @@ describe("Events view contracts", () => {
       approvedCount: 1,
       spotRequests: [
         {
-          userId: "00000000-0000-4000-8000-000000000023",
+          athleteId: "00000000-0000-4000-8000-000000000023",
           nick: "ana",
           status: "approved",
           createdAt: new Date("2026-11-10T18:00:00Z"),
@@ -93,7 +93,7 @@ describe("Events view contracts", () => {
       | "spotRequests"
     >();
     expectTypeOf<keyof EventManagerView["spotRequests"][number]>().toEqualTypeOf<
-      "userId" | "nick" | "status" | "createdAt"
+      "athleteId" | "nick" | "status" | "createdAt"
     >();
   });
 });

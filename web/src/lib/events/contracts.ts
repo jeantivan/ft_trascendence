@@ -18,10 +18,13 @@ export type EventMemberView = {
 
 // What a Manager of the club sees (event.readAttendees): the member view plus
 // every Spot Request with who asked. No mySpotRequest: a Manager has none in
-// their own club (one role per club)
+// their own club (one role per club).
+// Omit<T, "x"> is T without the field x; & adds the fields in braces
 export type EventManagerView = Omit<EventMemberView, "mySpotRequest"> & {
   spotRequests: {
-    userId: string;
+    // spot_requests.user_id in the database; the Manager sends it back as the
+    // athleteId of reviewSpotSchema to approve or reject
+    athleteId: string;
     nick: string;
     status: SpotRequestStatus;
     createdAt: Date;

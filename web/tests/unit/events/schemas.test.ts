@@ -48,11 +48,13 @@ describe("Events Zod schemas", () => {
       expect(result.data?.location).toBe("Puerta de Alcalá");
     });
 
-    it("rejects a title made only of spaces", () => {
+    it("rejects an empty title or one made only of spaces", () => {
+      expect(createEventSchema.safeParse({ ...validEvent, title: "" }).success).toBe(false);
       expect(createEventSchema.safeParse({ ...validEvent, title: "   " }).success).toBe(false);
     });
 
-    it("rejects a location made only of spaces", () => {
+    it("rejects an empty location or one made only of spaces", () => {
+      expect(createEventSchema.safeParse({ ...validEvent, location: "" }).success).toBe(false);
       expect(createEventSchema.safeParse({ ...validEvent, location: "   " }).success).toBe(false);
     });
 
@@ -82,10 +84,11 @@ describe("Events Zod schemas", () => {
       );
     });
 
-    it("accepts a sessionId in the seed's format and rejects a malformed one", () => {
-      const seedLikeId = "00000000-0000-4000-8000-000000000101";
+    it("accepts any 8-4-4-4-12 hex sessionId, like Postgres, and rejects a malformed one", () => {
+      // No RFC version or variant digits: z.uuid() would reject it, z.guid() must not
+      const nonRfcId = "00000000-0000-0000-0000-000000000101";
 
-      expect(createEventSchema.safeParse({ ...validEvent, sessionId: seedLikeId }).success).toBe(true);
+      expect(createEventSchema.safeParse({ ...validEvent, sessionId: nonRfcId }).success).toBe(true);
       expect(createEventSchema.safeParse({ ...validEvent, sessionId: "abc" }).success).toBe(false);
     });
 
@@ -203,7 +206,7 @@ describe("Events Zod schemas", () => {
   describe("reviewSpotSchema", () => {
     const valid = {
       eventId: EVENT_ID,
-      userId: "00000000-0000-4000-8000-000000000024",
+      athleteId: "00000000-0000-4000-8000-000000000024",
       decision: "approved",
     };
 
@@ -217,8 +220,8 @@ describe("Events Zod schemas", () => {
       expect(reviewSpotSchema.safeParse({ ...valid, decision: "withdrawn" }).success).toBe(false);
     });
 
-    it("rejects a malformed userId", () => {
-      expect(reviewSpotSchema.safeParse({ ...valid, userId: "abc" }).success).toBe(false);
+    it("rejects a malformed athleteId", () => {
+      expect(reviewSpotSchema.safeParse({ ...valid, athleteId: "abc" }).success).toBe(false);
     });
   });
 
@@ -246,6 +249,9 @@ describe("Events Zod schemas", () => {
       const tooLong = createFeedbackSchema.safeParse({ ...valid, body: "a".repeat(2001) });
 
       expect(empty.error?.issues[0]?.message).toBe("El Feedback no puede estar vacío");
+      expect(createFeedbackSchema.safeParse({ ...valid, body: "" }).error?.issues[0]?.message).toBe(
+        "El Feedback no puede estar vacío",
+      );
       expect(tooLong.error?.issues[0]?.message).toBe(
         "El Feedback no puede superar los 2000 caracteres",
       );
