@@ -265,6 +265,28 @@ else
   pass "the app log keeps no link token"
 fi
 
+# 20. The Referer carries only the origin, never the path or the "?" part (#185):
+# why, in nginx/app.conf. Exactly one Referrer-Policy: strict-origin on the app's
+# pages, on the test mail inbox (which sends its own) and on nginx's own error pages
+# (413), which only get the header with "always"
+policy_of() {
+  printf '%s\n' "$1" | tr -d '\r' | grep -i '^referrer-policy:' | sed 's/^[^:]*:[[:space:]]*//'
+}
+page_policy=$(policy_of "$(curl_https -o /dev/null -D - "$url/login")")
+mailpit_policy=$(policy_of "$(curl_https -o /dev/null -D - "$url/mailpit/")")
+# 6000000 bytes: over client_max_body_size (5 MB), so nginx answers 413 itself
+error_policy=$(policy_of "$(head -c 6000000 /dev/zero | curl_https -o /dev/null -D - -X POST \
+  --data-binary @- -H 'Content-Type: application/octet-stream' "$url/login")")
+if [ "$page_policy" != "strict-origin" ]; then
+  fail "a page sends Referrer-Policy '$page_policy', expected exactly one 'strict-origin'"
+elif [ "$mailpit_policy" != "strict-origin" ]; then
+  fail "the mail inbox sends Referrer-Policy '$mailpit_policy', expected exactly one 'strict-origin'"
+elif [ "$error_policy" != "strict-origin" ]; then
+  fail "an nginx error page (413) sends Referrer-Policy '$error_policy', expected exactly one 'strict-origin'"
+else
+  pass "Referrer-Policy strict-origin: the Referer carries no path or token"
+fi
+
 if [ "$failures" -eq 0 ]; then
   echo "All nginx checks passed"
 else
