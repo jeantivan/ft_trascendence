@@ -28,7 +28,7 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. T
 
 - Toda UI nueva o modificada sigue `ideas/stitch_athlete_training_dashboard/kinetic_obsidian/DESIGN.md` (paleta, tipografías, botones, inputs, estados). Leerlo antes de tocar estilos.
 - Usar los tokens de `web/src/app/globals.css` y las fuentes de `web/src/app/layout.tsx` (`font-heading`, `font-sans`) en lugar de colores o fuentes sueltas.
-- Antes de escribir UI, leer `web/src/components/ui/README.md` (tokens y reglas) y la carpeta `web/src/components/ui/docs/` (un fichero por componente), y reutilizar sus componentes en lugar de crear clases sueltas.
+- Antes de escribir UI, leer `web/src/components/ui/README.md` (tokens y reglas) y la carpeta `web/src/components/ui/docs/` (un fichero por componente, escrito en inglés), y reutilizar sus componentes en lugar de crear clases sueltas.
 - `DESIGN.md` es el diseño acordado (diseño de Stitch de Jean). Si algo no está en él, preguntar; no decidirlo por cuenta propia. Esta regla prevalece sobre skills de diseño genéricas.
 
 ## Antes de tocar código
