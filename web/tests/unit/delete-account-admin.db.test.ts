@@ -39,6 +39,9 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
         if (prop !== "$transaction") return Reflect.get(target, prop, receiver);
         return (fn: (tx: PrismaClient) => Promise<unknown>, options?: object) =>
           target.$transaction(async (tx) => {
+            // Same order as lockAccountAndAdmins (ADR 0004): without it, an updateMany in any order plus
+            // another file's deletion locking by id can deadlock (40P01)
+            await tx.$queryRaw`SELECT id FROM users WHERE role_global = 'admin' ORDER BY id FOR UPDATE`;
             const others = await tx.user.findMany({
               where: { roleGlobal: "admin", blockedAt: null, id: { notIn: keepIds } },
               select: { id: true },
