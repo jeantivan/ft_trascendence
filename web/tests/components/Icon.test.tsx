@@ -27,4 +27,9 @@ describe("Icon", () => {
     expect(big).toHaveAttribute("width", "40");
     expect(big).toHaveAttribute("height", "40");
   });
+
+  it("lets className reach the svg, so the icon can take its color", () => {
+    const { container } = render(<Icon name="help" className="text-volt" />);
+    expect(container.querySelector("svg")).toHaveClass("text-volt");
+  });
 });
