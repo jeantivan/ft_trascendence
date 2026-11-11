@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
 import { verifyOtpWithoutConsuming } from "@/lib/gdpr/otp";
 import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
 import { deleteAvatarFiles } from "@/lib/uploads/delete-avatar-files";
@@ -10,11 +11,22 @@ export const CLUB_WITHOUT_MANAGER = "club_without_manager";
 export type DeleteAccountResult =
   // avatarCleanupFailed is only present when some avatar file could not be removed
   | { deleted: true; avatarCleanupFailed?: number }
-  | { deleted: false; reason: "invalid_code" };
+  | { deleted: false; reason: "invalid_code" | "last_admin" };
+
+export type DeleteAccountAsAdminResult =
+  | { deleted: true; avatarCleanupFailed?: number }
+  | { deleted: false; reason: "not_found" | "last_admin" };
 
 // Thrown inside the transaction when the code could not be consumed; caught
 // below and returned as invalid_code. Any other error is rethrown unchanged.
 class OtpNotConsumedError extends Error {}
+
+// Thrown inside the transaction when the deletion would leave no unblocked Admin;
+// the whole transaction rolls back (the code is not consumed either).
+class LastAdminError extends Error {}
+
+// Thrown inside the Admin transaction when the account does not exist (any more)
+class AccountNotFoundError extends Error {}
 
 // Single public entry to delete an account. userId must come from the validated
 // session, never from the request.
@@ -61,21 +73,15 @@ export async function deleteAccountWithOtp(
         await tx.auditLog.create({
           data: { actorId: userId, subjectId: userId, actorRole: null, action: "account_deleted", resource: "account" },
         });
-        // Locked before reading the avatars (#122): an upload that commits after this read
-        // would lose its Avatar row to the cascade and leave its file behind. FOR UPDATE, not
-        // user.update: it also waits for the upload's avatar insert (its foreign key check
-        // holds a KEY SHARE lock), which user.update does not, and that ends in a deadlock.
-        // Lock order: this user first, then clubs, then conversations (deleteAccountRows).
-        // The wait for this lock counts against the transaction timeout (5 s by default)
-        await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
-        const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
-        avatarPaths = avatars.map((avatar) => avatar.path);
-        await deleteAccountRows(userId, tx);
+        avatarPaths = await deleteLockedAccount(userId, tx);
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
     );
   } catch (error) {
-    if (error instanceof OtpNotConsumedError) return { deleted: false, reason: "invalid_code" };
+    if (error instanceof OtpNotConsumedError || error instanceof AccountNotFoundError) {
+      return { deleted: false, reason: "invalid_code" };
+    }
+    if (error instanceof LastAdminError) return { deleted: false, reason: "last_admin" };
     throw error;
   }
 
@@ -87,11 +93,62 @@ export async function deleteAccountWithOtp(
   return { deleted: true, avatarCleanupFailed: failed };
 }
 
+// Deletes another person's account for the Admin panel (#104), without OTP. It deletes the
+// same as deleteAccountWithOtp: both go through deleteLockedAccount. The caller has already
+// checked that the actor is an Admin (in the database, not in the JWT) and passes its own
+// audit row in beforeDelete, which runs inside the same transaction: if the deletion fails,
+// the audit row rolls back with it.
+export async function deleteAccountAsAdmin(
+  targetId: string,
+  beforeDelete: (tx: Prisma.TransactionClient) => Promise<void>,
+  db: PrismaClient = prisma,
+  uploadsDir: string = UPLOADS_DIR,
+): Promise<DeleteAccountAsAdminResult> {
+  let avatarPaths: string[] = [];
+  try {
+    await db.$transaction(
+      async (tx) => {
+        await beforeDelete(tx);
+        avatarPaths = await deleteLockedAccount(targetId, tx);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    );
+  } catch (error) {
+    if (error instanceof AccountNotFoundError) return { deleted: false, reason: "not_found" };
+    if (error instanceof LastAdminError) return { deleted: false, reason: "last_admin" };
+    throw error;
+  }
+
+  const failed = await deleteAvatarFiles(avatarPaths, uploadsDir);
+  if (failed === 0) return { deleted: true };
+  console.warn(`Account deleted, but ${failed} avatar file(s) could not be removed`);
+  return { deleted: true, avatarCleanupFailed: failed };
+}
+
+// The part both entries share, inside their transaction. Returns the avatar paths to delete
+// from disk after the commit.
+//
+// First step: lockAccountAndAdmins (one ordered statement, the last-Admin rule is read after the
+// lock; see docs/adr/0004). The lock on the user row goes before reading the avatars (#122): an
+// upload that commits after that read would lose its Avatar row to the cascade and leave its
+// file behind. The Admins stay locked until the commit, so none of them can be deleted between
+// reading them and notifying them.
+// Lock order: users first, then clubs, then conversations (deleteAccountRows).
+async function deleteLockedAccount(userId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+  const { target, anotherAdminLeft } = await lockAccountAndAdmins(tx, userId);
+  if (!target) throw new AccountNotFoundError();
+  if (target.roleGlobal === "admin" && !anotherAdminLeft) throw new LastAdminError();
+
+  const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
+  await deleteAccountRows(userId, tx);
+  return avatars.map((avatar) => avatar.path);
+}
+
 // Deletes the user row; Postgres removes or detaches the rest through the
 // onDelete rules (docs/gdpr/account-deletion-table.md). If the user is the only
 // Manager of a club, every remaining Admin gets a notification (the deletion is
-// never blocked). Private: it must only run after the code has been consumed in
-// the same transaction.
+// never blocked). Private: it must only run from deleteLockedAccount, after the code has
+// been consumed (OTP) or the Admin check made (panel) in the same transaction.
 //
 // Two Managers of the same club may delete their accounts at the same time. To
 // stop both from seeing the other one and nobody warning the Admin, the clubs are
