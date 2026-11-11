@@ -59,6 +59,18 @@ describe("deleteAccountAction", () => {
     expect(signOut).not.toHaveBeenCalled();
   });
 
+  it("returns a controlled error and keeps the session when the user is the last Admin", async () => {
+    vi.mocked(deleteAccountWithOtp).mockResolvedValue({ deleted: false, reason: "last_admin" });
+
+    const result = await deleteAccountAction(null, formWith({ code: "123456" }));
+
+    expect(result).toEqual({
+      success: false,
+      error: "Eres el último Admin: nombra a otra persona Admin antes de borrar tu cuenta.",
+    });
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["missing", {}],
     ["empty", { code: "" }],
