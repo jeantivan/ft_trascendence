@@ -52,3 +52,31 @@ export const reviewSpotSchema = z.object({
   userId: z.guid(),
   decision: spotRequestStatusSchema.extract(["approved", "rejected"]),
 });
+
+// Health data: the messages are fixed texts, they never repeat what was sent
+const feedbackBodySchema = z
+  .string()
+  .trim()
+  .min(1, "El Feedback no puede estar vacío")
+  .max(2000, "El Feedback no puede superar los 2000 caracteres");
+
+// The Manager who writes comes from the session. Zod cannot check the rest, the
+// service does it in the transaction: the Event has a session, has started and is
+// not cancelled, the Athlete was approved and has health consent
+export const createFeedbackSchema = z.object({
+  eventId: z.guid(),
+  // The Athlete who receives it
+  athleteId: z.guid(),
+  body: feedbackBodySchema,
+});
+
+// Only the body changes: moving a Feedback to another Event or Athlete is not an edit.
+// The service checks the same conditions as creating, health consent included
+export const updateFeedbackSchema = z.object({
+  feedbackId: z.guid(),
+  body: feedbackBodySchema,
+});
+
+export const deleteFeedbackSchema = z.object({
+  feedbackId: z.guid(),
+});

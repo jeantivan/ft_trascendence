@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   cancelEventSchema,
   createEventSchema,
+  createFeedbackSchema,
+  deleteFeedbackSchema,
   requestSpotSchema,
   reviewSpotSchema,
   spotRequestStatusSchema,
   updateEventSchema,
+  updateFeedbackSchema,
   withdrawSpotSchema,
 } from "@/lib/events/schemas";
 
@@ -271,6 +274,80 @@ describe("Events Zod schemas", () => {
 
     it("rejects a malformed userId", () => {
       expect(reviewSpotSchema.safeParse({ ...valid, userId: "abc" }).success).toBe(false);
+    });
+  });
+
+  describe("createFeedbackSchema", () => {
+    const valid = {
+      eventId: EVENT_ID,
+      athleteId: "00000000-0000-4000-8000-000000000024",
+      body: "Buen ritmo en las series; la próxima vez, más calentamiento.",
+    };
+
+    it("accepts a valid Feedback and trims its body", () => {
+      const result = createFeedbackSchema.safeParse({ ...valid, body: `  ${valid.body}  ` });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(valid);
+    });
+
+    it("rejects a malformed eventId or athleteId", () => {
+      expect(createFeedbackSchema.safeParse({ ...valid, eventId: "abc" }).success).toBe(false);
+      expect(createFeedbackSchema.safeParse({ ...valid, athleteId: "abc" }).success).toBe(false);
+    });
+
+    it("explains an empty or too long body", () => {
+      const empty = createFeedbackSchema.safeParse({ ...valid, body: "   " });
+      const tooLong = createFeedbackSchema.safeParse({ ...valid, body: "a".repeat(2001) });
+
+      expect(empty.error?.issues[0]?.message).toBe("El Feedback no puede estar vacío");
+      expect(tooLong.error?.issues[0]?.message).toBe(
+        "El Feedback no puede superar los 2000 caracteres",
+      );
+      // 2000 is still fine
+      expect(createFeedbackSchema.safeParse({ ...valid, body: "a".repeat(2000) }).success).toBe(true);
+    });
+
+    it("never repeats the body in the error: it is health data", () => {
+      const healthText = "Me duele la rodilla izquierda. ".repeat(70);
+      const result = createFeedbackSchema.safeParse({ ...valid, body: healthText });
+
+      expect(result.success).toBe(false);
+      expect(JSON.stringify(result.error)).not.toContain("rodilla");
+    });
+  });
+
+  describe("updateFeedbackSchema", () => {
+    const FEEDBACK_ID = "00000000-0000-4000-8000-000000000301";
+
+    it("takes the feedbackId and the new body, and drops eventId and athleteId", () => {
+      const result = updateFeedbackSchema.safeParse({
+        feedbackId: FEEDBACK_ID,
+        body: "  Mejor así: más calentamiento.  ",
+        eventId: EVENT_ID,
+        athleteId: "00000000-0000-4000-8000-000000000023",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ feedbackId: FEEDBACK_ID, body: "Mejor así: más calentamiento." });
+    });
+
+    it("applies the same body rules as creating", () => {
+      const message = updateFeedbackSchema.safeParse({ feedbackId: FEEDBACK_ID, body: "   " }).error
+        ?.issues[0]?.message;
+
+      expect(message).toBe("El Feedback no puede estar vacío");
+    });
+  });
+
+  describe("deleteFeedbackSchema", () => {
+    it("takes only a well-formed feedbackId", () => {
+      const FEEDBACK_ID = "00000000-0000-4000-8000-000000000301";
+
+      expect(deleteFeedbackSchema.safeParse({ feedbackId: FEEDBACK_ID }).data).toEqual({
+        feedbackId: FEEDBACK_ID,
+      });
+      expect(deleteFeedbackSchema.safeParse({ feedbackId: "abc" }).success).toBe(false);
     });
   });
 });
