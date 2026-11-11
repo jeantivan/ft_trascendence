@@ -352,8 +352,8 @@ model SessionLog {
   sessionId   String   @map("session_id") @db.Uuid
   athleteId   String   @map("athlete_id") @db.Uuid
   completed   Boolean
-  // 1-10, validated by the server
-  rpe         Int      @db.SmallInt
+  // 1-10, validated by the server; null if consent withdrawn or purged (#66, #131)
+  rpe         Int?     @db.SmallInt
   distanceM   Int?     @map("distance_m")
   durationS   Int?     @map("duration_s")
   performedAt DateTime @map("performed_at") @db.Timestamptz(3)
