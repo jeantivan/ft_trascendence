@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@/generated/prisma/client";
+import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { deleteAccountAsAdmin } from "@/lib/gdpr/delete-account";
 import { deleteWithFreshOtp } from "../support/delete-account-helper";
 
@@ -57,7 +57,7 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
   }
 
   // The caller's audit row (#104 writes the real one); here it only shows that the callback runs in the transaction
-  const writeAudit = (actorId: string, subjectId: string) => (tx: Parameters<Parameters<typeof deleteAccountAsAdmin>[1]>[0]) =>
+  const writeAudit = (actorId: string, subjectId: string) => (tx: Prisma.TransactionClient) =>
     tx.auditLog.create({ data: { actorId, subjectId, actorRole: "admin", action: "account_deleted", resource: "account" } }).then(() => {});
 
   beforeEach(async () => {
