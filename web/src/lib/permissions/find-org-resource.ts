@@ -1,4 +1,5 @@
-import { z } from "zod";
+import { isDbId } from "./is-db-id";
+
 
 // Loads a resource by the id that came in the URL or the request, before
 // requireOrgResource / requireApiOrgResource. A malformed id gives null without
@@ -15,8 +16,7 @@ export async function findOrgResource<T extends { orgId: string }>(
   id: string,
   find: (id: string) => Promise<T | null>
 ): Promise<T | null> {
-  // z.guid(), not z.uuid(): any 8-4-4-4-12 hex id, like Postgres (z.uuid() rejects the seed's 00000000-...-0001)
-  if (!z.guid().safeParse(id).success) {
+  if (!isDbId(id)) {
     return null;
   }
   return find(id);
