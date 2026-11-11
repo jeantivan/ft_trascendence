@@ -5,17 +5,17 @@ Componentes reutilizables y tokens de la app. Fuente de verdad del diseño:
 
 ## Reglas (personas e IAs)
 
-1. Antes de escribir UI, mira la lista de componentes de abajo y **úsalos**. No dupliques un botón, badge, input... con clases sueltas.
+1. Antes de escribir UI, mira la carpeta `docs/` (un fichero por componente) y **úsalos**. No dupliques un botón, badge, input... con clases sueltas.
 2. Si falta un componente o una variante, **pregunta antes de crearlo**. Un componente nuevo va en su propio PR.
 3. Solo tokens: nada de colores hex, `px` ni sombras escritas a mano (`bg-[#ccff00]`, `shadow-[0_0_20px_...]`). Si falta un token, se añade a `web/src/app/globals.css` (y a `DESIGN.md` si es del diseño).
 4. Un fichero por componente en `web/src/components/ui/`, nombre en PascalCase (`Button.tsx`). Importar con `@/components/ui/Button`.
 5. Fuentes: `font-heading` (Space Grotesk) y `font-sans` (Hanken Grotesk). No usar otras.
-6. Al añadir un componente, actualizar la tabla de este README en el mismo PR.
+6. Al añadir un componente, añadir su `docs/<Componente>.md` en el mismo PR.
 
 ## Definition of Done (un ticket de componente)
 
 - Cumple sus criterios de aceptación y usa solo tokens (regla 3).
-- Está en la tabla de componentes de este README, con su ejemplo de uso.
+- Tiene su `docs/<Componente>.md` con su ejemplo de uso.
 - Las pantallas que ya tenían ese elemento lo usan (nada de duplicados con clases sueltas).
 - `make test` pasa y se ha comprobado en el navegador (`https://localhost:8443`).
 - El PR dice qué se ha comprobado y qué no, y el CI pasa. El merge lo hace Jean.
@@ -33,16 +33,6 @@ Componentes reutilizables y tokens de la app. Fuente de verdad del diseño:
 
 ## Componentes
 
-Se añaden por oleadas (ver el ticket del módulo). Al crear uno, añade una fila:
+Un fichero por componente en `web/src/components/ui/docs/` (`Button.md`, `Input.md`...). **La lista de componentes es esa carpeta.** Cada doc lleva: fichero, para qué sirve, props principales y un ejemplo de uso.
 
-| Componente | Fichero | Para qué | Props principales |
-|---|---|---|---|
-| `Button` | `Button.tsx` | Acciones y enlaces con aspecto de botón (48px) | `variant`: `primary` (por defecto), `ghost`, `destructive`. Con `href` es un `Link`; sin `href`, un `<button type="button">` (pasa `type="submit"` para enviar formularios). Acepta el resto de props de `<button>` o `Link` y `className` |
-| `Logo` | `Logo.tsx` | Logo de StrideSync (SVG inline, con sus colores propios: no usa tokens, a propósito) | `variant`: `full` (por defecto, marca + texto) o `mark` (solo el cuadrado con el rayo, para la barra lateral colapsada). El tamaño lo da `className` (`h-8 w-auto`). Acepta el resto de props de `<svg>` |
-| `Input` | `Input.tsx` | Campo de texto de una línea (48px) | Acepta las props de `<input>` y `className`. Con `aria-invalid="true"` muestra borde y foco en rojo (`rpe-max`); en reposo, foco `volt`. `disabled` lo atenúa. La etiqueta (`<label htmlFor>`) va fuera del componente |
-| `Avatar` | `Avatar.tsx` | Foto de perfil o silueta genérica determinista (#130) | `image`: URL de la imagen o `null`/`undefined` (renderiza silueta); `alt`: texto accesible; `size`: `sm` (32px), `md` (48px, por defecto), `lg` (64px). Acepta el resto de props de `<div>` y `className` |
-
-Ejemplo: `<Button variant="ghost" href="/events">Ver Events</Button>`.
-Ejemplo: `<Logo className="h-8 w-auto" />`, o `<Logo variant="mark" className="size-10" />` para solo la marca.
-Ejemplo: `<label htmlFor="email">Email</label>` y `<Input id="email" name="email" type="email" aria-invalid={Boolean(error)} />`.
-Ejemplo: `<Avatar image={user.image} alt={user.nick ?? "Usuario"} size="md" />`.
+Al crear un componente, añade su `docs/<Componente>.md` y **no edites ninguna tabla compartida**: así dos PRs de componentes distintos nunca chocan en este README.
