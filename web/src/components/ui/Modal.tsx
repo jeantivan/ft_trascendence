@@ -63,7 +63,7 @@ export function Modal({ open, onClose, title, closeLabel = "Cerrar", footer, chi
           type="button"
           aria-label={closeLabel}
           onClick={onClose}
-          className="rounded-sm p-1 text-text-secondary hover:text-text-primary"
+          className="rounded-sm p-2 text-text-secondary hover:text-text-primary"
         >
           <Icon name="close" size={20} />
         </button>
