@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { Icon } from "./Icon";
 
 type Props = {
   open: boolean;
@@ -62,9 +63,9 @@ export function Modal({ open, onClose, title, closeLabel = "Cerrar", footer, chi
           type="button"
           aria-label={closeLabel}
           onClick={onClose}
-          className="rounded-sm px-2 text-headline-md text-text-secondary hover:text-text-primary"
+          className="rounded-sm p-1 text-text-secondary hover:text-text-primary"
         >
-          ×
+          <Icon name="close" size={20} />
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">{children}</div>
