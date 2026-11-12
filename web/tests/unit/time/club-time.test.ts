@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clubDateOf, clubMidnightToUtc } from "@/lib/time/club-time";
+import { addCalendarDays, clubDateOf, clubMidnightToUtc } from "@/lib/time/club-time";
 
 describe("clubDateOf", () => {
   it("gives the club's calendar date, not the UTC one", () => {
@@ -42,6 +42,17 @@ describe("clubMidnightToUtc", () => {
     expect(clubMidnightToUtc({ year: 2026, month: 4, day: 5 }, "Australia/Sydney")).toEqual(
       new Date("2026-04-04T13:00:00Z"),
     );
+  });
+});
+
+describe("addCalendarDays", () => {
+  it("moves across the end of a month and of a year", () => {
+    expect(addCalendarDays({ year: 2026, month: 1, day: 31 }, 1)).toEqual({ year: 2026, month: 2, day: 1 });
+    expect(addCalendarDays({ year: 2026, month: 12, day: 28 }, 7)).toEqual({ year: 2027, month: 1, day: 4 });
+  });
+
+  it("goes back with negative days, also into a 29 February", () => {
+    expect(addCalendarDays({ year: 2028, month: 3, day: 1 }, -1)).toEqual({ year: 2028, month: 2, day: 29 });
   });
 });
 

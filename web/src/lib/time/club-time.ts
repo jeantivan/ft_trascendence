@@ -83,3 +83,11 @@ export function clubMidnightToUtc(date: CalendarDay, timezone: string): Date {
   const offset = clubWallClockAsUtc(new Date(firstGuess), timezone) - firstGuess;
   return new Date(midnightAsUtc - offset);
 }
+
+// The calendar day that many days after (or before, if negative) that day.
+// Calendar days, not 24 h: a day with a clock change lasts 23 or 25 hours.
+// Date.UTC moves day 0 or day 32 to the right month, like mktime with tm_mday
+export function addCalendarDays(date: CalendarDay, days: number): CalendarDay {
+  const moved = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+  return { year: moved.getUTCFullYear(), month: moved.getUTCMonth() + 1, day: moved.getUTCDate() };
+}

@@ -4,7 +4,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { clubDateOf, clubMidnightToUtc } from "@/lib/time/club-time";
+import { addCalendarDays, clubDateOf, clubMidnightToUtc } from "@/lib/time/club-time";
 
 export type VolumeTrend = {
   currentWeekMeters: number;
@@ -25,14 +25,8 @@ type ClubWeeks = {
 function clubWeekBounds(instant: Date, timezone: string): ClubWeeks {
   const today = clubDateOf(instant, timezone);
   // Days are counted on the calendar, not in hours: a week with a clock change
-  // lasts 167 or 169 hours. Date.UTC moves day 0 or day 32 to the right month
-  const mondayAt = (daysFromToday: number) => {
-    const day = new Date(Date.UTC(today.year, today.month - 1, today.day + daysFromToday));
-    return clubMidnightToUtc(
-      { year: day.getUTCFullYear(), month: day.getUTCMonth() + 1, day: day.getUTCDate() },
-      timezone,
-    );
-  };
+  // lasts 167 or 169 hours
+  const mondayAt = (daysFromToday: number) => clubMidnightToUtc(addCalendarDays(today, daysFromToday), timezone);
   const toMonday = 1 - today.weekday;
   return {
     previousStart: mondayAt(toMonday - 7),
