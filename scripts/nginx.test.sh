@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checks that nginx is the only way in, over HTTPS (issue #59), keeps the
 # visitor's address (#60), guards the test mail inbox (#93) and carries the
-# real-time stream (#61).
+# real-time stream (#61), and keeps tokens in links out of its logs and the app's (#185).
 # Usage: make test-nginx, with the app running (make or make dev).
 # Reads nothing from .env: the port comes from Docker.
 
@@ -28,6 +28,23 @@ url="https://localhost:$port"
 # -k: the certificate is self-signed, so curl cannot verify who signed it
 curl_https() {
   curl -sk -m 10 "$@"
+}
+
+# make dev is detected by the app's image name (image: transcendence-app-dev in
+# docker-compose.dev.yml): if that name changes, update this line. Used by checks 10 and 19.
+# Read from the container, not from docker compose ps: make test builds an image with
+# the same name, and then ps can show the running container's image as a bare sha256
+is_dev=false
+app_container=$(docker compose ps -q app 2>/dev/null)
+if [ -n "$app_container" ] &&
+  docker inspect -f '{{.Config.Image}}' "$app_container" 2>/dev/null | grep -q -- '-dev$'; then
+  is_dev=true
+fi
+
+# The last minute of a service's log: enough for one check's requests, and quick
+# after a long make dev
+service_logs() {
+  docker compose logs --no-log-prefix --since 60s "$1" 2>&1
 }
 
 # Right after make the app may still be starting (nginx answers 502): wait up to
@@ -114,10 +131,8 @@ fi
 tracked=$(git ls-files | grep -E '\.(pem|key|crt)$')
 if [ -z "$tracked" ]; then pass "no certificates or keys in git"; else fail "certificates or keys in git: $tracked"; fi
 
-# 10. make dev only: the hot reload WebSocket goes through nginx.
-# make dev is detected by the image name (image: transcendence-app-dev in
-# docker-compose.dev.yml): if that name changes, update this check
-if docker compose ps app --format '{{.Image}}' | grep -q -- '-dev$'; then
+# 10. make dev only: the hot reload WebSocket goes through nginx
+if [ "$is_dev" = true ]; then
   # Next 16 serves hot reload on /_next/hmr. Once upgraded the connection stays
   # open, so curl stops after 3 s: only the 101 status matters
   code=$(curl -sk -m 3 -o /dev/null -w '%{http_code}' --http1.1 \
@@ -181,6 +196,115 @@ elif printf '%s\n' "$config" | grep -Eq 'proxy_pass[[:space:]]+https?://app[:/;]
   fail "a proxy_pass to the app has a fixed address: use \$app_upstream"
 else
   pass "app address looked up on each request (resolver + \$app_upstream)"
+fi
+
+# 17-18. Tokens in links stay out of nginx's logs (#185): the data export (#165)
+# sends its download token after "?", and the login redirect carries that link,
+# token included, in callbackUrl. The secret is new on each run, so an older
+# run cannot hide or fake a result. Each check also needs the request's own log
+# line: if the logs could not be read, "secret not found" would prove nothing.
+run_id="$(date +%s)-$$"
+secret="secret-$run_id"
+
+# 17. The access log keeps the path, without what comes after "?", in the request
+# and in the Referer (the page the browser came from). The path stays as the browser
+# sent it: a %20 decoded to a space would split the quoted request field in two.
+# The path is new on each run too (the app answers 404), so the line found is this one
+path="/log-check-$run_id"
+spaced="$path%20spaced"
+curl_https -o /dev/null -e "$url/page?token=$secret-referer" "$url$path?token=$secret"
+curl_https -o /dev/null "$url$spaced?token=$secret"
+sleep 1
+logs=$(service_logs nginx)
+if ! printf '%s\n' "$logs" | grep -q "\"GET $path[ ?]"; then
+  fail "the request to $path is not in the nginx logs: cannot check the token"
+elif printf '%s\n' "$logs" | grep -q "$secret"; then
+  fail "the access log keeps what comes after '?' (token visible)"
+elif ! printf '%s\n' "$logs" | grep -q "\"GET $spaced HTTP/"; then
+  fail "the access log decodes the path: a %20 becomes a space and splits the request field"
+else
+  pass "access log keeps the path as sent and the Referer, without what comes after '?'"
+fi
+
+# 18. The error log copies the whole request, "?" part included, and its format
+# cannot change. On the download route (#165) and on /login it only keeps critical
+# errors. /login because a visitor without a session who opens a link with a token is
+# sent to /login?callbackUrl=<that link> (web/src/auth.config.ts), token included.
+# A body over 5 MB makes nginx write an error line (413), without touching the app.
+# An address over 8 KB (414) is rejected before nginx knows the route: its error line
+# is "info", below the log level, so it only shows if someone lowers that level
+download="/api/gdpr/export/check-$run_id/download"
+head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+  -H 'Content-Type: application/octet-stream' "$url$download?token=$secret-download"
+# The same with a slash at the end: nginx would otherwise skip the download block
+head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+  -H 'Content-Type: application/octet-stream' "$url$download/?token=$secret-download"
+# The login redirect, with the token inside callbackUrl, written as the app writes it
+callback="%2Fapi%2Fgdpr%2Fexport%2Fcheck-$run_id%2Fdownload%3Ftoken%3D$secret-login"
+for login in /login /login/; do
+  head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+    -H 'Content-Type: application/octet-stream' "$url$login?callbackUrl=$callback"
+done
+long=$(head -c 9000 /dev/zero | tr '\0' a)
+long_code=$(curl_https --http1.1 -o /dev/null -w '%{http_code}' "$url$download?token=$secret-download&pad=$long")
+sleep 1
+logs=$(service_logs nginx)
+if ! printf '%s\n' "$logs" | grep -q "\"POST $download[ ?]"; then
+  fail "the request to $download is not in the nginx logs: cannot check the token"
+elif ! printf '%s\n' "$logs" | grep -q "\"POST $download/[ ?]"; then
+  fail "the request to $download/ is not in the nginx logs: cannot check the token"
+elif ! printf '%s\n' "$logs" | grep -q "\"POST /login HTTP/"; then
+  fail "the request to /login is not in the nginx logs: cannot check the token"
+elif ! printf '%s\n' "$logs" | grep -q "\"POST /login/ HTTP/"; then
+  fail "the request to /login/ is not in the nginx logs: cannot check the token"
+elif [ "$long_code" != "414" ]; then
+  fail "an address over 8 KB answered $long_code, expected 414: cannot check the token"
+elif printf '%s\n' "$logs" | grep -q "$secret-download"; then
+  fail "a log of the download route keeps the token (access or error log)"
+elif printf '%s\n' "$logs" | grep -q "$secret-login"; then
+  fail "a log of /login keeps the token inside callbackUrl (access or error log)"
+else
+  pass "download route and /login: no log keeps the token, not even on an error"
+fi
+
+# 19. The app's own log keeps no token either: next start logs no requests, and next
+# dev leaves out links with a token parameter (web/next.config.ts).
+# The logs must be readable first. make dev: a request without a token must show.
+# make: next start logs no requests, so its start-up lines must show (whole log)
+curl_https -o /dev/null "$url/login?token=$secret-app"
+[ "$is_dev" = true ] && curl_https -o /dev/null "$url/login?check=$run_id-app-shown"
+sleep 1
+app_logs=$(service_logs app)
+if [ "$is_dev" = true ] && ! printf '%s\n' "$app_logs" | grep -q "$run_id-app-shown"; then
+  fail "the request without a token is not in the app logs: cannot check the token"
+elif [ "$is_dev" = false ] && [ -z "$(docker compose logs --no-log-prefix app 2>&1)" ]; then
+  fail "the app log is empty: cannot check the token"
+elif printf '%s\n' "$app_logs" | grep -q "$secret-app"; then
+  fail "the app log keeps a link's token"
+else
+  pass "the app log keeps no link token"
+fi
+
+# 20. The Referer carries only the origin, never the path or the "?" part (#185):
+# why, in nginx/app.conf. Exactly one Referrer-Policy: strict-origin on the app's
+# pages, on the test mail inbox (which sends its own) and on nginx's own error pages
+# (413), which only get the header with "always"
+policy_of() {
+  printf '%s\n' "$1" | tr -d '\r' | grep -i '^referrer-policy:' | sed 's/^[^:]*:[[:space:]]*//'
+}
+page_policy=$(policy_of "$(curl_https -o /dev/null -D - "$url/login")")
+mailpit_policy=$(policy_of "$(curl_https -o /dev/null -D - "$url/mailpit/")")
+# 6000000 bytes: over client_max_body_size (5 MB), so nginx answers 413 itself
+error_policy=$(policy_of "$(head -c 6000000 /dev/zero | curl_https -o /dev/null -D - -X POST \
+  --data-binary @- -H 'Content-Type: application/octet-stream' "$url/login")")
+if [ "$page_policy" != "strict-origin" ]; then
+  fail "a page sends Referrer-Policy '$page_policy', expected exactly one 'strict-origin'"
+elif [ "$mailpit_policy" != "strict-origin" ]; then
+  fail "the mail inbox sends Referrer-Policy '$mailpit_policy', expected exactly one 'strict-origin'"
+elif [ "$error_policy" != "strict-origin" ]; then
+  fail "an nginx error page (413) sends Referrer-Policy '$error_policy', expected exactly one 'strict-origin'"
+else
+  pass "Referrer-Policy strict-origin: the Referer carries no path or token"
 fi
 
 if [ "$failures" -eq 0 ]; then
