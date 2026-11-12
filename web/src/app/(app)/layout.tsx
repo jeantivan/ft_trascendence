@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { MobileNav } from "@/components/MobileNav";
 import { Sidebar } from "@/components/Sidebar";
+import { LegalLinks } from "@/components/ui/LegalLinks";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,12 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <MobileNav />
         <main className="flex-1 p-4 md:p-8">{children}</main>
         <footer className="flex gap-4 border-t border-border-subtle px-4 py-4 text-sm text-text-secondary md:px-8">
-          <Link href="/privacy" className="hover:text-text-primary">
-            Privacy Policy
-          </Link>
-          <Link href="/terms" className="hover:text-text-primary">
-            Terms of Service
-          </Link>
+          <LegalLinks />
           {/* Hueco: aviso legal (art. 10 LSSI), contenido por decidir */}
         </footer>
       </div>
