@@ -3,6 +3,7 @@ import path from "node:path";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
 import { prisma } from "@/lib/prisma";
 import { checkImage, MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
+import { removeAvatar } from "@/lib/uploads/remove-avatar";
 import { saveAvatar } from "@/lib/uploads/save-avatar";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
 
@@ -121,4 +122,16 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   return Response.json({ id: saved.avatarId, url: `/api/files/${saved.avatarId}` }, { status: 201 });
+}
+
+// DELETE /api/upload: the signed-in user removes their avatar (#130), returning
+// to the default silhouette
+export async function DELETE(): Promise<Response> {
+  const user = await requireApiAuth();
+  if (user instanceof Response) {
+    return user;
+  }
+
+  await removeAvatar(user.id);
+  return Response.json({ removed: true }, { status: 200 });
 }
