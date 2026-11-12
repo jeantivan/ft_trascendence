@@ -79,6 +79,9 @@ export type AdminActionEntry = { adminId: string } & (
 // Ids only, never the content (nick, message text...): the row is kept 12 months.
 // A thin layer over recordAudit, the one writer of audit_log (#183): it fixes the
 // role to admin and only lets through the Admin's own resource and action pairs.
+// One exception left: delete-account.ts still writes account_deleted with
+// tx.auditLog.create directly, not yet through recordAudit. Left as it is so
+// this PR does not clash with #191, which edits that file; #191 keeps that write.
 export async function recordAdminAction(
   tx: Prisma.TransactionClient,
   entry: AdminActionEntry,

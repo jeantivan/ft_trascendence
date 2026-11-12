@@ -3,7 +3,10 @@ import { Prisma, type ActorRole, type AuditAction, type PrismaClient } from "@/g
 // What the person does on their own behalf: no role, and never an access by a third party
 const SELF_ACTIONS = ["consent_given", "consent_withdrawn", "account_deleted"] as const satisfies readonly AuditAction[];
 type SelfAction = (typeof SELF_ACTIONS)[number];
-// What a Manager may record on someone's data in their club (which cases: matrix #2)
+// What a Manager may record on someone's data in their club. Which cases: the
+// Manager column of matrix #2 (https://github.com/jeantivan/ft_trascendence/issues/2).
+// Our reading, not the matrix's words: its C/R/U/D map to create/read/update/delete,
+// and the Admin-only actions are left out
 type ManagerAction = "read" | "update" | "create" | "delete";
 // Everything else is the Admin's (#101). recordAdminAction's list must match it (checked by a test)
 export type AdminAction = Exclude<AuditAction, SelfAction>;
