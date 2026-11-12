@@ -1,17 +1,28 @@
 import { Prisma, type ActorRole, type AuditAction, type PrismaClient } from "@/generated/prisma/client";
 
+// What the person does on their own behalf: no role, and never an access by a third party
+const SELF_ACTIONS = ["consent_given", "consent_withdrawn", "account_deleted"] as const satisfies readonly AuditAction[];
+type SelfAction = (typeof SELF_ACTIONS)[number];
+// What a Manager may record on someone's data in their club (which cases: matrix #2)
+type ManagerAction = "read" | "update" | "create" | "delete";
+// Everything else is the Admin's (#101). recordAdminAction's list must match it (checked by a test)
+export type AdminAction = Exclude<AuditAction, SelfAction>;
+
 // Audit metadata only. The table has no dedicated column for RPE values,
 // Feedback bodies or message text. Never put sensitive content in any field;
 // resource and resourceId must contain only resource names and identifiers.
+// The role decides which actions fit, so a pair that makes no sense (a Manager
+// with consent_given) does not compile (#183).
 export type AuditEntry = {
   actorId: string;
   subjectId: string | null;
-  // Null in consent events and account deletion: the person acts on their own behalf
-  actorRole: ActorRole | null;
-  action: AuditAction;
   resource: string;
   resourceId: string | null;
-};
+} & (
+  | { actorRole: null; action: SelfAction }
+  | { actorRole: "manager"; action: ManagerAction }
+  | { actorRole: "admin"; action: AdminAction }
+);
 
 // Takes the caller's transaction, so the row is committed or rolled back together
 // with the change it records
@@ -39,14 +50,15 @@ export type AccessLogEntry = {
 };
 
 // Accesses by a Manager or an Admin to the data of subjectId, oldest first.
-// Rows without an actor role (consent events, account_deleted) are not accesses by a third party.
+// Rows without an actor role, and SELF_ACTIONS even if a row has a role, are not
+// accesses by a third party (#183).
 // This function does not authorize access to subjectId.
 // For self-export (#33), the caller must derive it from the authenticated
 // session and validate the current user in the database, never trust a
 // subjectId supplied by the client.
 export async function listAccessesToUser(db: PrismaClient, subjectId: string): Promise<AccessLogEntry[]> {
   const rows = await db.auditLog.findMany({
-    where: { subjectId, actorRole: { not: null } },
+    where: { subjectId, actorRole: { not: null }, action: { notIn: [...SELF_ACTIONS] } },
     orderBy: { createdAt: "asc" },
     select: { createdAt: true, action: true, resource: true, actorRole: true },
   });
