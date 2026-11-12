@@ -239,6 +239,11 @@ head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
 # The same with a slash at the end: nginx would otherwise skip the download block
 head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
   -H 'Content-Type: application/octet-stream' "$url$download/?token=$secret-download"
+# An id with an encoded slash (#202): nginx matches the decoded path (check-<run>/x),
+# so the download block must not stop at a "/"
+slashed="/api/gdpr/export/check-$run_id%2Fx/download"
+head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+  -H 'Content-Type: application/octet-stream' "$url$slashed?token=$secret-download"
 # The login redirect, with the token inside callbackUrl, written as the app writes it
 callback="%2Fapi%2Fgdpr%2Fexport%2Fcheck-$run_id%2Fdownload%3Ftoken%3D$secret-login"
 for login in /login /login/; do
@@ -253,6 +258,8 @@ if ! printf '%s\n' "$logs" | grep -q "\"POST $download[ ?]"; then
   fail "the request to $download is not in the nginx logs: cannot check the token"
 elif ! printf '%s\n' "$logs" | grep -q "\"POST $download/[ ?]"; then
   fail "the request to $download/ is not in the nginx logs: cannot check the token"
+elif ! printf '%s\n' "$logs" | grep -q "\"POST $slashed[ ?]"; then
+  fail "the request to $slashed is not in the nginx logs: cannot check the token"
 elif ! printf '%s\n' "$logs" | grep -q "\"POST /login HTTP/"; then
   fail "the request to /login is not in the nginx logs: cannot check the token"
 elif ! printf '%s\n' "$logs" | grep -q "\"POST /login/ HTTP/"; then
