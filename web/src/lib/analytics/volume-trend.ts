@@ -62,6 +62,11 @@ export async function calculateVolumeTrend(
   orgId: string,
   db: Prisma.TransactionClient = prisma,
 ): Promise<VolumeTrend> {
+  // Checked first: Intl throws RangeError for an invalid date too, and the catch
+  // below would blame the club's time zone for the caller's date
+  if (Number.isNaN(date.getTime())) {
+    throw new TypeError("Invalid date");
+  }
   const organization = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true } });
   // The caller decides what a failure means (#143): nothing is swallowed here.
   // The message carries the club id only, never data about the Athlete

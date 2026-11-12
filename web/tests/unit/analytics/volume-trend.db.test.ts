@@ -253,6 +253,13 @@ describe("calculateVolumeTrend", { timeout: 30_000 }, () => {
     );
   });
 
+  // Intl throws RangeError for an invalid date too: it must not blame the club's time zone
+  it("throws an invalid date error, not a time zone one, when the date is invalid", async () => {
+    await expect(calculateVolumeTrend(ATHLETE_ID, new Date("not a date"), orgId, db)).rejects.toThrow(
+      new TypeError("Invalid date"),
+    );
+  });
+
   it("throws a clear error, with the club id only, when the club does not exist", async () => {
     const missingOrgId = "14500000-0000-4000-8000-0000000000ff";
 
