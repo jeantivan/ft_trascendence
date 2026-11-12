@@ -1,6 +1,6 @@
 # Alert
 
-- **Fichero:** `Alert.tsx`
-- **Para qué:** aviso en línea con icono.
-- **Props:** `variant`: `error` (`role="alert"`, borde `rpe-max`, icono `warning`), `success` (`role="status"`, `rpe-low`, `check`) o `info` (`role="status"`, `session-rodaje`, `info`). Los `children` son el mensaje. Siempre pinta su caja: el `if (mensaje)` va fuera.
-- **Ejemplo:** `{error && <Alert variant="error">{error}</Alert>}`, o `<Alert variant="info">Te hemos enviado un código.</Alert>`
+- **File:** `Alert.tsx`
+- **Purpose:** inline notice with an icon.
+- **Props:** `variant`: `error` (`role="alert"`, `rpe-max` border, `warning` icon), `success` (`role="status"`, `rpe-low`, `check`) or `info` (`role="status"`, `session-rodaje`, `info`). The `children` are the message. It always renders its box: the `if (message)` goes outside.
+- **Example:** `{error && <Alert variant="error">{error}</Alert>}`, or `<Alert variant="info">We have sent you a code.</Alert>`
