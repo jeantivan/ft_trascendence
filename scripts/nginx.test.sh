@@ -199,29 +199,37 @@ else
 fi
 
 # 17-18. Tokens in links stay out of nginx's logs (#185): the data export (#165)
-# sends its download token after "?". The secret is new on each run, so an older
+# sends its download token after "?", and the login redirect carries that link,
+# token included, in callbackUrl. The secret is new on each run, so an older
 # run cannot hide or fake a result. Each check also needs the request's own log
 # line: if the logs could not be read, "secret not found" would prove nothing.
 run_id="$(date +%s)-$$"
 secret="secret-$run_id"
 
 # 17. The access log keeps the path, without what comes after "?", in the request
-# and in the Referer (the page the browser came from).
+# and in the Referer (the page the browser came from). The path stays as the browser
+# sent it: a %20 decoded to a space would split the quoted request field in two.
 # The path is new on each run too (the app answers 404), so the line found is this one
 path="/log-check-$run_id"
+spaced="$path%20spaced"
 curl_https -o /dev/null -e "$url/page?token=$secret-referer" "$url$path?token=$secret"
+curl_https -o /dev/null "$url$spaced?token=$secret"
 sleep 1
 logs=$(service_logs nginx)
 if ! printf '%s\n' "$logs" | grep -q "\"GET $path[ ?]"; then
   fail "the request to $path is not in the nginx logs: cannot check the token"
 elif printf '%s\n' "$logs" | grep -q "$secret"; then
   fail "the access log keeps what comes after '?' (token visible)"
+elif ! printf '%s\n' "$logs" | grep -q "\"GET $spaced HTTP/"; then
+  fail "the access log decodes the path: a %20 becomes a space and splits the request field"
 else
-  pass "access log keeps the path and the Referer without what comes after '?'"
+  pass "access log keeps the path as sent and the Referer, without what comes after '?'"
 fi
 
 # 18. The error log copies the whole request, "?" part included, and its format
-# cannot change. On the download route (#165) it only keeps critical errors.
+# cannot change. On the download route (#165) and on /login it only keeps critical
+# errors. /login because a visitor without a session who opens a link with a token is
+# sent to /login?callbackUrl=<that link> (web/src/auth.config.ts), token included.
 # A body over 5 MB makes nginx write an error line (413), without touching the app.
 # An address over 8 KB (414) is rejected before nginx knows the route: its error line
 # is "info", below the log level, so it only shows if someone lowers that level
@@ -231,6 +239,12 @@ head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
 # The same with a slash at the end: nginx would otherwise skip the download block
 head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
   -H 'Content-Type: application/octet-stream' "$url$download/?token=$secret-download"
+# The login redirect, with the token inside callbackUrl, written as the app writes it
+callback="%2Fapi%2Fgdpr%2Fexport%2Fcheck-$run_id%2Fdownload%3Ftoken%3D$secret-login"
+for login in /login /login/; do
+  head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+    -H 'Content-Type: application/octet-stream' "$url$login?callbackUrl=$callback"
+done
 long=$(head -c 9000 /dev/zero | tr '\0' a)
 long_code=$(curl_https --http1.1 -o /dev/null -w '%{http_code}' "$url$download?token=$secret-download&pad=$long")
 sleep 1
@@ -239,12 +253,18 @@ if ! printf '%s\n' "$logs" | grep -q "\"POST $download[ ?]"; then
   fail "the request to $download is not in the nginx logs: cannot check the token"
 elif ! printf '%s\n' "$logs" | grep -q "\"POST $download/[ ?]"; then
   fail "the request to $download/ is not in the nginx logs: cannot check the token"
+elif ! printf '%s\n' "$logs" | grep -q "\"POST /login HTTP/"; then
+  fail "the request to /login is not in the nginx logs: cannot check the token"
+elif ! printf '%s\n' "$logs" | grep -q "\"POST /login/ HTTP/"; then
+  fail "the request to /login/ is not in the nginx logs: cannot check the token"
 elif [ "$long_code" != "414" ]; then
   fail "an address over 8 KB answered $long_code, expected 414: cannot check the token"
 elif printf '%s\n' "$logs" | grep -q "$secret-download"; then
   fail "a log of the download route keeps the token (access or error log)"
+elif printf '%s\n' "$logs" | grep -q "$secret-login"; then
+  fail "a log of /login keeps the token inside callbackUrl (access or error log)"
 else
-  pass "download route: no log keeps the token, not even on an error"
+  pass "download route and /login: no log keeps the token, not even on an error"
 fi
 
 # 19. The app's own log keeps no token either: next start logs no requests, and next
