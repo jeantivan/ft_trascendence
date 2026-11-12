@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { registerAction, type AuthActionResult } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/Button";
+import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { AuthErrorBanner } from "./AuthErrorBanner";
 
@@ -18,10 +19,7 @@ export function RegisterForm() {
 
       {!state.success && <AuthErrorBanner error={state.error} />}
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="nick" className="text-sm font-medium">
-          Nick
-        </label>
+      <FormField label="Nick" htmlFor="nick">
         <Input
           id="nick"
           name="nick"
@@ -30,12 +28,9 @@ export function RegisterForm() {
           autoComplete="username"
           placeholder="fastrunner"
         />
-      </div>
+      </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="email" className="text-sm font-medium">
-          Email
-        </label>
+      <FormField label="Email" htmlFor="email">
         <Input
           id="email"
           name="email"
@@ -44,12 +39,9 @@ export function RegisterForm() {
           autoComplete="email"
           placeholder="runner@42madrid.com"
         />
-      </div>
+      </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm font-medium">
-          Contraseña (mínimo 8 caracteres)
-        </label>
+      <FormField label="Contraseña (mínimo 8 caracteres)" htmlFor="password">
         <Input
           id="password"
           name="password"
@@ -59,7 +51,7 @@ export function RegisterForm() {
           autoComplete="new-password"
           placeholder="••••••••"
         />
-      </div>
+      </FormField>
 
       <Button type="submit" disabled={isPending} className="mt-2">
         {isPending ? "Registrando..." : "Crear cuenta"}
