@@ -183,14 +183,15 @@ export class PrismaUserRepository implements UserRepository {
     return this.toAuthUser(user);
   }
 
-  async giveHealthConsent(id: string, version: number): Promise<AuthUser> {
+  private async setHealthConsent(
+    id: string,
+    consent: { healthConsentAt: Date | null; healthConsentVersion: number | null },
+    action: "consent_given" | "consent_withdrawn"
+  ): Promise<AuthUser> {
     return this.db.$transaction(async (tx) => {
       const user = await tx.user.update({
         where: { id },
-        data: {
-          healthConsentAt: new Date(),
-          healthConsentVersion: version,
-        },
+        data: consent,
         select: authUserSelect,
       });
 
@@ -199,7 +200,7 @@ export class PrismaUserRepository implements UserRepository {
           actorId: id,
           subjectId: id,
           actorRole: null,
-          action: "consent_given",
+          action,
           resource: "health_consent",
         },
       });
@@ -208,29 +209,20 @@ export class PrismaUserRepository implements UserRepository {
     });
   }
 
+  async giveHealthConsent(id: string, version: number): Promise<AuthUser> {
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: new Date(), healthConsentVersion: version },
+      "consent_given"
+    );
+  }
+
   async withdrawHealthConsent(id: string): Promise<AuthUser> {
-    return this.db.$transaction(async (tx) => {
-      const user = await tx.user.update({
-        where: { id },
-        data: {
-          healthConsentAt: null,
-          healthConsentVersion: null,
-        },
-        select: authUserSelect,
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorId: id,
-          subjectId: id,
-          actorRole: null,
-          action: "consent_withdrawn",
-          resource: "health_consent",
-        },
-      });
-
-      return this.toAuthUser(user);
-    });
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: null, healthConsentVersion: null },
+      "consent_withdrawn"
+    );
   }
 
   async purgeHealthData(id: string): Promise<void> {

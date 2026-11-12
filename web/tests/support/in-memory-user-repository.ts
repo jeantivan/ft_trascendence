@@ -128,48 +128,45 @@ export class InMemoryUserRepository implements UserRepository {
     return updated;
   }
 
-  async giveHealthConsent(id: string, version: number): Promise<AuthUser> {
+  private async setHealthConsent(
+    id: string,
+    consent: { healthConsentAt: Date | null; healthConsentVersion: number | null },
+    action: "consent_given" | "consent_withdrawn"
+  ): Promise<AuthUser> {
     const user = this.users.get(id);
     if (!user) {
       throw new Error(`User with id ${id} not found`);
     }
     const updated: AuthUser = {
       ...user,
-      healthConsentAt: new Date(),
-      healthConsentVersion: version,
+      ...consent,
     };
     this.users.set(id, updated);
     this.auditLogs.push({
       actorId: id,
       subjectId: id,
       actorRole: null,
-      action: "consent_given",
+      action,
       resource: "health_consent",
       createdAt: new Date(),
     });
     return updated;
   }
 
+  async giveHealthConsent(id: string, version: number): Promise<AuthUser> {
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: new Date(), healthConsentVersion: version },
+      "consent_given"
+    );
+  }
+
   async withdrawHealthConsent(id: string): Promise<AuthUser> {
-    const user = this.users.get(id);
-    if (!user) {
-      throw new Error(`User with id ${id} not found`);
-    }
-    const updated: AuthUser = {
-      ...user,
-      healthConsentAt: null,
-      healthConsentVersion: null,
-    };
-    this.users.set(id, updated);
-    this.auditLogs.push({
-      actorId: id,
-      subjectId: id,
-      actorRole: null,
-      action: "consent_withdrawn",
-      resource: "health_consent",
-      createdAt: new Date(),
-    });
-    return updated;
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: null, healthConsentVersion: null },
+      "consent_withdrawn"
+    );
   }
 
   async purgeHealthData(id: string): Promise<void> {

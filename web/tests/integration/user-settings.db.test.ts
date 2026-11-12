@@ -5,6 +5,7 @@ import { PrismaUserRepository } from "@/lib/auth/user-repository";
 import { UserSettingsService } from "@/lib/user/user-settings-service";
 
 const EMAIL_PREFIX = "user-settings-db-test-";
+const ORG_PREFIX = "user-settings-db-test-org-";
 const repo = new PrismaUserRepository(prisma);
 const service = new UserSettingsService(repo);
 
@@ -16,6 +17,15 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
     });
     const ids = users.map((u) => u.id);
     if (ids.length > 0) {
+      await prisma.sessionLog.deleteMany({
+        where: { athleteId: { in: ids } },
+      });
+      await prisma.feedback.deleteMany({
+        where: { athleteId: { in: ids } },
+      });
+      await prisma.trainingSession.deleteMany({
+        where: { athleteId: { in: ids } },
+      });
       await prisma.auditLog.deleteMany({
         where: { actorId: { in: ids } },
       });
@@ -23,6 +33,9 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
         where: { id: { in: ids } },
       });
     }
+    await prisma.organization.deleteMany({
+      where: { name: { startsWith: ORG_PREFIX } },
+    });
   });
 
   afterAll(async () => {
@@ -98,7 +111,7 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
 
     const org = await prisma.organization.create({
       data: {
-        name: `Org for ${user.id.slice(0, 8)}`,
+        name: `${ORG_PREFIX}${user.id.slice(0, 8)}`,
         timezone: "Europe/Madrid",
       },
     });
@@ -151,9 +164,5 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
     // Verify TrainingSession still intact
     const countSession = await prisma.trainingSession.count({ where: { id: session.id } });
     expect(countSession).toBe(1);
-
-    // Clean up session and org
-    await prisma.trainingSession.delete({ where: { id: session.id } });
-    await prisma.organization.delete({ where: { id: org.id } });
   });
 });
