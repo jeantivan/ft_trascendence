@@ -2,12 +2,22 @@ COMPOSE      = docker compose
 COMPOSE_DEV  = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_TEST = $(COMPOSE) -f docker-compose.test.yml
 
+# Port nginx publishes, read from .env (8443 if missing) to print the address
+HTTPS_PORT = $(or $(shell grep -s '^HTTPS_PORT=' .env | tail -n1 | cut -d= -f2 | tr -d '\r"'),8443)
+
 # Run when the start fails: explains it if Postgres rejected the password
 DB_PASSWORD_HINT = $(COMPOSE) logs migrate 2>/dev/null | sh scripts/db-password-hint.sh
 
 # Production: build the images and start everything in the background
+# If the app container is still the make dev one, remove it with --volumes first:
+# its anonymous node_modules volume would otherwise stay orphaned (~880 MB each
+# time, #65). Only then, so a second make with no changes restarts nothing.
 all: env
+	@if $(COMPOSE) ps --all --format '{{.Image}}' app 2>/dev/null | grep -q '^transcendence-app-dev'; then \
+		$(COMPOSE) rm --stop --force --volumes app; \
+	fi
 	$(COMPOSE) up --build -d || { $(DB_PASSWORD_HINT); exit 1; }
+	@echo "App: https://localhost:$(HTTPS_PORT) (from another computer: https://<this computer's IP>:$(HTTPS_PORT))"
 
 # Development: hot reload without rebuilding (make logs to see the output)
 # Removing the old app container with its anonymous node_modules volume gives
@@ -66,8 +76,11 @@ down:
 clean: down
 
 # Also remove the volumes and the images: DELETES THE DATABASE DATA
+# --rmi local skips images with a fixed name, so the make dev / make test image
+# (transcendence-app-dev) is removed by name (#65)
 fclean:
 	$(COMPOSE) down --volumes --rmi local
+	docker image rm --force transcendence-app-dev 2>/dev/null || true
 
 # Sequential on purpose: with make -j, "re: clean all" could run both at once
 re: clean
