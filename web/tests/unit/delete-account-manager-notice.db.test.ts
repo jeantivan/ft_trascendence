@@ -35,11 +35,13 @@ describe("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000
 
   // Notices as [recipient, orgId] pairs, sorted so the assertions do not depend on insert order
   async function notices() {
-    // Only this file's Admins: other test files share the database and create their own
+    // Only this file's Admins and clubs: other test files share the database, and every Admin
+    // in it (ADMIN_1 included) receives the notices their own Manager deletions create
     const rows = await db.notification.findMany({
       where: { type: "club_without_manager", userId: { in: [ADMIN_1, ADMIN_2] } },
     });
     return rows
+      .filter((row) => ORG_IDS.includes((row.payload as { orgId: string }).orgId))
       .map((row) => [row.userId, (row.payload as { orgId: string }).orgId])
       .sort((a, b) => a.join().localeCompare(b.join()));
   }
@@ -124,7 +126,7 @@ describe("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000
 
     expect(await db.user.findUnique({ where: { id: MANAGER_A } })).not.toBeNull();
     expect(await db.membership.count({ where: { userId: MANAGER_A } })).toBe(1);
-    expect(await db.notification.count()).toBe(0);
+    expect(await notices()).toEqual([]);
   });
 
   // Without serialization both transactions see the other Manager and nobody warns the Admin.
@@ -141,7 +143,9 @@ describe("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000
       expect(await notices()).toEqual([[ADMIN_1, ORG_1]]);
 
       // Reset for the next round
-      await db.notification.deleteMany({ where: { userId: ADMIN_1 } });
+      await db.notification.deleteMany({
+        where: { userId: ADMIN_1, type: "club_without_manager", payload: { path: ["orgId"], equals: ORG_1 } },
+      });
       await db.organization.deleteMany({ where: { id: ORG_1 } });
       await createUser(MANAGER_A, "user");
       await createUser(MANAGER_B, "user");
