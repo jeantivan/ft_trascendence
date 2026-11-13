@@ -9,7 +9,10 @@ interface AlertProps {
   children: ReactNode;
 }
 
-const base = "flex items-center gap-2 rounded border bg-surface-elevated p-3 text-body-sm text-text-primary";
+// items-start keeps the icon on the first line of a long message; min-w-0 and wrap-anywhere
+// let a long token or link break instead of overflowing the box
+const base =
+  "flex min-w-0 items-start gap-2 rounded border bg-surface-elevated p-3 text-body-sm wrap-anywhere text-text-primary";
 
 // Record obliga a tener una entrada por variante, con las dos propiedades: si falta algo, tsc falla
 const variants: Record<AlertVariant, { border: string; icon: IconName }> = {
@@ -23,7 +26,7 @@ export function Alert({ variant, children }: AlertProps) {
 
   return (
     <div role={variant === "error" ? "alert" : "status"} className={`${base} ${border}`}>
-      <Icon name={icon} />
+      <Icon name={icon} className="mt-0.5 shrink-0" />
       {children}
     </div>
   );

@@ -46,11 +46,17 @@ describe("Alert", () => {
     render(<Alert variant="info">Código enviado</Alert>);
     expect(screen.getByRole("status")).toHaveClass(
       "flex",
-      "items-center",
+      "items-start",
       "gap-2",
       "p-3",
       "text-body-sm",
       "text-text-primary"
     );
+  });
+
+  it("keeps the icon at full size and breaks long unbroken text", () => {
+    const { container } = render(<Alert variant="error">abcdefghijklmnopqrstuvwxyz0123456789</Alert>);
+    expect(container.querySelector("svg")).toHaveClass("shrink-0");
+    expect(screen.getByRole("alert")).toHaveClass("min-w-0", "wrap-anywhere");
   });
 });
