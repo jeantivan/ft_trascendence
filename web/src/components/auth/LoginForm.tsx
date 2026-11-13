@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type AuthActionResult } from "@/lib/auth/actions";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
 
@@ -17,6 +17,8 @@ interface LoginFormProps {
 
 export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
+  // A failed login attempt replaces the notice that came with the page
+  const message = state.success ? notice : state.error;
 
   return (
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
@@ -26,8 +28,7 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
         <input type="hidden" name="callbackUrl" value={callbackUrl} />
       )}
 
-      {/* A failed login attempt replaces the notice that came with the page */}
-      <AuthErrorBanner error={state.success ? notice : state.error} />
+      {message && <Alert variant="error">{message}</Alert>}
 
       <FormField label="Email" htmlFor="email">
         <Input
