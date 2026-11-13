@@ -2,7 +2,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { recordAdminAction } from "@/lib/audit/record-admin-action";
+import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
 import { CLUB_WITHOUT_MANAGER, deleteAccountWithOtp } from "@/lib/gdpr/delete-account";
 import { issueDeleteCode } from "../support/delete-account-helper";
 import { withLockHarness } from "../support/lock-harness";
@@ -20,8 +20,8 @@ import {
 } from "../support/organization-repository-contract";
 
 // Delegates to the real function; a test replaces it once to make the audit write fail
-vi.mock("@/lib/audit/record-admin-action", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/audit/record-admin-action")>();
+vi.mock("@/lib/gdpr/record-admin-action", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/gdpr/record-admin-action")>();
   return { ...actual, recordAdminAction: vi.fn(actual.recordAdminAction) };
 });
 
