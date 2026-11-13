@@ -1,8 +1,9 @@
-import type { AuditAction, Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
+import { recordAudit, type AdminAction } from "./audit";
 
 // The audit actions an Admin can take (#101). What each one means is in
-// AuditAction in schema.prisma; the person's own actions (consent, account_deleted)
-// are left out.
+// AuditAction in schema.prisma. It is every AuditAction except SELF_ACTIONS (audit.ts):
+// AdminAction there, and a test checks that this list matches it.
 export const ADMIN_AUDIT_ACTIONS = [
   "block",
   "unblock",
@@ -11,7 +12,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   "create",
   "update",
   "read",
-] as const satisfies readonly AuditAction[];
+] as const satisfies readonly AdminAction[];
 
 export type AdminAuditAction = (typeof ADMIN_AUDIT_ACTIONS)[number];
 
@@ -47,19 +48,20 @@ interface MessageEntry {
 
 // A club. Creating one with its first Manager writes two rows: create on
 // organization, and role_change on membership with the Manager as subjectId.
+// No subjectId here: a club is not a person, and the row would reach someone's export.
 interface OrganizationEntry {
   action: "create" | "update" | "delete";
   resource: "organization";
   resourceId: string;
-  subjectId?: string;
+  subjectId?: never;
 }
 
-// A Group or an Event of a club: the Admin can only delete them.
+// A Group or an Event of a club: the Admin can only delete them. No subjectId either.
 interface ContentEntry {
   action: "delete";
   resource: "group" | "event";
   resourceId: string;
-  subjectId?: string;
+  subjectId?: never;
 }
 
 export type AdminActionEntry = { adminId: string } & (
@@ -75,18 +77,21 @@ export type AdminActionEntry = { adminId: string } & (
 // "admin" from requireOrgRole): if the action fails, the row rolls back with it.
 // A Manager's action is not recorded here: it goes with actor_role manager (#163).
 // Ids only, never the content (nick, message text...): the row is kept 12 months.
+// A thin layer over recordAudit, the one writer of audit_log (#183): it fixes the
+// role to admin and only lets through the Admin's own resource and action pairs.
+// One exception left: delete-account.ts still writes account_deleted with
+// tx.auditLog.create directly, not yet through recordAudit. Left as it is so
+// this PR does not clash with #191, which edits that file; #191 keeps that write.
 export async function recordAdminAction(
   tx: Prisma.TransactionClient,
   entry: AdminActionEntry,
 ): Promise<void> {
-  await tx.auditLog.create({
-    data: {
-      actorId: entry.adminId,
-      actorRole: "admin",
-      action: entry.action,
-      resource: entry.resource,
-      resourceId: entry.resourceId ?? null,
-      subjectId: entry.subjectId ?? null,
-    },
+  await recordAudit(tx, {
+    actorId: entry.adminId,
+    actorRole: "admin",
+    action: entry.action,
+    resource: entry.resource,
+    resourceId: entry.resourceId ?? null,
+    subjectId: entry.subjectId ?? null,
   });
 }

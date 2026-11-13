@@ -19,15 +19,15 @@ describe("requireApiAdmin", () => {
     expect(await result.json()).toEqual({ error: "Unauthorized" });
   });
 
-  it("answers 403 JSON when the user has a session but is not an Admin", async () => {
+  it("answers 404 JSON when the user has a session but is not an Admin", async () => {
     const notAdmin = async (): Promise<AdminResult> => ({ ok: false, reason: "not-admin" });
 
     const result = await requireApiAdmin(notAdmin);
 
     expect(result).toBeInstanceOf(Response);
     if (!(result instanceof Response)) return;
-    expect(result.status).toBe(403);
-    expect(await result.json()).toEqual({ error: "Forbidden" });
+    expect(result.status).toBe(404);
+    expect(await result.json()).toEqual({ error: "Not Found" });
   });
 
   it("returns the Admin when the check accepts it", async () => {
