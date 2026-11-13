@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "@/app/api/upload/route";
+import { DELETE, POST } from "@/app/api/upload/route";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
 
 // The real requireApiAuth needs NextAuth and the users table: fake it, so these
@@ -21,6 +21,11 @@ const fake = vi.hoisted(() => ({
   transaction: vi.fn(),
   avatarFindMany: vi.fn(),
   avatarDeleteMany: vi.fn(),
+  removeAvatar: vi.fn(),
+}));
+
+vi.mock("@/lib/uploads/remove-avatar", () => ({
+  removeAvatar: fake.removeAvatar,
 }));
 
 // A getter, so the route reads the temporary directory of the current test
@@ -293,5 +298,22 @@ describe("POST /api/upload", () => {
     // The orphan is reported, so someone can find it
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe("DELETE /api/upload", () => {
+  it("returns 401 without a session", async () => {
+    vi.mocked(requireApiAuth).mockResolvedValue(Response.json({ error: "Unauthorized" }, { status: 401 }));
+    const response = await DELETE();
+    expect(response.status).toBe(401);
+    expect(fake.removeAvatar).not.toHaveBeenCalled();
+  });
+
+  it("removes the avatar and returns 200 with result", async () => {
+    fake.removeAvatar.mockResolvedValue({ removed: true });
+    const response = await DELETE();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ removed: true });
+    expect(fake.removeAvatar).toHaveBeenCalledWith(testUser.id);
   });
 });

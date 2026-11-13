@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
+import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { deleteAccountAction, requestDeleteCodeAction } from "@/lib/gdpr/actions";
 
@@ -72,10 +73,7 @@ export function DeleteAccountSection() {
       </div>
 
       <form action={deleteAction} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="delete-account-code" className="text-sm font-medium text-text-primary">
-            Código de confirmación
-          </label>
+        <FormField label="Código de confirmación" htmlFor="delete-account-code">
           <Input
             id="delete-account-code"
             name="code"
@@ -86,7 +84,7 @@ export function DeleteAccountSection() {
             autoComplete="one-time-code"
             maxLength={CODE_LENGTH}
           />
-        </div>
+        </FormField>
         {!deleteState.success && (
           <p role="alert" className="text-sm text-red-400">
             {deleteState.error}
