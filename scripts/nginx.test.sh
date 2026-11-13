@@ -239,11 +239,16 @@ head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
 # The same with a slash at the end: nginx would otherwise skip the download block
 head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
   -H 'Content-Type: application/octet-stream' "$url$download/?token=$secret-download"
-# An id with an encoded slash (#202): nginx matches the decoded path (check-<run>/x),
-# so the download block must not stop at a "/"
-slashed="/api/gdpr/export/check-$run_id%2Fx/download"
-head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
-  -H 'Content-Type: application/octet-stream' "$url$slashed?token=$secret-download"
+# Ids with an encoded character (#202): nginx matches the decoded path, so the
+# download block must take any character in the id. %2F becomes "/", %3F a "?" in
+# the path and %0A a line break, which "." in a regex skips unless told otherwise
+encoded_ids="%2Fx %3Fx %0Ax"
+encoded_download() { printf '/api/gdpr/export/check-%s%s/download' "$run_id" "$1"; }
+for id in $encoded_ids; do
+  head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+    -H 'Content-Type: application/octet-stream' \
+    "$url$(encoded_download "$id")?token=$secret-download"
+done
 # The login redirect, with the token inside callbackUrl, written as the app writes it
 callback="%2Fapi%2Fgdpr%2Fexport%2Fcheck-$run_id%2Fdownload%3Ftoken%3D$secret-login"
 for login in /login /login/; do
@@ -254,12 +259,17 @@ long=$(head -c 9000 /dev/zero | tr '\0' a)
 long_code=$(curl_https --http1.1 -o /dev/null -w '%{http_code}' "$url$download?token=$secret-download&pad=$long")
 sleep 1
 logs=$(service_logs nginx)
+missing=""
+for id in $encoded_ids; do
+  printf '%s\n' "$logs" | grep -q "\"POST $(encoded_download "$id")[ ?]" \
+    || missing="$missing${missing:+ }$id"
+done
 if ! printf '%s\n' "$logs" | grep -q "\"POST $download[ ?]"; then
   fail "the request to $download is not in the nginx logs: cannot check the token"
 elif ! printf '%s\n' "$logs" | grep -q "\"POST $download/[ ?]"; then
   fail "the request to $download/ is not in the nginx logs: cannot check the token"
-elif ! printf '%s\n' "$logs" | grep -q "\"POST $slashed[ ?]"; then
-  fail "the request to $slashed is not in the nginx logs: cannot check the token"
+elif [ -n "$missing" ]; then
+  fail "the download requests with id $missing are not in the nginx logs: cannot check the token"
 elif ! printf '%s\n' "$logs" | grep -q "\"POST /login HTTP/"; then
   fail "the request to /login is not in the nginx logs: cannot check the token"
 elif ! printf '%s\n' "$logs" | grep -q "\"POST /login/ HTTP/"; then

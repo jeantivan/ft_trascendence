@@ -18,6 +18,14 @@ describe("next dev request logging", () => {
     expect(isLogged("/api/gdpr/export/abc/download/?other=secret")).toBe(false);
   });
 
+  it("leaves out the download route when the id has a slash, like nginx (#202)", () => {
+    // nginx/app.conf takes any id, so next dev must leave out at least the same links
+    expect(isLogged("/api/gdpr/export/a/b/download?other=secret")).toBe(false);
+    expect(isLogged("/api/gdpr/export/a%2Fb/download?other=secret")).toBe(false);
+    // next dev sees "?" still encoded inside the id, so "[^?]+" takes it
+    expect(isLogged("/api/gdpr/export/a%3Fb/download?other=secret")).toBe(false);
+  });
+
   it("leaves out any route whose link carries a token parameter", () => {
     expect(isLogged("/verify-email?token=secret")).toBe(false);
     expect(isLogged("/any/route?lang=es&token=secret")).toBe(false);
