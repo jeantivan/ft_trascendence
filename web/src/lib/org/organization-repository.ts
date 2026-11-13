@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
-import { recordAdminAction } from "@/lib/audit/record-admin-action";
+import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
 import type { CreateOrganizationInput } from "./schemas";
 
 // Two clubs cannot have the same name (exact match, case included)
