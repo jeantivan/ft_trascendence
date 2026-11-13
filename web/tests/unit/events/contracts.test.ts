@@ -11,12 +11,14 @@ import type {
 // each @ts-expect-error must find an error, or tsc fails with "Unused directive".
 
 const EVENT_ID = "00000000-0000-4000-8000-000000000201";
+const ORG_ID = "00000000-0000-4000-8000-000000000001";
 
 describe("Events view contracts", () => {
   it("EventMemberView carries the count, never the list of Spot Requests", () => {
     // What the Admin gets: same view, without a Spot Request of their own
     const adminView: EventMemberView = {
       id: EVENT_ID,
+      orgId: ORG_ID,
       title: "Series en el Retiro",
       location: "Puerta de Alcalá",
       startsAt: new Date("2026-11-14T08:00:00Z"),
@@ -41,6 +43,7 @@ describe("Events view contracts", () => {
   it("EventMemberView has exactly these fields: a new one needs a review against #2", () => {
     expectTypeOf<keyof EventMemberView>().toEqualTypeOf<
       | "id"
+      | "orgId"
       | "title"
       | "location"
       | "startsAt"
@@ -54,6 +57,7 @@ describe("Events view contracts", () => {
   it("EventManagerView adds the Spot Requests with nick and status", () => {
     const managerView: EventManagerView = {
       id: EVENT_ID,
+      orgId: ORG_ID,
       title: "Series en el Retiro",
       location: "Puerta de Alcalá",
       startsAt: new Date("2026-11-14T08:00:00Z"),
@@ -84,6 +88,7 @@ describe("Events view contracts", () => {
   it("EventManagerView has exactly these fields", () => {
     expectTypeOf<keyof EventManagerView>().toEqualTypeOf<
       | "id"
+      | "orgId"
       | "title"
       | "location"
       | "startsAt"

@@ -5,6 +5,8 @@ import type { SpotRequestStatus } from "@/generated/prisma/enums";
 // approvedCount counts only approved Spot Requests (EventRepository, #147)
 export type EventMemberView = {
   id: string;
+  // The Event's club, for links in the UI; whoever sees the Event is already a member
+  orgId: string;
   title: string;
   location: string;
   startsAt: Date;
