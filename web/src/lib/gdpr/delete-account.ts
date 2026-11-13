@@ -99,9 +99,9 @@ export async function deleteAccountWithOtp(
 // Managers are counted. The second transaction waits for the first one's commit
 // and then counts again, so it sees the real state.
 //
-// Known limit, pending the Manager management ticket: this only serializes
-// deletions with each other. An Admin granting or removing a Manager at the same
-// time is not covered unless that flow locks the club row the same way.
+// Known limit: this lock only protects against code that takes it too. Granting and
+// removing a Manager (OrganizationRepository) locks the user row and then the club
+// row, like this function; any other code that writes memberships must do the same.
 async function deleteAccountRows(userId: string, tx: Prisma.TransactionClient): Promise<void> {
   const managed = await tx.membership.findMany({
     where: { userId, role: "manager" },
