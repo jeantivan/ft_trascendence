@@ -8,7 +8,7 @@ const PAGE_PATH = "src/app/example/page.tsx";
 const eslint = new ESLint({ cwd: path.resolve(import.meta.dirname, "../../..") });
 
 const MESSAGE =
-  "Call requireAdmin() outside try/catch: redirect() and forbidden() throw, and a catch would swallow them.";
+  "Call requireAdmin() outside try/catch: redirect() and notFound() throw, and a catch would swallow them.";
 
 // Loading the Next plugins takes seconds: done once, outside the 5 s per-test limit
 beforeAll(async () => {
