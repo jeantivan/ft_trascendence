@@ -3,6 +3,8 @@ import {
   updateNickSchema,
   updateEmailSchema,
   updatePasswordSchema,
+  updatePrivacySchema,
+  purgeHealthDataSchema,
 } from "@/lib/user/schemas";
 
 describe("User settings Zod schemas", () => {
@@ -100,6 +102,48 @@ describe("User settings Zod schemas", () => {
         newPassword: "ñ".repeat(36) + "A",
       });
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe("updatePrivacySchema", () => {
+    it("accepts valid partial privacy settings", () => {
+      const result = updatePrivacySchema.safeParse({ statsPublic: true });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.statsPublic).toBe(true);
+        expect(result.data.showOnline).toBeUndefined();
+      }
+    });
+
+    it("accepts all privacy settings combined", () => {
+      const result = updatePrivacySchema.safeParse({
+        statsPublic: true,
+        showOnline: false,
+        notificationsEnabled: false,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects empty object when no settings are provided", () => {
+      const result = updatePrivacySchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects non-boolean values", () => {
+      const result = updatePrivacySchema.safeParse({ statsPublic: "true" });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("purgeHealthDataSchema", () => {
+    it("accepts confirm: true", () => {
+      const result = purgeHealthDataSchema.safeParse({ confirm: true });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects confirm: false or missing", () => {
+      expect(purgeHealthDataSchema.safeParse({ confirm: false }).success).toBe(false);
+      expect(purgeHealthDataSchema.safeParse({}).success).toBe(false);
     });
   });
 });

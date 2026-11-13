@@ -1,12 +1,42 @@
 import {
   type AuthUser,
   type CreateUserInput,
+  type UpdatePrivacySettingsInput,
   UserAlreadyExistsError,
   type UserRepository,
 } from "@/lib/auth/user-repository";
+import { stripCardiacMetrics } from "@/lib/user/strip-cardiac-metrics";
+
+export interface InMemoryAuditLogEntry {
+  actorId: string;
+  subjectId: string | null;
+  actorRole: null;
+  action: string;
+  resource: string;
+  createdAt: Date;
+}
+
+export interface InMemorySessionLog {
+  id: string;
+  athleteId: string;
+  completed: boolean;
+  rpe: number | null;
+  distanceM?: number | null;
+  durationS?: number | null;
+  extra?: Record<string, unknown> | null;
+}
+
+export interface InMemoryFeedback {
+  id: string;
+  athleteId: string;
+  body: string;
+}
 
 export class InMemoryUserRepository implements UserRepository {
   private users: Map<string, AuthUser> = new Map();
+  public auditLogs: InMemoryAuditLogEntry[] = [];
+  public sessionLogs: InMemorySessionLog[] = [];
+  public feedbacks: InMemoryFeedback[] = [];
 
   async findByEmail(email: string): Promise<AuthUser | null> {
     const normalized = email.toLowerCase().trim();
@@ -81,5 +111,74 @@ export class InMemoryUserRepository implements UserRepository {
     const updated: AuthUser = { ...user, passwordHash };
     this.users.set(id, updated);
     return updated;
+  }
+
+  async updatePrivacy(id: string, settings: UpdatePrivacySettingsInput): Promise<AuthUser> {
+    const user = this.users.get(id);
+    if (!user) {
+      throw new Error(`User with id ${id} not found`);
+    }
+    const updated: AuthUser = {
+      ...user,
+      ...(settings.statsPublic !== undefined && { statsPublic: settings.statsPublic }),
+      ...(settings.showOnline !== undefined && { showOnline: settings.showOnline }),
+      ...(settings.notificationsEnabled !== undefined && { notificationsEnabled: settings.notificationsEnabled }),
+    };
+    this.users.set(id, updated);
+    return updated;
+  }
+
+  private async setHealthConsent(
+    id: string,
+    consent: { healthConsentAt: Date | null; healthConsentVersion: number | null },
+    action: "consent_given" | "consent_withdrawn"
+  ): Promise<AuthUser> {
+    const user = this.users.get(id);
+    if (!user) {
+      throw new Error(`User with id ${id} not found`);
+    }
+    const updated: AuthUser = {
+      ...user,
+      ...consent,
+    };
+    this.users.set(id, updated);
+    this.auditLogs.push({
+      actorId: id,
+      subjectId: id,
+      actorRole: null,
+      action,
+      resource: "health_consent",
+      createdAt: new Date(),
+    });
+    return updated;
+  }
+
+  async giveHealthConsent(id: string, version: number): Promise<AuthUser> {
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: new Date(), healthConsentVersion: version },
+      "consent_given"
+    );
+  }
+
+  async withdrawHealthConsent(id: string): Promise<AuthUser> {
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: null, healthConsentVersion: null },
+      "consent_withdrawn"
+    );
+  }
+
+  async purgeHealthData(id: string): Promise<void> {
+    this.feedbacks = this.feedbacks.filter((f) => f.athleteId !== id);
+    this.sessionLogs = this.sessionLogs.map((log) => {
+      if (log.athleteId !== id) return log;
+      const cleaned = stripCardiacMetrics(log.extra);
+      return {
+        ...log,
+        rpe: null,
+        extra: cleaned,
+      };
+    });
   }
 }
