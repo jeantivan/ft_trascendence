@@ -46,6 +46,7 @@ export const spotRequestStatusSchema = z.enum(SpotRequestStatus);
 //   Athlete  no row or withdrawn  -> pending
 //   Athlete  pending or approved  -> withdrawn
 //   Manager  pending              -> approved or rejected
+//   Manager  approved             -> rejected (expels the Athlete)
 // rejected is final for that Event. Once the Event is cancelled or has started,
 // no transition is allowed.
 
@@ -58,7 +59,7 @@ export const withdrawSpotSchema = z.object({
   eventId: z.guid(),
 });
 
-// The Manager only decides on pending requests, and only approves or rejects
+// The Manager approves or rejects a pending request, or rejects an approved one to expel
 export const reviewSpotSchema = z.object({
   eventId: z.guid(),
   // The Athlete whose request is reviewed: spot_requests.user_id in the database,
