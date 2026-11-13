@@ -92,6 +92,15 @@ describe("Events Zod schemas", () => {
       expect(createEventSchema.safeParse({ ...validEvent, sessionId: "abc" }).success).toBe(false);
     });
 
+    it("accepts an Event without sessionId and leaves it as null", () => {
+      const withoutSession: Record<string, unknown> = { ...validEvent };
+      delete withoutSession.sessionId;
+      const result = createEventSchema.safeParse(withoutSession);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.sessionId).toBeNull();
+    });
+
     it("drops orgId, createdBy and cancelledAt sent by the client", () => {
       const result = createEventSchema.safeParse({
         ...validEvent,
@@ -155,6 +164,14 @@ describe("Events Zod schemas", () => {
 
       expect(result.success).toBe(true);
       expect(result.data).not.toHaveProperty("cancelledAt");
+    });
+
+    // Every field again: a missing sessionId would be ambiguous (keep it or unlink it?)
+    it("rejects an edit without sessionId: the form sends an id or null", () => {
+      const withoutSession: Record<string, unknown> = { ...valid };
+      delete withoutSession.sessionId;
+
+      expect(updateEventSchema.safeParse(withoutSession).success).toBe(false);
     });
   });
 

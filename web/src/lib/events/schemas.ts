@@ -2,6 +2,9 @@ import { z } from "zod";
 // enums.ts, not client.ts: only the values, no database client, so forms can import it too
 import { SpotRequestStatus } from "@/generated/prisma/enums";
 
+// The id of the linked Session, or null for an Event without one
+const sessionIdSchema = z.guid().nullable();
+
 export const createEventSchema = z.object({
   title: z
     .string()
@@ -18,13 +21,16 @@ export const createEventSchema = z.object({
   startsAt: z.iso
     .datetime({ local: true, precision: -1, error: "Fecha y hora no válidas" })
     .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Fecha y hora no válidas"),
-  sessionId: z.guid().nullable(),
+  sessionId: sessionIdSchema.default(null),
 });
 
 // Every field again, not only the changed ones. Never cancelledAt: cancelling is
-// its own action, so an edit cannot undo a cancellation
+// its own action, so an edit cannot undo a cancellation.
+// sessionId again without the default: a missing one would be ambiguous
+// (keep the Session or unlink it?), so the form sends an id or null
 export const updateEventSchema = createEventSchema.extend({
   eventId: z.guid(),
+  sessionId: sessionIdSchema,
 });
 
 // The server sets cancelledAt to now; there is no action to undo it
