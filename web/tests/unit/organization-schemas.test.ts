@@ -26,8 +26,13 @@ describe("updateOrganizationSchema", () => {
     );
   });
 
-  it("rejects aliases such as UTC: only the Intl.supportedValuesOf list", () => {
-    expect(updateOrganizationSchema.safeParse({ ...VALID, timezone: "UTC" }).success).toBe(false);
+  it("accepts UTC, which Intl.supportedValuesOf does not list, and Intl can use it", () => {
+    expect(updateOrganizationSchema.safeParse({ ...VALID, timezone: "UTC" }).success).toBe(true);
+    expect(() => new Intl.DateTimeFormat("en-US", { timeZone: "UTC" })).not.toThrow();
+  });
+
+  it("still rejects other spellings such as lower-case utc", () => {
+    expect(updateOrganizationSchema.safeParse({ ...VALID, timezone: "utc" }).success).toBe(false);
   });
 });
 
