@@ -4,7 +4,7 @@ import { withLockHarness } from "../support/lock-harness";
 // Smoke test of the harness itself, with plain SQL: advisory locks need no tables.
 describe("LockHarness", () => {
   // Distinct per test so a failed run cannot leave the other test waiting
-  const lockKeys = { waits: 910_001, noWait: 910_002 };
+  const lockKeys = { waits: 910_001, noWait: 910_002, wrongFragment: 910_004, bodyThrows: 910_005 };
 
   it("proves that two operations wait behind the gate, and lets them finish once it is released", async () => {
     const key = lockKeys.waits;
@@ -55,5 +55,52 @@ describe("LockHarness", () => {
         harness.waitUntilWaiting(gate, [{ name: "free", client, queryFragment: "pg_advisory_xact_lock" }], 300),
       ).rejects.toThrow(/Not every operation was waiting behind the gate/);
     });
+  });
+
+  it("does not accept an operation that waits, but stopped at another query than expected", async () => {
+    const key = lockKeys.wrongFragment;
+
+    await withLockHarness(async (harness) => {
+      const gate = await harness.holdLock("gate", (tx) => tx.$executeRaw`SELECT pg_advisory_xact_lock(${key}::bigint)`);
+      const client = harness.client("a");
+      harness.track(client.db.$executeRaw`SELECT pg_advisory_xact_lock(${key}::bigint)`);
+
+      await expect(
+        harness.waitUntilWaiting(gate, [{ name: "a", client, queryFragment: "FROM no_such_table" }], 300),
+      ).rejects.toThrow(/Not every operation was waiting behind the gate/);
+    });
+  });
+
+  it("cleans up when the body of the test throws: the error is kept, the operation finishes and the gate is released", async () => {
+    const key = lockKeys.bodyThrows;
+    let finished = false;
+
+    await expect(
+      withLockHarness(async (harness) => {
+        const gate = await harness.holdLock("gate", (tx) => tx.$executeRaw`SELECT pg_advisory_xact_lock(${key}::bigint)`);
+        const client = harness.client("a");
+        harness.track(
+          client.db.$executeRaw`SELECT pg_advisory_xact_lock(${key}::bigint)`.then(() => {
+            finished = true;
+          }),
+        );
+        await harness.waitUntilWaiting(gate, [{ name: "a", client, queryFragment: "pg_advisory_xact_lock" }]);
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+
+    expect(finished).toBe(true);
+    // The lock is free again: a new gate gets it at once (a leftover one would make it wait)
+    await withLockHarness(async (harness) => {
+      await harness.holdLock("again", (tx) => tx.$executeRaw`SELECT pg_advisory_xact_lock(${key}::bigint)`);
+    });
+  });
+
+  it("reports a gate whose transaction fails, instead of hanging", async () => {
+    await expect(
+      withLockHarness((harness) =>
+        harness.holdLock("gate", (tx) => tx.$executeRaw`SELECT 1 FROM table_that_does_not_exist`),
+      ),
+    ).rejects.toThrow(/table_that_does_not_exist/);
   });
 });
