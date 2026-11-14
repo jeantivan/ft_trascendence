@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { deleteAccountAction, requestDeleteCodeAction } from "@/lib/gdpr/actions";
@@ -43,10 +44,7 @@ export function DeleteAccountSection() {
   }
 
   return (
-    <section
-      aria-labelledby="delete-account-title"
-      className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface-elevated p-6"
-    >
+    <Card as="section" aria-labelledby="delete-account-title" className="flex flex-col gap-4">
       <h2 id="delete-account-title" className="font-heading text-xl font-bold text-text-primary">
         Borrar cuenta
       </h2>
@@ -94,6 +92,6 @@ export function DeleteAccountSection() {
           {isDeleting ? "Borrando…" : "Borrar mi cuenta definitivamente"}
         </Button>
       </form>
-    </section>
+    </Card>
   );
 }
