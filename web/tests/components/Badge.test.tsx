@@ -13,6 +13,7 @@ describe("Badge", () => {
     ["intervalos", "session-intervalos"],
     ["cuestas", "session-cuestas"],
     ["tirada-larga", "session-tirada-larga"],
+    ["tirada_larga", "session-tirada-larga"],
     ["fartlek", "session-fartlek"],
     ["warning", "volume-alert"],
   ] as const)("variant %s uses its token for text, border and 12%% background", (variant, token) => {
@@ -29,5 +30,10 @@ describe("Badge", () => {
     const badge = screen.getByTestId("badge");
     expect(badge).toHaveClass("rounded-full", "font-heading", "text-label-caps", "uppercase", "px-4");
     expect(badge).not.toHaveClass("px-2");
+  });
+
+  it("keeps its pill on one line and spaces an icon from the text", () => {
+    render(<Badge variant="warning" data-testid="badge" />);
+    expect(screen.getByTestId("badge")).toHaveClass("whitespace-nowrap", "gap-1");
   });
 });
