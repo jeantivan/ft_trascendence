@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOrganizationSchema, updateOrganizationSchema } from "@/lib/org/schemas";
+import { createOrganizationSchema, NAME_MAX_LENGTH, updateOrganizationSchema } from "@/lib/org/schemas";
 
 const VALID = { description: "Salimos los martes", timezone: "Europe/Madrid" };
 
@@ -54,6 +54,29 @@ describe("createOrganizationSchema", () => {
     const input = { ...NEW_CLUB, managerIds: [MANAGER_A, MANAGER_A] };
 
     expect(createOrganizationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects the same Manager twice in different capitalization", () => {
+    const input = { ...NEW_CLUB, managerIds: [MANAGER_A, MANAGER_A.toUpperCase()] };
+
+    expect(createOrganizationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("lower-cases the Manager ids", () => {
+    const parsed = createOrganizationSchema.parse({ ...NEW_CLUB, managerIds: [MANAGER_A.toUpperCase()] });
+
+    expect(parsed.managerIds).toEqual([MANAGER_A]);
+  });
+
+  it("accepts a 100-character name and rejects a 101-character one", () => {
+    expect(createOrganizationSchema.safeParse({ ...NEW_CLUB, name: "a".repeat(NAME_MAX_LENGTH) }).success).toBe(true);
+    expect(createOrganizationSchema.safeParse({ ...NEW_CLUB, name: "a".repeat(NAME_MAX_LENGTH + 1) }).success).toBe(false);
+  });
+
+  it("counts the name after trimming", () => {
+    const name = ` ${"a".repeat(NAME_MAX_LENGTH)} `;
+
+    expect(createOrganizationSchema.safeParse({ ...NEW_CLUB, name }).success).toBe(true);
   });
 
   it("rejects a Manager id that is not a uuid", () => {

@@ -2,6 +2,19 @@ import { z } from "zod";
 
 export const DESCRIPTION_MAX_LENGTH = 500;
 
+// No project rule covers a club name (nick is 30, password 72), so 100 for this form:
+// room for a long club name, short enough to fit a catalog row
+export const NAME_MAX_LENGTH = 100;
+
+// Postgres compares uuids case-insensitively, JavaScript strings do not: every id is
+// lower-cased before it is compared, deduplicated or stored
+export function normalizeId(id: string): string {
+  return id.toLowerCase();
+}
+
+// z.guid(), not z.uuid(): see org-role.ts
+export const idSchema = z.guid().transform(normalizeId);
+
 // Computed once: the list is the same for the whole process. Aliases such as
 // "UTC" are not in it, only the canonical IANA names ("Europe/Madrid")
 const IANA_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
@@ -19,12 +32,9 @@ export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 // What the Admin gives to create a club: what a Manager can edit, plus the name
 // and the first Managers (a club never exists without one)
 export const createOrganizationSchema = updateOrganizationSchema.extend({
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(NAME_MAX_LENGTH),
   managerIds: z
-    .array(
-      // z.guid(), not z.uuid(): see org-role.ts
-      z.guid(),
-    )
+    .array(idSchema)
     .min(1)
     .refine((ids) => new Set(ids).size === ids.length, {
       message: "Duplicate Manager",
