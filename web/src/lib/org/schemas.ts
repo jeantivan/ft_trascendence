@@ -15,14 +15,14 @@ export function normalizeId(id: string): string {
 // z.guid(), not z.uuid(): see org-role.ts
 export const idSchema = z.guid().transform(normalizeId);
 
-// Computed once: the list is the same for the whole process. Aliases such as
-// "UTC" are not in it, only the canonical IANA names ("Europe/Madrid")
+// Computed once: the list is the same for the whole process. It holds the canonical IANA
+// names ("Europe/Madrid") but not "UTC", which is accepted on its own below
 const IANA_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
 
 export const updateOrganizationSchema = z.object({
   // null removes the description (the column is optional)
   description: z.string().max(DESCRIPTION_MAX_LENGTH).nullable(),
-  timezone: z.string().refine((zone) => IANA_TIMEZONES.has(zone), {
+  timezone: z.string().refine((zone) => zone === "UTC" || IANA_TIMEZONES.has(zone), {
     message: "Not an IANA time zone",
   }),
 });
