@@ -113,22 +113,29 @@ export function isNameViolation(error: unknown): boolean {
 // Locks every Manager's row, in id order so two creations cannot wait on each other, and checks
 // they all exist. A concurrent account deletion (delete-account.ts locks the user first, too)
 // then waits until this transaction ends, so the memberships below cannot hit a missing user:
-// no P2003 has to be interpreted.
+// no P2003 has to be interpreted. FOR NO KEY UPDATE, not FOR UPDATE: it still conflicts with the
+// deletion's FOR UPDATE, but not with the KEY SHARE that a foreign key check takes (see
+// lockUserThenClub).
 async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): Promise<void> {
   const users = await tx.$queryRaw<{ id: string }[]>`
-    SELECT id FROM users WHERE id = ANY(${userIds}::uuid[]) ORDER BY id FOR UPDATE`;
+    SELECT id FROM users WHERE id = ANY(${userIds}::uuid[]) ORDER BY id FOR NO KEY UPDATE`;
   if (users.length !== userIds.length) throw new UserNotFoundError();
 }
 
 // Role changes lock the target user, then the club: the order account deletion uses
 // (delete-account.ts), so the two cannot wait on each other. Whatever is read about the
 // membership or the other Managers must be read after this, in a new statement.
+// The user row is taken FOR NO KEY UPDATE, not FOR UPDATE: deleting the last Manager of a club
+// notifies every Admin, and the notification's foreign key needs a KEY SHARE lock on the Admin's
+// row. With FOR UPDATE, an Admin being assigned here (row held, waiting for the club the deletion
+// already holds) and that deletion would wait for each other (40P01). FOR NO KEY UPDATE does not
+// conflict with KEY SHARE, and still conflicts with the FOR UPDATE of the user's own deletion.
 async function lockUserThenClub(
   tx: Prisma.TransactionClient,
   orgId: string,
   userId: string,
 ): Promise<void> {
-  const users = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+  const users = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
   if (users.length === 0) throw new UserNotFoundError();
   const clubs = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM organizations WHERE id = ${orgId}::uuid FOR UPDATE`;
   if (clubs.length === 0) throw new OrganizationNotFoundError();

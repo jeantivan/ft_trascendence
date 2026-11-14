@@ -127,6 +127,15 @@ describe("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000
     expect(await db.user.findUnique({ where: { id: MANAGER_A } })).not.toBeNull();
     expect(await db.membership.count({ where: { userId: MANAGER_A } })).toBe(1);
     expect(await notices()).toEqual([]);
+    // Any other notification to this file's users, or any about its club, would be a leftover too
+    expect(
+      await db.notification.count({
+        where: {
+          userId: { in: USER_IDS },
+          OR: [{ type: { not: "club_without_manager" } }, { payload: { path: ["orgId"], equals: ORG_1 } }],
+        },
+      }),
+    ).toBe(0);
   });
 
   // Without serialization both transactions see the other Manager and nobody warns the Admin.

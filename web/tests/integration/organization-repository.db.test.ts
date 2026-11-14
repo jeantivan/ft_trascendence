@@ -753,5 +753,82 @@ describe("PrismaOrganizationRepository.assignManager / removeManager", () => {
     it("role removal of one Manager and account deletion of the other: the deletion arrives first and the removal throws LastManagerError", async () => {
       await expect(removeManagerWhileOtherManagerDeletesAccount("deletion")).resolves.toBe("LastManagerError");
     });
+
+    // The recipient of the role operation is an Admin. Deleting a club's last Manager notifies
+    // every Admin, and the notification's foreign key needs a KEY SHARE lock on the Admin's row.
+    // If assign/remove held that row with FOR UPDATE while waiting for the club, the two would
+    // wait for each other (40P01); FOR NO KEY UPDATE does not conflict with KEY SHARE.
+    // G holds the club and the deletion queues first, so it gets the club before the role
+    // operation, which by then holds the Admin's row. Returns how the role operation ended.
+    async function roleOnAdminWhileLastManagerDeletesAccount(operation: "assign" | "remove") {
+      const { adminId, managerId: deleted, otherManagerId: recipient, athleteId, orgId } = await setup();
+      await prisma.user.updateMany({ where: { id: { in: [adminId, recipient, athleteId] } }, data: { roleGlobal: "admin" } });
+      if (operation === "assign") {
+        // `deleted` is the club's only Manager; the recipient (an Admin athlete) is promoted
+        await prisma.membership.update({
+          where: { userId_orgId: { userId: recipient, orgId } },
+          data: { role: "athlete" },
+        });
+      }
+      const code = await issueDeleteCode(prisma, deleted);
+
+      try {
+        const [roleResult, deletionResult] = await withLockHarness(async (harness) => {
+          const gate = await harness.holdLock("gate", (tx) =>
+            tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId}::uuid FOR UPDATE`,
+          );
+          const deletionClient = harness.client("deletion", OTP_CLIENT);
+          const roleClient = harness.client("role", OTP_CLIENT);
+          const deletionTarget = { name: "deletion", client: deletionClient, queryFragment: "FROM organizations" };
+          const roleTarget = { name: "role", client: roleClient, queryFragment: "FROM organizations" };
+
+          const deletion = harness.track(deleteAccountWithOtp(deleted, code, deletionClient.db));
+          await harness.waitUntilWaiting(gate, [deletionTarget], OTP_OBSERVE_MS);
+          const roleRepository = new PrismaOrganizationRepository(roleClient.db);
+          const role = harness.track(
+            operation === "assign"
+              ? roleRepository.assignManager(adminId, orgId, recipient)
+              : roleRepository.removeManager(adminId, orgId, recipient),
+          );
+          await harness.waitUntilWaiting(gate, [deletionTarget, roleTarget], OTP_OBSERVE_MS);
+
+          gate.release();
+          return Promise.allSettled([role, deletion]);
+        });
+
+        // Any rejection that is not the removal's domain error (a deadlock included) fails here
+        if (deletionResult.status === "rejected") throw deletionResult.reason;
+        expect(await prisma.user.findUnique({ where: { id: deleted } })).toBeNull();
+        const clubNotices = (await prisma.notification.findMany({ where: { type: CLUB_WITHOUT_MANAGER } })).filter(
+          (notice) => (notice.payload as { orgId?: string }).orgId === orgId,
+        );
+        const rows = await auditRows(adminId);
+
+        if (operation === "assign") {
+          if (roleResult.status === "rejected") throw roleResult.reason;
+          // Deletion first: the club had no other Manager, so every Admin was told; then the promotion
+          expect(await roleOf(orgId, recipient)).toBe("manager");
+          expect(clubNotices.some((notice) => notice.userId === recipient)).toBe(true);
+          expect(rows).toHaveLength(1);
+        } else {
+          // Deletion first: the recipient was the other Manager, so nobody was told; then the
+          // removal finds them alone
+          expect(removalOutcome(roleResult)).toBe("LastManagerError");
+          expect(await roleOf(orgId, recipient)).toBe("manager");
+          expect(clubNotices).toHaveLength(0);
+          expect(rows).toHaveLength(0);
+        }
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { actorId: deleted } });
+      }
+    }
+
+    it("assigning an Admin as Manager while the club's last Manager deletes their account: no deadlock, both complete", async () => {
+      await roleOnAdminWhileLastManagerDeletesAccount("assign");
+    });
+
+    it("removing an Admin Manager after the other Manager's account deletion arrived first: the removal throws LastManagerError and nobody is notified", async () => {
+      await roleOnAdminWhileLastManagerDeletesAccount("remove");
+    });
   });
 });
