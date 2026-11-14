@@ -1,18 +1,6 @@
-const CARDIAC_KEYS = new Set([
-  "heartRate",
-  "heart_rate",
-  "avgHeartRate",
-  "avg_heart_rate",
-  "maxHeartRate",
-  "max_heart_rate",
-  "hr",
-  "avgHr",
-  "avg_hr",
-  "maxHr",
-  "max_hr",
-  "bpm",
-  "cardiac",
-]);
+// Only non-health keys explicitly allowed by docs/gdpr/export-spec.md survive purge.
+// When #69 defines the full SessionLog.extra schema, review this allowlist.
+const ALLOWED_EXTRA_KEYS = new Set(["incompletion_reason"]);
 
 export function stripCardiacMetrics(
   extra: unknown
@@ -22,7 +10,7 @@ export function stripCardiacMetrics(
   }
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(extra as Record<string, unknown>)) {
-    if (!CARDIAC_KEYS.has(key)) {
+    if (ALLOWED_EXTRA_KEYS.has(key)) {
       result[key] = value;
     }
   }

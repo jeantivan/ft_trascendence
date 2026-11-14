@@ -137,6 +137,13 @@ export class InMemoryUserRepository implements UserRepository {
     if (!user) {
       throw new Error(`User with id ${id} not found`);
     }
+    const unchanged =
+      action === "consent_given"
+        ? user.healthConsentAt !== null && user.healthConsentVersion === consent.healthConsentVersion
+        : user.healthConsentAt === null;
+    if (unchanged) {
+      return user;
+    }
     const updated: AuthUser = {
       ...user,
       ...consent,
@@ -179,6 +186,14 @@ export class InMemoryUserRepository implements UserRepository {
         rpe: null,
         extra: cleaned,
       };
+    });
+    this.auditLogs.push({
+      actorId: id,
+      subjectId: id,
+      actorRole: null,
+      action: "delete",
+      resource: "health_data",
+      createdAt: new Date(),
     });
   }
 }

@@ -14,12 +14,14 @@ describe("stripCardiacMetrics", () => {
     expect(stripCardiacMetrics(input)).toEqual({ incompletion_reason: "injury" });
   });
 
-  it("removes cardiac keys while keeping non-cardiac keys", () => {
+  it("removes cardiac, case-variant, nested and unknown keys while keeping incompletion_reason", () => {
     const input = {
       incompletion_reason: "fatigue",
       avgHeartRate: 165,
-      maxHr: 185,
-      bpm: 170,
+      HeartRate: 170,
+      hrv: 52,
+      metrics: { avgHeartRate: 160 },
+      unknown_field: "something",
     };
     expect(stripCardiacMetrics(input)).toEqual({
       incompletion_reason: "fatigue",

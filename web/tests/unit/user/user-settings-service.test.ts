@@ -9,6 +9,7 @@ import {
 } from "@/lib/user/user-settings-service";
 import { UserAlreadyExistsError } from "@/lib/auth/user-repository";
 import { hashPassword } from "@/lib/auth/password";
+import type { PurgeHealthDataInput } from "@/lib/user/schemas";
 
 describe("UserSettingsService", () => {
   let repo: InMemoryUserRepository;
@@ -274,6 +275,22 @@ describe("UserSettingsService", () => {
       expect(updated.notificationsEnabled).toBe(false);
     });
 
+    it("updates a single privacy setting without changing the others", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const updated = await service.updatePrivacy(user.id, {
+        showOnline: false,
+      });
+
+      expect(updated.showOnline).toBe(false);
+      expect(updated.statsPublic).toBe(false);
+      expect(updated.notificationsEnabled).toBe(true);
+    });
+
     it("throws UserNotFoundError when user is blocked", async () => {
       const user = await repo.createUser({
         email: "runner@42.com",
@@ -331,6 +348,35 @@ describe("UserSettingsService", () => {
         action: "consent_withdrawn",
         resource: "health_consent",
       });
+    });
+
+    it("is a no-op when giving health consent twice with the same version", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const first = await service.giveHealthConsent(user.id);
+      const second = await service.giveHealthConsent(user.id);
+
+      expect(second.healthConsentAt).toEqual(first.healthConsentAt);
+      expect(second.healthConsentVersion).toBe(first.healthConsentVersion);
+      expect(repo.auditLogs).toHaveLength(1);
+    });
+
+    it("is a no-op when withdrawing health consent without prior consent", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const withdrawn = await service.withdrawHealthConsent(user.id);
+
+      expect(withdrawn.healthConsentAt).toBeNull();
+      expect(withdrawn.healthConsentVersion).toBeNull();
+      expect(repo.auditLogs).toHaveLength(0);
     });
 
     it("throws UserNotFoundError when user is blocked", async () => {
@@ -408,6 +454,15 @@ describe("UserSettingsService", () => {
       // Athlete's feedback deleted; other athlete's feedback kept
       expect(repo.feedbacks).toHaveLength(1);
       expect(repo.feedbacks[0].id).toBe("fb-2");
+
+      expect(repo.auditLogs).toHaveLength(1);
+      expect(repo.auditLogs[0]).toMatchObject({
+        actorId: athlete.id,
+        subjectId: athlete.id,
+        actorRole: null,
+        action: "delete",
+        resource: "health_data",
+      });
     });
 
     it("rejects purge without confirmation", async () => {
@@ -417,9 +472,28 @@ describe("UserSettingsService", () => {
         nick: "runner42",
       });
 
+      repo.sessionLogs.push({
+        id: "log-keep",
+        athleteId: user.id,
+        completed: true,
+        rpe: 7,
+        distanceM: 5000,
+        durationS: 1800,
+        extra: { avgHeartRate: 155 },
+      });
+      repo.feedbacks.push({
+        id: "fb-keep",
+        athleteId: user.id,
+        body: "Buen ritmo",
+      });
+
       await expect(
-        service.purgeHealthData(user.id, { confirm: false } as any)
+        service.purgeHealthData(user.id, { confirm: false } as unknown as PurgeHealthDataInput)
       ).rejects.toThrow();
+
+      expect(repo.sessionLogs[0]?.rpe).toBe(7);
+      expect(repo.sessionLogs[0]?.extra).toEqual({ avgHeartRate: 155 });
+      expect(repo.feedbacks).toHaveLength(1);
     });
 
     it("throws UserNotFoundError when user is blocked", async () => {

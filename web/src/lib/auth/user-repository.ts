@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient, type GlobalRole } from "@/generated/prisma/client";
 import { stripCardiacMetrics } from "@/lib/user/strip-cardiac-metrics";
+import { recordAudit } from "@/lib/gdpr/audit";
 
 export class UserAlreadyExistsError extends Error {
   constructor(message = "User already exists") {
@@ -189,20 +190,36 @@ export class PrismaUserRepository implements UserRepository {
     action: "consent_given" | "consent_withdrawn"
   ): Promise<AuthUser> {
     return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
+
+      const current = await tx.user.findUniqueOrThrow({
+        where: { id },
+        select: authUserSelect,
+      });
+
+      const unchanged =
+        action === "consent_given"
+          ? current.healthConsentAt !== null &&
+            current.healthConsentVersion === consent.healthConsentVersion
+          : current.healthConsentAt === null;
+
+      if (unchanged) {
+        return this.toAuthUser(current);
+      }
+
       const user = await tx.user.update({
         where: { id },
         data: consent,
         select: authUserSelect,
       });
 
-      await tx.auditLog.create({
-        data: {
-          actorId: id,
-          subjectId: id,
-          actorRole: null,
-          action,
-          resource: "health_consent",
-        },
+      await recordAudit(tx, {
+        actorId: id,
+        subjectId: id,
+        actorRole: null,
+        action,
+        resource: "health_consent",
+        resourceId: null,
       });
 
       return this.toAuthUser(user);
@@ -227,6 +244,8 @@ export class PrismaUserRepository implements UserRepository {
 
   async purgeHealthData(id: string): Promise<void> {
     await this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
+
       await tx.feedback.deleteMany({
         where: { athleteId: id },
       });
@@ -252,6 +271,15 @@ export class PrismaUserRepository implements UserRepository {
       await tx.sessionLog.updateMany({
         where: { athleteId: id },
         data: { rpe: null },
+      });
+
+      await recordAudit(tx, {
+        actorId: id,
+        subjectId: id,
+        actorRole: null,
+        action: "delete",
+        resource: "health_data",
+        resourceId: null,
       });
     });
   }

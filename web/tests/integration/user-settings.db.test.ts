@@ -64,6 +64,26 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
     expect(fromDb.notificationsEnabled).toBe(false);
   });
 
+  it("updates a single privacy setting without changing the others in database", async () => {
+    const user = await repo.createUser({
+      email: `${EMAIL_PREFIX}partial-privacy@example.com`,
+      nick: "partial_privacy",
+    });
+
+    const updated = await service.updatePrivacy(user.id, {
+      showOnline: false,
+    });
+
+    expect(updated.showOnline).toBe(false);
+    expect(updated.statsPublic).toBe(false);
+    expect(updated.notificationsEnabled).toBe(true);
+
+    const fromDb = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(fromDb.showOnline).toBe(false);
+    expect(fromDb.statsPublic).toBe(false);
+    expect(fromDb.notificationsEnabled).toBe(true);
+  });
+
   it("gives and withdraws health consent with audit logs respecting CHECK constraint", async () => {
     const user = await repo.createUser({
       email: `${EMAIL_PREFIX}consent@example.com`,
@@ -103,10 +123,33 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
     expect(withdrawnAudit.subjectId).toBe(user.id);
   });
 
-  it("purges health data (RPE, cardiac metrics, feedback) while preserving volume and sessions", async () => {
+  it("is a no-op in database when giving consent twice or withdrawing without prior consent", async () => {
+    const user = await repo.createUser({
+      email: `${EMAIL_PREFIX}idempotent@example.com`,
+      nick: "idempotent_athlete",
+    });
+
+    // Withdraw before ever consenting -> 0 audit rows
+    await service.withdrawHealthConsent(user.id);
+    expect(await prisma.auditLog.count({ where: { actorId: user.id } })).toBe(0);
+
+    // Give consent twice -> keeps original timestamp and only 1 audit row
+    const first = await service.giveHealthConsent(user.id);
+    const second = await service.giveHealthConsent(user.id);
+    expect(second.healthConsentAt).toEqual(first.healthConsentAt);
+    expect(
+      await prisma.auditLog.count({ where: { actorId: user.id, action: "consent_given" } })
+    ).toBe(1);
+  });
+
+  it("purges health data (RPE, cardiac metrics, feedback) while preserving volume, sessions and other athletes", async () => {
     const user = await repo.createUser({
       email: `${EMAIL_PREFIX}purge@example.com`,
       nick: "purge_athlete",
+    });
+    const otherUser = await repo.createUser({
+      email: `${EMAIL_PREFIX}other@example.com`,
+      nick: "other_athlete",
     });
 
     const org = await prisma.organization.create({
@@ -125,6 +168,24 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
         scheduledAt: new Date(),
       },
     });
+    const session2 = await prisma.trainingSession.create({
+      data: {
+        orgId: org.id,
+        athleteId: user.id,
+        origin: "free",
+        sessionType: "rodaje",
+        scheduledAt: new Date(),
+      },
+    });
+    const otherSession = await prisma.trainingSession.create({
+      data: {
+        orgId: org.id,
+        athleteId: otherUser.id,
+        origin: "free",
+        sessionType: "rodaje",
+        scheduledAt: new Date(),
+      },
+    });
 
     const log = await prisma.sessionLog.create({
       data: {
@@ -138,6 +199,30 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
         extra: { avgHeartRate: 165, incompletion_reason: "none" },
       },
     });
+    const heartOnlyLog = await prisma.sessionLog.create({
+      data: {
+        sessionId: session2.id,
+        athleteId: user.id,
+        completed: true,
+        rpe: 6,
+        distanceM: 5000,
+        durationS: 1800,
+        performedAt: new Date(),
+        extra: { avgHeartRate: 165 },
+      },
+    });
+    const otherLog = await prisma.sessionLog.create({
+      data: {
+        sessionId: otherSession.id,
+        athleteId: otherUser.id,
+        completed: true,
+        rpe: 7,
+        distanceM: 5000,
+        durationS: 1800,
+        performedAt: new Date(),
+        extra: { avgHeartRate: 150 },
+      },
+    });
 
     const fb = await prisma.feedback.create({
       data: {
@@ -145,8 +230,14 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
         body: "Gran entrenamiento",
       },
     });
+    const otherFb = await prisma.feedback.create({
+      data: {
+        athleteId: otherUser.id,
+        body: "Buen rodaje",
+      },
+    });
 
-    // Execute purge
+    // Execute purge for the first athlete only
     await service.purgeHealthData(user.id, { confirm: true });
 
     // Verify sessionLog: rpe is null, cardiac metrics stripped, incompletion_reason kept, volume kept
@@ -157,6 +248,13 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
     expect(updatedLog.durationS).toBe(3600);
     expect(updatedLog.extra).toEqual({ incompletion_reason: "none" });
 
+    // Verify log with only cardiac metrics gets SQL NULL (Prisma.DbNull)
+    const updatedHeartOnlyLog = await prisma.sessionLog.findUniqueOrThrow({
+      where: { id: heartOnlyLog.id },
+    });
+    expect(updatedHeartOnlyLog.rpe).toBeNull();
+    expect(updatedHeartOnlyLog.extra).toBeNull();
+
     // Verify feedback deleted
     const countFb = await prisma.feedback.count({ where: { id: fb.id } });
     expect(countFb).toBe(0);
@@ -164,5 +262,19 @@ describe("Integration: user privacy and health consent (Postgres)", () => {
     // Verify TrainingSession still intact
     const countSession = await prisma.trainingSession.count({ where: { id: session.id } });
     expect(countSession).toBe(1);
+
+    // Verify purge audit log entry
+    const purgeAudit = await prisma.auditLog.findFirstOrThrow({
+      where: { actorId: user.id, action: "delete", resource: "health_data" },
+    });
+    expect(purgeAudit.actorRole).toBeNull();
+    expect(purgeAudit.subjectId).toBe(user.id);
+
+    // Verify other athlete's health data is untouched
+    const untouchedLog = await prisma.sessionLog.findUniqueOrThrow({ where: { id: otherLog.id } });
+    expect(untouchedLog.rpe).toBe(7);
+    expect(untouchedLog.extra).toEqual({ avgHeartRate: 150 });
+    const countOtherFb = await prisma.feedback.count({ where: { id: otherFb.id } });
+    expect(countOtherFb).toBe(1);
   });
 });
