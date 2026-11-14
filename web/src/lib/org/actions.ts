@@ -1,9 +1,10 @@
 "use server";
 
-import { z, ZodError } from "zod";
+import { ZodError } from "zod";
 import { requireAdmin } from "@/lib/permissions/require-admin";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
+import { idSchema } from "./schemas";
 import {
   AlreadyManagerError,
   LastManagerError,
@@ -99,24 +100,30 @@ export async function createOrganizationAction(
     if (error instanceof AdminCannotBeManagerError) {
       return { success: false, error: "El Admin no puede ser Manager del club" };
     }
+    // A Manager that was deleted before or during the creation: no club is left behind
+    if (error instanceof UserNotFoundError) {
+      return { success: false, error: "Alguno de los Managers ya no existe" };
+    }
     throw error;
   }
 }
 
 // The service and the repository cast both ids to uuid in SQL: a malformed one would be an
 // unexpected database error, so it is rejected here. z.guid(), not z.uuid(): see org-role.ts
-type ManagerTarget = { ok: true; userId: string } | { ok: false; error: string };
+// Ids come back lower-cased (see normalizeId)
+type ManagerTarget = { ok: true; orgId: string; userId: string } | { ok: false; error: string };
 
 function parseManagerTarget(orgId: string, formData: FormData): ManagerTarget {
-  if (!z.guid().safeParse(orgId).success) {
+  const club = idSchema.safeParse(orgId);
+  if (!club.success) {
     return { ok: false, error: "Club no válido" };
   }
   // A missing field (null), an empty string or a file are not a guid
-  const userId = z.guid().safeParse(formData.get("userId"));
+  const userId = idSchema.safeParse(formData.get("userId"));
   if (!userId.success) {
     return { ok: false, error: "Usuario no válido" };
   }
-  return { ok: true, userId: userId.data };
+  return { ok: true, orgId: club.data, userId: userId.data };
 }
 
 // Bind the club before using it as a form action: assignManagerAction.bind(null, orgId).
@@ -138,7 +145,7 @@ export async function assignManagerAction(
   }
 
   try {
-    await organizationService.assignManager(admin.id, orgId, target.userId);
+    await organizationService.assignManager(admin.id, target.orgId, target.userId);
   } catch (error) {
     return managerErrorResult(error);
   }
@@ -160,7 +167,7 @@ export async function removeManagerAction(
   }
 
   try {
-    await organizationService.removeManager(admin.id, orgId, target.userId);
+    await organizationService.removeManager(admin.id, target.orgId, target.userId);
   } catch (error) {
     return managerErrorResult(error);
   }
