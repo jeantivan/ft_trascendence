@@ -3,6 +3,7 @@ import { blockAccountAction, unblockAccountAction, updateAccountNickAction } fro
 import { blockAccount, unblockAccount, updateAccountNick } from "@/lib/admin/accounts";
 import { requireAdmin } from "@/lib/permissions/require-admin";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 vi.mock("@/lib/permissions/require-admin", () => ({ requireAdmin: vi.fn() }));
 vi.mock("@/lib/admin/accounts", () => ({
@@ -11,6 +12,7 @@ vi.mock("@/lib/admin/accounts", () => ({
   updateAccountNick: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 // requireAdmin ends by throwing (redirect or forbidden) when it does not let you in
 class ForbiddenSignal extends Error {}
@@ -89,5 +91,29 @@ describe("Admin account actions", () => {
     await expect(action()).rejects.toBeInstanceOf(ForbiddenSignal);
 
     expect(service).not.toHaveBeenCalled();
+  });
+
+  // The panel pages read the database: after a change they must be drawn again
+  it.each([
+    ["block", blockAccountAction, blockAccount],
+    ["unblock", unblockAccountAction, unblockAccount],
+    ["nick", updateAccountNickAction, updateAccountNick],
+  ] as const)("%s: a change redraws the panel pages", async (_name, action, service) => {
+    vi.mocked(service).mockResolvedValue({ ok: true, changed: true });
+
+    await action(null, formWith({ accountId: ACCOUNT_ID, nick: "Nuevo" }));
+
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/accounts", "layout");
+  });
+
+  it.each([
+    ["nothing changed", { ok: true, changed: false }],
+    ["the action was refused", { ok: false, reason: "self" }],
+  ] as const)("block: %s, nothing to redraw", async (_name, result) => {
+    vi.mocked(blockAccount).mockResolvedValue(result);
+
+    await blockAccountAction(null, formWith({ accountId: ACCOUNT_ID }));
+
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

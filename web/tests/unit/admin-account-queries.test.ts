@@ -29,10 +29,17 @@ describe("Admin panel reads", () => {
     expect(listAccounts).not.toHaveBeenCalled();
   });
 
-  it("?page=2 asks for page 2", async () => {
-    await getAccountsPageForAdmin("2");
+  it("?page=2 asks for page 2, and says which page it is for the links", async () => {
+    const result = await getAccountsPageForAdmin("2");
 
     expect(listAccounts).toHaveBeenCalledWith(prisma, { page: 2 });
+    expect(result.page).toBe(2);
+  });
+
+  it("a malformed ?page= says page 1, the one it shows", async () => {
+    const result = await getAccountsPageForAdmin("abc");
+
+    expect(result.page).toBe(1);
   });
 
   // Next gives each search param as text, as a list when it is repeated, or nothing
@@ -60,5 +67,21 @@ describe("Admin panel reads", () => {
 
     expect(account).toBeNull();
     expect(getAccount).toHaveBeenCalledWith(prisma, ACCOUNT_ID);
+  });
+
+  it("says whether the account is the Admin's own, so the page does not offer to block it", async () => {
+    const detail = {
+      email: "x@demo.local",
+      nick: null,
+      roleGlobal: "user" as const,
+      blockedAt: null,
+      createdAt: new Date(),
+      clubs: [],
+    };
+    vi.mocked(getAccount).mockResolvedValueOnce({ ...detail, id: ACCOUNT_ID });
+    vi.mocked(getAccount).mockResolvedValueOnce({ ...detail, id: SESSION_ADMIN.id });
+
+    expect((await getAccountForAdmin(ACCOUNT_ID))?.isSelf).toBe(false);
+    expect((await getAccountForAdmin(SESSION_ADMIN.id))?.isSelf).toBe(true);
   });
 });

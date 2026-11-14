@@ -1,5 +1,5 @@
 import type { GlobalRole, MembershipRole, Prisma, PrismaClient } from "@/generated/prisma/client";
-import { recordAdminAction, type AdminActionEntry } from "@/lib/audit/record-admin-action";
+import { recordAdminAction, type AdminActionEntry } from "@/lib/gdpr/record-admin-action";
 import { registerSchema } from "@/lib/auth/schemas";
 import { isDbId } from "@/lib/permissions/is-db-id";
 

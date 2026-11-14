@@ -1,6 +1,5 @@
 import { isDbId } from "./is-db-id";
 
-
 // Loads a resource by the id that came in the URL or the request, before
 // requireOrgResource / requireApiOrgResource. A malformed id gives null without
 // touching the database (Prisma would throw P2023 → 500), so it ends in the
