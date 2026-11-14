@@ -183,6 +183,32 @@ export function runOrganizationRepositoryContract(
       ).rejects.toBeInstanceOf(OrganizationNameTakenError);
     });
 
+    it("createWithManagers throws UserNotFoundError if a Manager does not exist and creates no club", async () => {
+      const { repo, createUsers } = createFixture();
+      const data = newClub();
+      const [adminId, managerId] = await createUsers(2);
+
+      await expect(
+        repo.createWithManagers(adminId, { ...data, managerIds: [managerId, UNKNOWN_ID] }),
+      ).rejects.toBeInstanceOf(UserNotFoundError);
+
+      const catalog = await repo.listCatalog();
+      expect(catalog.some((club) => club.name === data.name)).toBe(false);
+    });
+
+    it("createWithManagers treats the same Manager in different capitalization as one", async () => {
+      const { repo, createUsers } = createFixture();
+      const data = newClub();
+      const [adminId, managerId] = await createUsers(2);
+
+      const created = await repo.createWithManagers(adminId, {
+        ...data,
+        managerIds: [managerId, managerId.toUpperCase()],
+      });
+
+      expect(await repo.listManagerIds(created.id)).toEqual([managerId]);
+    });
+
     // A club with one Manager, plus an admin and an athlete member to work with
     async function clubWithAthlete() {
       const { repo, createUsers, addAthlete } = createFixture();
@@ -253,6 +279,19 @@ export function runOrganizationRepositoryContract(
       await expect(repo.removeManager(adminId, orgId, strangerId)).rejects.toBeInstanceOf(
         NotManagerError,
       );
+    });
+
+    it("assignManager and removeManager accept upper-case ids for the same user and club", async () => {
+      const { repo, adminId, managerId, athleteId, orgId } = await clubWithAthlete();
+
+      await repo.assignManager(adminId, orgId.toUpperCase(), athleteId.toUpperCase());
+      expect((await repo.listManagerIds(orgId)).sort()).toEqual([managerId, athleteId].sort());
+      await expect(
+        repo.assignManager(adminId, orgId, athleteId.toUpperCase()),
+      ).rejects.toBeInstanceOf(AlreadyManagerError);
+
+      await repo.removeManager(adminId, orgId.toUpperCase(), athleteId.toUpperCase());
+      expect(await repo.listManagerIds(orgId)).toEqual([managerId]);
     });
 
     // strangerId exists but has no membership; UNKNOWN_ID does not exist at all

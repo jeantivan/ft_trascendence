@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
-import type { CreateOrganizationInput } from "./schemas";
+import { normalizeId, type CreateOrganizationInput } from "./schemas";
 
 // Two clubs cannot have the same name (exact match, case included)
 export class OrganizationNameTakenError extends Error {
@@ -96,6 +96,30 @@ function hasPrismaCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === code;
 }
 
+// The unique index a P2002 violated: with the pg driver adapter Prisma reports it in
+// meta.driverAdapterError.cause.constraint.index (checked against a real database in the
+// integration tests). "" when the error does not say.
+function violatedIndex(error: unknown): string {
+  const meta = (error as { meta?: { driverAdapterError?: { cause?: { constraint?: { index?: unknown } } } } }).meta;
+  const index = meta?.driverAdapterError?.cause?.constraint?.index;
+  return typeof index === "string" ? index : "";
+}
+
+// True only when the violated unique constraint is organizations.name (exported for its test)
+export function isNameViolation(error: unknown): boolean {
+  return hasPrismaCode(error, "P2002") && violatedIndex(error) === "organizations_name_key";
+}
+
+// Locks every Manager's row, in id order so two creations cannot wait on each other, and checks
+// they all exist. A concurrent account deletion (delete-account.ts locks the user first, too)
+// then waits until this transaction ends, so the memberships below cannot hit a missing user:
+// no P2003 has to be interpreted.
+async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): Promise<void> {
+  const users = await tx.$queryRaw<{ id: string }[]>`
+    SELECT id FROM users WHERE id = ANY(${userIds}::uuid[]) ORDER BY id FOR UPDATE`;
+  if (users.length !== userIds.length) throw new UserNotFoundError();
+}
+
 // Role changes lock the target user, then the club: the order account deletion uses
 // (delete-account.ts), so the two cannot wait on each other. Whatever is read about the
 // membership or the other Managers must be read after this, in a new statement.
@@ -142,17 +166,20 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     adminId: string,
     input: CreateOrganizationInput,
   ): Promise<OrganizationDetail> {
+    // Same user in different capitalization is one user
+    const managerIds = [...new Set(input.managerIds.map(normalizeId))];
     try {
       // One transaction: if any write fails, the club, its memberships and the
       // audit rows are all rolled back
       return await this.db.$transaction(async (tx) => {
+        await lockUsersExist(tx, managerIds);
         const club = await tx.organization.create({
           data: {
             name: input.name,
             description: input.description,
             timezone: input.timezone,
             memberships: {
-              create: input.managerIds.map((userId) => ({ userId, role: "manager" as const })),
+              create: managerIds.map((userId) => ({ userId, role: "manager" as const })),
             },
           },
           select: { id: true, name: true, description: true, timezone: true },
@@ -163,7 +190,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
           resource: "organization",
           resourceId: club.id,
         });
-        for (const managerId of input.managerIds) {
+        for (const managerId of managerIds) {
           await recordAdminAction(tx, {
             adminId,
             action: "role_change",
@@ -175,9 +202,9 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
         return club;
       });
     } catch (error) {
-      // P2002: unique violation. The only one reachable here is organizations.name
-      // (the new club's memberships cannot collide, managerIds has no duplicates)
-      if (hasPrismaCode(error, "P2002")) {
+      // Only a violation of organizations.name means "name taken"; any other
+      // constraint is not translated
+      if (isNameViolation(error)) {
         throw new OrganizationNameTakenError();
       }
       throw error;
@@ -185,6 +212,8 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
   }
 
   async assignManager(adminId: string, orgId: string, userId: string): Promise<void> {
+    orgId = normalizeId(orgId);
+    userId = normalizeId(userId);
     await this.db.$transaction(
       async (tx) => {
         await lockUserThenClub(tx, orgId, userId);
@@ -211,6 +240,8 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
   }
 
   async removeManager(adminId: string, orgId: string, userId: string): Promise<void> {
+    orgId = normalizeId(orgId);
+    userId = normalizeId(userId);
     await this.db.$transaction(
       async (tx) => {
         await lockUserThenClub(tx, orgId, userId);

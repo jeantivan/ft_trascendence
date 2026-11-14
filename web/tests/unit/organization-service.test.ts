@@ -4,7 +4,7 @@ import {
   OrganizationNotFoundError,
   OrganizationService,
 } from "@/lib/org/organization-service";
-import { LastManagerError } from "@/lib/org/organization-repository";
+import { LastManagerError, UserNotFoundError } from "@/lib/org/organization-repository";
 import { InMemoryOrganizationRepository } from "../support/in-memory-organization-repository";
 
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
@@ -103,7 +103,8 @@ describe("OrganizationService", () => {
   });
 
   it("createOrganization creates the club and returns its record", async () => {
-    const { service } = createService();
+    const { service, repo } = createService();
+    repo.addUser(MANAGER_ID);
 
     const created = await service.createOrganization(ADMIN_ID, NEW_CLUB);
 
@@ -123,6 +124,43 @@ describe("OrganizationService", () => {
       service.createOrganization(ADMIN_ID, { ...NEW_CLUB, managerIds: [MANAGER_ID, ADMIN_ID] }),
     ).rejects.toBeInstanceOf(AdminCannotBeManagerError);
     await expect(service.listCatalog()).resolves.toEqual([]);
+  });
+
+  it("createOrganization rejects the Admin's id in upper case and creates nothing", async () => {
+    const { service } = createService();
+
+    await expect(
+      service.createOrganization(ADMIN_ID, { ...NEW_CLUB, managerIds: [ADMIN_ID.toUpperCase()] }),
+    ).rejects.toBeInstanceOf(AdminCannotBeManagerError);
+    await expect(service.listCatalog()).resolves.toEqual([]);
+  });
+
+  it("createOrganization rejects an upper-case Admin id given by the session", async () => {
+    const { service } = createService();
+
+    await expect(
+      service.createOrganization(ADMIN_ID.toUpperCase(), { ...NEW_CLUB, managerIds: [ADMIN_ID] }),
+    ).rejects.toBeInstanceOf(AdminCannotBeManagerError);
+  });
+
+  it("createOrganization throws UserNotFoundError if a Manager does not exist and creates nothing", async () => {
+    const { service } = createService();
+
+    await expect(
+      service.createOrganization(ADMIN_ID, { ...NEW_CLUB, managerIds: [UNKNOWN_ID] }),
+    ).rejects.toBeInstanceOf(UserNotFoundError);
+    await expect(service.listCatalog()).resolves.toEqual([]);
+  });
+
+  it("assignManager rejects the Admin's id in upper case and changes nothing", async () => {
+    const { service, repo } = createService();
+    const orgId = repo.add(CLUB);
+    repo.addUser(ADMIN_ID);
+
+    await expect(service.assignManager(ADMIN_ID, orgId, ADMIN_ID.toUpperCase())).rejects.toBeInstanceOf(
+      AdminCannotBeManagerError,
+    );
+    await expect(repo.listManagerIds(orgId)).resolves.toEqual([]);
   });
 
   it("assignManager makes the user a Manager of the club", async () => {

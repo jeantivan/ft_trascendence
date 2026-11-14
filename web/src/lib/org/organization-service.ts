@@ -5,7 +5,7 @@ import {
   type OrganizationRepository,
   type OrganizationSummary,
 } from "./organization-repository";
-import { createOrganizationSchema, updateOrganizationSchema } from "./schemas";
+import { createOrganizationSchema, normalizeId, updateOrganizationSchema } from "./schemas";
 
 // Defined in the repository (which also throws it); re-exported to keep this import path
 export { OrganizationNotFoundError };
@@ -42,7 +42,7 @@ export class OrganizationService {
   // Admin only: requireAdmin() gives the adminId
   async createOrganization(adminId: string, input: unknown): Promise<OrganizationDetail> {
     const validated = createOrganizationSchema.parse(input);
-    if (validated.managerIds.includes(adminId)) {
+    if (validated.managerIds.includes(normalizeId(adminId))) {
       throw new AdminCannotBeManagerError();
     }
     return this.repo.createWithManagers(adminId, validated);
@@ -51,7 +51,7 @@ export class OrganizationService {
   // Admin only: requireAdmin() gives the adminId. The Admin cannot name themselves Manager;
   // the check comes first, so the rejection reads and writes nothing.
   async assignManager(adminId: string, orgId: string, userId: string): Promise<void> {
-    if (userId === adminId) {
+    if (normalizeId(userId) === normalizeId(adminId)) {
       throw new AdminCannotBeManagerError();
     }
     await this.repo.assignManager(adminId, orgId, userId);

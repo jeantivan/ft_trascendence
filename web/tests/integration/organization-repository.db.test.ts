@@ -8,6 +8,7 @@ import { issueDeleteCode } from "../support/delete-account-helper";
 import { withLockHarness } from "../support/lock-harness";
 import {
   AlreadyManagerError,
+  isNameViolation,
   LastManagerError,
   NotManagerError,
   OrganizationNotFoundError,
@@ -153,10 +154,61 @@ describe("PrismaOrganizationRepository.createWithManagers", () => {
         name,
         managerIds: [managerId, unknownUser],
       }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(UserNotFoundError);
 
     await expect(prisma.organization.count({ where: { name } })).resolves.toBe(0);
     await expect(prisma.auditLog.count({ where: { actorId: adminId } })).resolves.toBe(0);
+  });
+
+  it("if a Manager is deleted while the creation waits for their row, it throws UserNotFoundError and leaves nothing", async () => {
+    const [adminId, managerId] = await createUsers(2);
+    const name = `${PREFIX}concurrent-delete`;
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((resolve) => (locked = resolve));
+
+    // Like account deletion: takes the user's row, then deletes the user, then commits
+    const deletion = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${managerId}::uuid FOR UPDATE`;
+      locked();
+      await released;
+      await tx.user.delete({ where: { id: managerId } });
+    });
+    await lockTaken;
+
+    const creation = repository.createWithManagers(adminId, { ...CLUB, name, managerIds: [managerId] });
+    const outcome = creation.then(
+      () => "created",
+      (error: unknown) => error,
+    );
+    // The creation has to be waiting behind the deletion, not finished
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await deletion;
+
+    expect(await outcome).toBeInstanceOf(UserNotFoundError);
+    await expect(prisma.organization.count({ where: { name } })).resolves.toBe(0);
+    await expect(prisma.auditLog.count({ where: { actorId: adminId } })).resolves.toBe(0);
+  });
+
+  it("isNameViolation tells the name constraint from another unique one, on real Prisma errors", async () => {
+    const [userId] = await createUsers(1);
+    const name = `${PREFIX}unique-shapes`;
+    const orgId = await createClub({ name, description: null, timezone: "Europe/Madrid", members: 0 });
+    await prisma.membership.create({ data: { userId, orgId, role: "athlete" } });
+
+    const duplicateName = await prisma.organization
+      .create({ data: { name, timezone: "Europe/Madrid" } })
+      .catch((error: unknown) => error);
+    const duplicateMembership = await prisma.membership
+      .create({ data: { userId, orgId, role: "manager" } })
+      .catch((error: unknown) => error);
+
+    expect(duplicateName).toMatchObject({ code: "P2002" });
+    expect(duplicateMembership).toMatchObject({ code: "P2002" });
+    expect(isNameViolation(duplicateName)).toBe(true);
+    expect(isNameViolation(duplicateMembership)).toBe(false);
   });
 });
 

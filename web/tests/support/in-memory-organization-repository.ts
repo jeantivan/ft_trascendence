@@ -11,7 +11,7 @@ import {
   type OrganizationRepository,
   type OrganizationSummary,
 } from "@/lib/org/organization-repository";
-import type { CreateOrganizationInput } from "@/lib/org/schemas";
+import { normalizeId, type CreateOrganizationInput } from "@/lib/org/schemas";
 import type { NewClub } from "./organization-repository-contract";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,7 +37,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   private users: Set<string> = new Set();
 
   addUser(userId: string): void {
-    this.users.add(userId);
+    this.users.add(normalizeId(userId));
   }
 
   // Like the Prisma implementation: the user is checked first, then the club
@@ -88,13 +88,17 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     _adminId: string,
     input: CreateOrganizationInput,
   ): Promise<OrganizationDetail> {
+    // Like Postgres, ids are compared without regard to capitalization
+    const managerIds = [...new Set(input.managerIds.map(normalizeId))];
+    // Like the database: a Manager that does not exist stops the creation, nothing is created
+    if (managerIds.some((userId) => !this.users.has(userId))) throw new UserNotFoundError();
     // Like the unique index on organizations.name
     if ([...this.clubs.values()].some((club) => club.data.name === input.name)) {
       throw new OrganizationNameTakenError();
     }
     const id = this.store(
       { name: input.name, description: input.description, timezone: input.timezone },
-      new Map(input.managerIds.map((userId) => [userId, "manager" as Role])),
+      new Map(managerIds.map((userId) => [userId, "manager" as Role])),
     );
     return { id, name: input.name, description: input.description, timezone: input.timezone };
   }
@@ -112,12 +116,16 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   }
 
   async assignManager(_adminId: string, orgId: string, userId: string): Promise<void> {
+    orgId = normalizeId(orgId);
+    userId = normalizeId(userId);
     const members = this.memberRoles(orgId, userId);
     if (members.get(userId) === "manager") throw new AlreadyManagerError();
     members.set(userId, "manager");
   }
 
   async removeManager(_adminId: string, orgId: string, userId: string): Promise<void> {
+    orgId = normalizeId(orgId);
+    userId = normalizeId(userId);
     const members = this.memberRoles(orgId, userId);
     if (members.get(userId) !== "manager") throw new NotManagerError();
     if ((await this.listManagerIds(orgId)).length === 1) throw new LastManagerError();

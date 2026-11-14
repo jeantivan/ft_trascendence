@@ -232,6 +232,7 @@ describe("createOrganizationAction", () => {
     ["invalid data (ZodError)", new ZodError([]), "Datos del club no válidos"],
     ["a taken name", new OrganizationNameTakenError(), "Ya existe un club con ese nombre"],
     ["the Admin naming themselves Manager", new AdminCannotBeManagerError(), "El Admin no puede ser Manager del club"],
+    ["a Manager that does not exist", new UserNotFoundError(), "Alguno de los Managers ya no existe"],
   ])("translates %s into a controlled error", async (_label, error, message) => {
     createOrganization.mockRejectedValue(error);
 
@@ -308,6 +309,14 @@ describe.each([
 
     expect(result).toEqual({ success: false, error: "Usuario no válido" });
     expect(serviceMethod).not.toHaveBeenCalled();
+  });
+
+  it("passes the club and user ids to the service in lower case", async () => {
+    serviceMethod.mockResolvedValue(undefined);
+
+    await action(ORG_ID.toUpperCase(), null, formWith({ userId: USER_ID.toUpperCase() }));
+
+    expect(serviceMethod).toHaveBeenCalledWith(expect.any(String), ORG_ID, USER_ID);
   });
 
   it("rejects a malformed club id without calling the service", async () => {
