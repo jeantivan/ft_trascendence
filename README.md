@@ -18,6 +18,33 @@ Key Features:
 - Make
 
 ### Setup
+From a fresh clone, one command starts everything:
+
+```sh
+make
+```
+
+It creates `.env` with random secrets if it is missing, builds the images and starts the database, the app, the test mail inbox and NGINX. The first run downloads and installs everything, so it takes a few minutes.
+
+Then open **https://localhost:8443**. The certificate is self-signed, so the browser shows a warning the first time: accept it to continue. NGINX only listens on this HTTPS port; there is no plain HTTP access.
+
+From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
+
+In a fresh clone or after `make fclean`, `make` starts with an empty database (all the tables, no users): register from the app. `make dev` loads demo users, and they stay afterwards in `make` too: only `make fclean` deletes the database.
+
+| Command | What it does |
+|---|---|
+| `make` | Production mode: builds the images and starts everything in the background |
+| `make dev` | Development mode: same, but `./web` is mounted and the app reloads on save; loads the demo data |
+| `make test` | Runs every test in Docker against an empty test database ([docs/testing.md](docs/testing.md)) |
+| `make test-nginx` | Checks that NGINX is the only way in, over HTTPS (needs `make` or `make dev` running) |
+| `make migrate name=<name>` | Creates a Prisma migration from `web/prisma/schema.prisma` and applies it (needs `make dev` running) |
+| `make logs` / `make ps` | Follows the logs / lists the containers |
+| `make down` / `make clean` | Stops and removes the containers; the data is kept |
+| `make fclean` | Removes everything the project created: the containers and the network; the volumes, that is **the database, the uploaded files** and the HTTPS certificate (the next start makes a new one); and the images it built (`app`, `migrate`, `nginx` and `transcendence-app-dev`). `transcendence-app-dev` is the `make dev` / `make test` image, shared by every clone on the computer, so it is removed for all of them (the next `make dev` or `make test` rebuilds it). Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them |
+| `make re` | `make clean` followed by `make` |
+
+The port can be changed with `HTTPS_PORT` in `.env`.
 
 ### Conventions
 - **Frontend tests**: automated frontend tests live in `web/tests/`, grouped by component or feature. Component tests go in `web/tests/components/` and import the code through the `@/` alias.
