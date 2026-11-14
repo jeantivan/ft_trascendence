@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { registerAction, type AuthActionResult } from "@/lib/auth/actions";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
 
@@ -17,7 +17,7 @@ export function RegisterForm() {
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
       <h1 className="text-2xl font-bold text-center">Crear Cuenta</h1>
 
-      {!state.success && <AuthErrorBanner error={state.error} />}
+      {!state.success && <Alert variant="error">{state.error}</Alert>}
 
       <FormField label="Nick" htmlFor="nick">
         <Input

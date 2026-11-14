@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 
 export default function AccountDeletedPage() {
   return (
     <main className="mx-auto flex w-full max-w-xl flex-col gap-6 p-4 md:p-8">
-      <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface-elevated p-6">
+      <Card as="section" className="flex flex-col gap-4">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
           Has cruzado la meta de tu cuenta
         </h1>
@@ -13,7 +14,7 @@ export default function AccountDeletedPage() {
           tendrás la puerta abierta y la línea de salida preparada.
         </p>
         <Button href="/register">Volver a registrarme</Button>
-      </section>
+      </Card>
     </main>
   );
 }
