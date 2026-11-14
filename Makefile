@@ -2,9 +2,6 @@ COMPOSE      = docker compose
 COMPOSE_DEV  = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_TEST = $(COMPOSE) -f docker-compose.test.yml
 
-# Port nginx publishes, read from .env (8443 if missing) to print the address
-HTTPS_PORT = $(or $(shell grep -s '^HTTPS_PORT=' .env | tail -n1 | cut -d= -f2 | tr -d '\r"'),8443)
-
 # Run when the start fails: explains it if Postgres rejected the password
 DB_PASSWORD_HINT = $(COMPOSE) logs migrate 2>/dev/null | sh scripts/db-password-hint.sh
 
@@ -12,12 +9,20 @@ DB_PASSWORD_HINT = $(COMPOSE) logs migrate 2>/dev/null | sh scripts/db-password-
 # If the app container is still the make dev one, remove it with --volumes first:
 # its anonymous node_modules volume would otherwise stay orphaned (~880 MB each
 # time, #65). Only then, so a second make with no changes restarts nothing.
+# The make dev container is the one that mounts /app/node_modules: its image name
+# is not enough, it turns into sha256:... once make test rebuilds that image.
+# The address asks compose for the host port nginx really publishes (8443 inside
+# the container, see docker-compose.yml): it already applied the quotes, comments
+# and shell variables of HTTPS_PORT. 8443 if it cannot tell.
 all: env
-	@if $(COMPOSE) ps --all --format '{{.Image}}' app 2>/dev/null | grep -q '^transcendence-app-dev'; then \
+	@id=$$($(COMPOSE) ps --all -q app 2>/dev/null); \
+	if [ -n "$$id" ] && docker inspect --format '{{range .Mounts}}{{.Destination}} {{end}}' $$id | grep -q '/app/node_modules'; then \
 		$(COMPOSE) rm --stop --force --volumes app; \
 	fi
 	$(COMPOSE) up --build -d || { $(DB_PASSWORD_HINT); exit 1; }
-	@echo "App: https://localhost:$(HTTPS_PORT) (from another computer: https://<this computer's IP>:$(HTTPS_PORT))"
+	@port=$$($(COMPOSE) port nginx 8443 2>/dev/null | head -n1 | sed 's/.*://'); \
+	[ -n "$$port" ] || port=8443; \
+	echo "App: https://localhost:$$port (from another computer: https://<this computer's IP>:$$port)"
 
 # Development: hot reload without rebuilding (make logs to see the output)
 # Removing the old app container with its anonymous node_modules volume gives
@@ -77,10 +82,13 @@ clean: down
 
 # Also remove the volumes and the images: DELETES THE DATABASE DATA
 # --rmi local skips images with a fixed name, so the make dev / make test image
-# (transcendence-app-dev) is removed by name (#65)
+# (transcendence-app-dev) is removed by name (#65). It is checked first so a
+# missing image prints nothing, while real errors still show.
 fclean:
 	$(COMPOSE) down --volumes --rmi local
-	docker image rm --force transcendence-app-dev 2>/dev/null || true
+	@if docker image inspect transcendence-app-dev >/dev/null 2>&1; then \
+		docker image rm --force transcendence-app-dev; \
+	fi
 
 # Sequential on purpose: with make -j, "re: clean all" could run both at once
 re: clean

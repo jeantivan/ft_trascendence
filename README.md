@@ -30,7 +30,7 @@ Then open **https://localhost:8443**. The certificate is self-signed, so the bro
 
 From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
 
-`make` starts with an empty database (all the tables, no users): register from the app. `make dev` also loads demo users.
+In a fresh clone or after `make fclean`, `make` starts with an empty database (all the tables, no users): register from the app. `make dev` loads demo users, and they stay afterwards in `make` too: only `make fclean` deletes the database.
 
 | Command | What it does |
 |---|---|
@@ -41,7 +41,7 @@ From another computer on the same network, use the IP of the computer that ran `
 | `make migrate name=<name>` | Creates a Prisma migration from `web/prisma/schema.prisma` and applies it (needs `make dev` running) |
 | `make logs` / `make ps` | Follows the logs / lists the containers |
 | `make down` / `make clean` | Stops and removes the containers; the data is kept |
-| `make fclean` | Also removes the volumes and the images the project built: **deletes the database data and the uploaded files**. Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them |
+| `make fclean` | Removes everything the project created: the containers and the network; the volumes, that is **the database, the uploaded files** and the HTTPS certificate (the next start makes a new one); and the images it built (`app`, `migrate`, `nginx` and `transcendence-app-dev`). `transcendence-app-dev` is the `make dev` / `make test` image, shared by every clone on the computer, so it is removed for all of them (the next `make dev` or `make test` rebuilds it). Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them |
 | `make re` | `make clean` followed by `make` |
 
 The port can be changed with `HTTPS_PORT` in `.env`.
