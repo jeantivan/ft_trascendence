@@ -1,6 +1,6 @@
 # Button
 
-- **Fichero:** `Button.tsx`
-- **Para qué:** acciones y enlaces con aspecto de botón (48px).
-- **Props:** `variant`: `primary` (por defecto), `ghost`, `destructive`. Con `href` es un `Link`; sin `href`, un `<button type="button">` (pasa `type="submit"` para enviar formularios). Acepta el resto de props de `<button>` o `Link` y `className`.
-- **Ejemplo:** `<Button variant="ghost" href="/events">Ver Events</Button>`
+- **File:** `Button.tsx`
+- **Purpose:** actions and links styled as a button (48px).
+- **Props:** `variant`: `primary` (default), `ghost`, `destructive`. With `href` it is a `Link`; without `href`, a `<button type="button">` (pass `type="submit"` to submit forms). Accepts the rest of the `<button>` or `Link` props and `className`.
+- **Example:** `<Button variant="ghost" href="/events">View Events</Button>`
