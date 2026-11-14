@@ -16,6 +16,7 @@ Plataforma para clubes de running: grupos por nivel y objetivo, entrenamientos p
 - **Event**: Session de grupo con calendario y chat propio. Es presencial. Puede venir de una Training Template (con objetivo) o ser una quedada sin plantilla (solo fecha, lugar y chat). Todos los miembros del club ven todos los Events y su número de apuntados.
 - **Spot Request (Reserva)**: Solicitud de un Athlete para asistir a un Event. El Manager decide si concede el acceso; solo los admitidos entran al chat del Event. Los Managers administran el chat.
 - **Session Metrics**: Datos que el Athlete introduce al terminar una Session: Completion, RPE y, como complemento opcional, distancia y tiempo. Frecuencia semanal y volumen semanal se derivan de ellas.
+- **Weekly Volume (Volumen semanal)**: Metros de las Sessions completadas por un Athlete en un club durante una semana del club, de lunes a las 00:00 al lunes siguiente a las 00:00 en la zona horaria del club. Las Sessions no completadas no cuentan, aunque tengan distancia. Es la base del Volume Alert.
 - **Completion**: Marca del Athlete sobre una Session: completada / no completada.
 - **RPE (Esfuerzo Percibido)**: Valoración subjetiva del Athlete, de 1 a 10, sobre lo duro que fue una Session. Orientación: rodajes suaves 4-5, sesiones duras 7-9.
 - **Feedback**: Comentario privado del Manager a un Athlete en la ficha del Event, con opinión y motivación. Solo existe en Events; las Free Sessions y Customized Sessions personales solo tienen Completion y RPE.
