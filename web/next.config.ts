@@ -17,7 +17,9 @@ const nextConfig: NextConfig = {
       ignore: [
         // "?" "&" "=" as they are, encoded once (%3F %26 %3D) or twice (%253F...)
         /(?:[?&]|%(?:25)?3F|%(?:25)?26)token(?:=|%(?:25)?3D)/i,
-        /^\/api\/gdpr\/export\/[^/]+\/download\/?(?:\?|$)/,
+        // Any id, slashes included, like nginx/app.conf: next dev sees the path still
+        // encoded, so a "?" in it can only be the start of the "?" part
+        /^\/api\/gdpr\/export\/[^?]+\/download\/?(?:\?|$)/,
       ],
     },
   },
