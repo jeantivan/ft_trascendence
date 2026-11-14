@@ -30,28 +30,44 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
   }
 
   // Other test files share this database and create their own Admins while these tests run, so
-  // "the only Admin" would not hold. This client unblocks nothing and blocks every Admin outside
-  // `keepIds` inside the transaction under test, and puts them back before the commit, so the
-  // rule sees just this file's Admins and no other file ever sees the change.
+  // "the only Admin" would not hold. This client blocks every Admin outside `keepIds` inside the
+  // transaction under test and puts them back before the commit, so the rule sees just this file's
+  // Admins and no other file ever sees the change.
+  // REPEATABLE READ: the snapshot is taken by the first statement (the lock below), so an Admin
+  // another file creates afterwards is invisible to lockAccountAndAdmins. If a locked Admin was
+  // changed by another file first, Postgres aborts with 40001 (40001) and the whole
+  // transaction is retried.
   function onlyTheseAdmins(keepIds: string[]): PrismaClient {
     return new Proxy(db, {
       get(target, prop, receiver) {
         if (prop !== "$transaction") return Reflect.get(target, prop, receiver);
-        return (fn: (tx: PrismaClient) => Promise<unknown>, options?: object) =>
-          target.$transaction(async (tx) => {
-            // Same order as lockAccountAndAdmins (ADR 0004): without it, an updateMany in any order plus
-            // another file's deletion locking by id can deadlock (40P01)
-            await tx.$queryRaw`SELECT id FROM users WHERE role_global = 'admin' ORDER BY id FOR UPDATE`;
-            const others = await tx.user.findMany({
-              where: { roleGlobal: "admin", blockedAt: null, id: { notIn: keepIds } },
-              select: { id: true },
-            });
-            const ids = others.map((row) => row.id);
-            await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: new Date() } });
-            const result = await fn(tx as unknown as PrismaClient);
-            await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: null } });
-            return result;
-          }, options);
+        return async (fn: (tx: PrismaClient) => Promise<unknown>, options?: object) => {
+          for (let attempt = 1; ; attempt++) {
+            try {
+              return await target.$transaction(
+                async (tx) => {
+                  // Same order as lockAccountAndAdmins (ADR 0004): without it, an updateMany in any order plus
+                  // another file's deletion locking by id can deadlock (40P01)
+                  await tx.$queryRaw`SELECT id FROM users WHERE role_global = 'admin' ORDER BY id FOR UPDATE`;
+                  const others = await tx.user.findMany({
+                    where: { roleGlobal: "admin", blockedAt: null, id: { notIn: keepIds } },
+                    select: { id: true },
+                  });
+                  const ids = others.map((row) => row.id);
+                  await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: new Date() } });
+                  const result = await fn(tx as unknown as PrismaClient);
+                  await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: null } });
+                  return result;
+                },
+                { ...options, isolationLevel: "RepeatableRead" },
+              );
+            } catch (error) {
+              // A raw query reports it as P2010 with the SQLSTATE in the message, the rest as P2034
+              const serialization = /P2034|40001/.test(`${(error as { code?: string }).code} ${String(error)}`);
+              if (!serialization || attempt >= 5) throw error;
+            }
+          }
+        };
       },
     }) as PrismaClient;
   }
@@ -99,8 +115,11 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
       expect(await db.membership.count({ where: { userId: USER_1 } })).toBe(0);
       expect(await db.avatar.count({ where: { ownerId: USER_1 } })).toBe(0);
       expect(existsSync(path.join(uploadsDir, "avatars", "admin-test.png"))).toBe(false);
-      const notices = await db.notification.findMany({ where: { userId: ADMIN_1, type: "club_without_manager" } });
-      expect(notices.map((row) => (row.payload as { orgId: string }).orgId)).toEqual([ORG_1]);
+      // Only this club: other files delete Managers too, and every Admin gets their notices
+      const notices = await db.notification.findMany({
+        where: { userId: ADMIN_1, type: "club_without_manager", payload: { path: ["orgId"], equals: ORG_1 } },
+      });
+      expect(notices).toHaveLength(1);
     } finally {
       await db.organization.deleteMany({ where: { id: ORG_1 } });
       await rm(uploadsDir, { recursive: true, force: true });
