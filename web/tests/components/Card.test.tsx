@@ -32,7 +32,7 @@ describe("Card", () => {
   });
 
   it("adds the left bar in the color of the session type", () => {
-    render(<Card data-testid="card" accent="tirada-larga" />);
+    render(<Card data-testid="card" accent="tirada_larga" />);
     const card = screen.getByTestId("card");
     expect(card).toHaveClass("border-l-4", "border-l-session-tirada-larga");
     expect(card).not.toHaveClass("border-l-session-rodaje");
