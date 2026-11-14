@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  POSTGRES_INT_MAX,
   sessionTypeSchema,
   trainingTemplateNameSchema,
   trainingTemplateSchema,
@@ -46,6 +47,17 @@ describe("trainingTemplateSchema", () => {
       trainingTemplateSchema.parse({
         name: "Plan",
         sessions: [{ sessionType: "rodaje", dayOffset: -1 }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects numbers exceeding 32-bit signed int max", () => {
+    expect(() =>
+      trainingTemplateSchema.parse({
+        name: "Plan",
+        sessions: [
+          { sessionType: "rodaje", dayOffset: POSTGRES_INT_MAX + 1 },
+        ],
       }),
     ).toThrow();
   });

@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { SessionType } from "@/generated/prisma/enums";
+
+export const POSTGRES_INT_MAX = 2_147_483_647;
 
 export const trainingTemplateNameSchema = z
   .string()
@@ -6,29 +9,39 @@ export const trainingTemplateNameSchema = z
   .min(1, "El nombre es obligatorio")
   .max(100, "El nombre no puede superar los 100 caracteres");
 
-export const SESSION_TYPES = [
-  "rodaje",
-  "intervalos",
-  "cuestas",
-  "tirada_larga",
-  "fartlek",
-] as const;
+export const sessionTypeSchema = z.enum(SessionType);
 
-export const sessionTypeSchema = z.enum(SESSION_TYPES);
-
-export type SessionType = z.infer<typeof sessionTypeSchema>;
+export type { SessionType };
 
 export const templateSessionSchema = z.object({
   sessionType: sessionTypeSchema,
-  dayOffset: z.number().int().min(0),
-  position: z.number().int().min(0).optional(),
-  targetDistanceM: z.number().int().positive().nullable().optional(),
-  targetDurationS: z.number().int().positive().nullable().optional(),
-  targetPaceSPerKm: z.number().int().positive().nullable().optional(),
-  notes: z.string().trim().max(1000).nullable().optional(),
+  dayOffset: z.number().int().min(0).max(POSTGRES_INT_MAX),
+  position: z.number().int().min(0).max(POSTGRES_INT_MAX).optional(),
+  targetDistanceM: z
+    .number()
+    .int()
+    .positive()
+    .max(POSTGRES_INT_MAX)
+    .nullable()
+    .optional(),
+  targetDurationS: z
+    .number()
+    .int()
+    .positive()
+    .max(POSTGRES_INT_MAX)
+    .nullable()
+    .optional(),
+  targetPaceSPerKm: z
+    .number()
+    .int()
+    .positive()
+    .max(POSTGRES_INT_MAX)
+    .nullable()
+    .optional(),
 });
 
-export type TemplateSessionInput = z.infer<typeof templateSessionSchema>;
+export type TemplateSessionInput = z.input<typeof templateSessionSchema>;
+export type TemplateSession = z.infer<typeof templateSessionSchema>;
 
 export const trainingTemplateSchema = z
   .object({
@@ -45,4 +58,5 @@ export const trainingTemplateSchema = z
     })),
   }));
 
-export type TrainingTemplateInput = z.infer<typeof trainingTemplateSchema>;
+export type TrainingTemplateInput = z.input<typeof trainingTemplateSchema>;
+export type TrainingTemplate = z.infer<typeof trainingTemplateSchema>;
