@@ -50,6 +50,9 @@ interface HeldGate {
 }
 
 // An operation that must be waiting for a lock, and the query it must be stopped at
+// queryFragment is matched against pg_stat_activity.query, which Postgres truncates to
+// track_activity_query_size (1024 bytes by default): pick a fragment near the start of the query,
+// or a long SELECT can lose its FROM and waitUntilWaiting fails although the operation is waiting
 export interface WaitTarget {
   name: string;
   client: HarnessClient;
