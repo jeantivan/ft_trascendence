@@ -1,7 +1,13 @@
 // @vitest-environment node
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, expectTypeOf, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { ADMIN_AUDIT_ACTIONS, recordAdminAction, type AdminActionEntry } from "@/lib/audit/record-admin-action";
+import type { AdminAction } from "@/lib/gdpr/audit";
+import {
+  ADMIN_AUDIT_ACTIONS,
+  recordAdminAction,
+  type AdminActionEntry,
+  type AdminAuditAction,
+} from "@/lib/gdpr/record-admin-action";
 
 // audit_log has no foreign keys (schema.prisma), so these ids need no users
 const ADMIN_ID = "a0000000-0000-4000-8000-000000000101";
@@ -77,6 +83,11 @@ describe("Integration: recordAdminAction", () => {
     await expect(adminRows()).resolves.toMatchObject([{ action, resource: entry.resource }]);
   });
 
+  // Checked by tsc: a new AuditAction that is not the person's own must be added to the list too
+  it("lists exactly the actions AuditEntry allows an Admin", () => {
+    expectTypeOf<AdminAuditAction>().toEqualTypeOf<AdminAction>();
+  });
+
   it("rejects invalid entries at compile time", () => {
     // Checked by tsc: without subjectId the row would never reach the person's export (#36)
     // @ts-expect-error subjectId is required for account
@@ -95,9 +106,13 @@ describe("Integration: recordAdminAction", () => {
     const createGroup: AdminActionEntry = { adminId: ADMIN_ID, action: "create", resource: "group", resourceId: GROUP_ID };
     // @ts-expect-error resource must be one of the known ones
     const typo: AdminActionEntry = { adminId: ADMIN_ID, action: "delete", resource: "groups", resourceId: GROUP_ID };
+    // @ts-expect-error a club is not a person: no subjectId, or it would reach someone's export (#183)
+    const clubWithPerson: AdminActionEntry = { adminId: ADMIN_ID, action: "delete", resource: "organization", resourceId: CLUB_ID, subjectId: SUBJECT_ID };
+    // @ts-expect-error no subjectId on a Group or an Event either
+    const groupWithPerson: AdminActionEntry = { adminId: ADMIN_ID, action: "delete", resource: "group", resourceId: GROUP_ID, subjectId: SUBJECT_ID };
 
     // At runtime they are plain objects: the check that matters is tsc on the lines above.
-    for (const entry of [account, membership, message, messageWithoutId, readAccount, blockMembership, createGroup, typo]) {
+    for (const entry of [account, membership, message, messageWithoutId, readAccount, blockMembership, createGroup, typo, clubWithPerson, groupWithPerson]) {
       expect(entry).toBeDefined();
     }
   });
