@@ -17,7 +17,8 @@ const ADMIN_2 = "a1000000-0000-4000-8000-000000000002";
 const USER_1 = "a1000000-0000-4000-8000-000000000011";
 const ORG_1 = "b1000000-0000-4000-8000-000000000001";
 const MISSING = "a1000000-0000-4000-8000-0000000000ff";
-const USER_IDS = [ADMIN_1, ADMIN_2, USER_1];
+const ADMIN_3 = "a1000000-0000-4000-8000-000000000003";
+const USER_IDS = [ADMIN_1, ADMIN_2, ADMIN_3, USER_1];
 
 // Real password hashing on every OTP: with other test files running in parallel the 5 s default is too tight
 describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 }, () => {
@@ -37,7 +38,10 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
   // another file creates afterwards is invisible to lockAccountAndAdmins. If a locked Admin was
   // changed by another file first, Postgres aborts with 40001 (40001) and the whole
   // transaction is retried.
-  function onlyTheseAdmins(keepIds: string[]): PrismaClient {
+  // `afterBlock` runs once the other Admins are blocked and before the code under test starts: the exact
+  // window in which another file can commit a new Admin. There is no lock to wait on between two
+  // statements of one transaction, so a lock harness cannot stop the deletion there; the hook can.
+  function onlyTheseAdmins(keepIds: string[], afterBlock?: () => Promise<void>): PrismaClient {
     return new Proxy(db, {
       get(target, prop, receiver) {
         if (prop !== "$transaction") return Reflect.get(target, prop, receiver);
@@ -55,6 +59,7 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
                   });
                   const ids = others.map((row) => row.id);
                   await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: new Date() } });
+                  await afterBlock?.();
                   const result = await fn(tx as unknown as PrismaClient);
                   await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: null } });
                   return result;
@@ -161,6 +166,17 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
 
     expect(result).toEqual({ deleted: true });
     expect(await db.user.findUnique({ where: { id: ADMIN_1 } })).toBeNull();
+  });
+
+  // The race behind the old flaky test: an Admin committed by another file after the snapshot must not
+  // count as "another Admin that stays". Without REPEATABLE READ this deletes the last Admin.
+  it("un Admin creado por otro archivo a mitad del borrado no cuenta: sigue siendo el último", async () => {
+    const guarded = onlyTheseAdmins([ADMIN_1], () => createUser(ADMIN_3, "admin"));
+
+    const result = await deleteAccountAsAdmin(ADMIN_1, writeAudit(ADMIN_1, ADMIN_1), guarded);
+
+    expect(result).toEqual({ deleted: false, reason: "last_admin" });
+    expect(await db.user.findUnique({ where: { id: ADMIN_1 } })).not.toBeNull();
   });
 
   // Waits until some connection is blocked by the lock holderPid holds. Filtered by holder, not
