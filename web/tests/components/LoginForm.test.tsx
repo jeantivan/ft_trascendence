@@ -32,4 +32,20 @@ describe("LoginForm", () => {
     expect(await screen.findByText("Email o contraseña incorrectos")).toBeInTheDocument();
     expect(screen.queryByText("Tu cuenta está bloqueada.")).not.toBeInTheDocument();
   });
+
+  // #79: titles use Space Grotesk (font-heading), as DESIGN.md says
+  it("shows its title as the page heading, in the heading font", () => {
+    render(<LoginForm />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Iniciar Sesión" })).toHaveClass("font-heading");
+  });
+
+  // #79: the link is a Button with href, no longer the default blue link
+  it("links to /register without the default blue", () => {
+    render(<LoginForm />);
+
+    const link = screen.getByRole("link", { name: "Regístrate aquí" });
+    expect(link).toHaveAttribute("href", "/register");
+    expect(link).not.toHaveClass("text-blue-500");
+  });
 });
