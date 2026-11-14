@@ -152,7 +152,8 @@ model RecoveryCode {
 // A club. Only the Admin creates them.
 model Organization {
   id          String   @id @default(uuid()) @db.Uuid
-  name        String
+  // Exact match, case included: two clubs cannot share a name
+  name        String   @unique
   description String?
   // IANA zone, e.g. "Europe/Madrid": weekly stats are grouped by the club's week
   timezone    String

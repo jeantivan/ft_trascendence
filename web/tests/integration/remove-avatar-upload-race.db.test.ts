@@ -79,11 +79,23 @@ describe("avatar removal and upload at the same time", { timeout: 30_000 }, () =
       { isolationLevel: "ReadCommitted", timeout: 20_000 },
     );
 
-    // removeAvatar runs in parallel and must wait for upload's lock on User row
-    const removal = removeAvatar(USER_ID, db, uploadsDir);
+    // Recorded from the start: a failure of the upload is never an unhandled rejection
+    upload.catch(() => {});
+    let removal: ReturnType<typeof removeAvatar> | undefined;
 
     try {
-      await waitUntilBlockedBy(await uploadPid);
+      // The upload announces its pid only after inserting the avatar and updating the user,
+      // so removeAvatar starts after that. If the upload fails first, its error is what we get.
+      const holderPid = await Promise.race([
+        uploadPid,
+        upload.then(() => {
+          throw new Error("The upload ended before announcing its pid");
+        }),
+      ]);
+      // removeAvatar runs in parallel and must wait for upload's lock on User row
+      removal = removeAvatar(USER_ID, db, uploadsDir);
+      removal.catch(() => {});
+      await waitUntilBlockedBy(holderPid);
     } finally {
       openGate();
       await Promise.allSettled([upload, removal]);
