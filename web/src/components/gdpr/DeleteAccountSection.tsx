@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -61,14 +62,10 @@ export function DeleteAccountSection() {
           {isRequesting ? "Enviando…" : cooldown > 0 ? `Reenviar en ${cooldown} s` : "Enviar código"}
         </Button>
         {feedback?.kind === "sent" && (
-          <p role="status" className="text-sm text-text-secondary">
-            Te hemos enviado un código a tu correo. Caduca en 10 minutos.
-          </p>
+          <Alert variant="info">Te hemos enviado un código a tu correo. Caduca en 10 minutos.</Alert>
         )}
         {feedback?.kind === "error" && (
-          <p role="alert" className="text-sm text-red-400">
-            {feedback.message}
-          </p>
+          <Alert variant="error">{feedback.message}</Alert>
         )}
       </div>
 
@@ -86,9 +83,7 @@ export function DeleteAccountSection() {
           />
         </FormField>
         {!deleteState.success && (
-          <p role="alert" className="text-sm text-red-400">
-            {deleteState.error}
-          </p>
+          <Alert variant="error">{deleteState.error}</Alert>
         )}
         <Button type="submit" variant="destructive" disabled={busy || code.length !== CODE_LENGTH}>
           {isDeleting ? "Borrando…" : "Borrar mi cuenta definitivamente"}
