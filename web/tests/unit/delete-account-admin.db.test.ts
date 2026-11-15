@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
+import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
 import { deleteAccountAsAdmin } from "@/lib/gdpr/delete-account";
 import { deleteWithFreshOtp } from "../support/delete-account-helper";
 
@@ -212,29 +213,30 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
     throw new Error(`No connection was blocked by ${holderPid} within 5 s`);
   }
 
-  // Deterministic, no timing luck: the test holds ADMIN_1's lock in a raw transaction, the deletion
-  // of ADMIN_2 starts and waits, and then the test asks for ADMIN_2's lock. The deletion takes the
-  // rows in id order in ONE statement, so it holds nothing of ADMIN_2 while it waits and the test
-  // gets it. If it locked its own row (ADMIN_2) first, the test would wait for it while it waits
-  // for ADMIN_1: a deadlock (40P01), and the test fails.
-  it("el borrado de un Admin espera por la fila menor sin retener la propia, así que no hay deadlock", async () => {
+  // Deterministic, no timing luck, and WITHOUT onlyTheseAdmins: that proxy locks every Admin in id
+  // order before the code under test, which would hide a wrong lock order. The test holds ADMIN_1's
+  // lock in a raw transaction, lockAccountAndAdmins for ADMIN_2 starts and waits, and then the test
+  // asks for ADMIN_2's lock. The helper takes the rows in id order in ONE statement, so it holds
+  // nothing of ADMIN_2 while it waits and the test gets it. If it locked its own row (ADMIN_2)
+  // first, the test would wait for it while it waits for ADMIN_1: a deadlock (40P01).
+  // Admins from other files may be locked too (a short wait); it never changes the order.
+  it("lockAccountAndAdmins espera por la fila menor sin retener la propia, así que no hay deadlock", async () => {
     await createUser(ADMIN_2, "admin");
-    let deletion!: Promise<unknown>;
+    let locking!: Promise<unknown>;
 
     await db.$transaction(async (tx) => {
       const [{ pid }] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${ADMIN_1}::uuid FOR UPDATE`;
 
-      deletion = deleteAccountAsAdmin(ADMIN_2, writeAudit(ADMIN_1, ADMIN_2), onlyTheseAdmins([ADMIN_1, ADMIN_2]));
+      locking = db.$transaction((other) => lockAccountAndAdmins(other, ADMIN_2), { timeout: 20_000 });
       await waitUntilBlockedBy(pid);
 
-      // Would raise 40P01 (and fail the test) if the deletion already held ADMIN_2
+      // Would raise 40P01 (and fail the test) if the helper already held ADMIN_2
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${ADMIN_2}::uuid FOR UPDATE`;
-    });
+    }, { timeout: 20_000 });
 
-    // The test committed: ADMIN_1 stays unblocked, so ADMIN_2 may go
-    expect(await deletion).toEqual({ deleted: true });
-    expect(await db.user.findUnique({ where: { id: ADMIN_2 } })).toBeNull();
+    const { target } = (await locking) as Awaited<ReturnType<typeof lockAccountAndAdmins>>;
+    expect(target?.id).toBe(ADMIN_2);
   });
 
   // Two Admins deleting each other at the same time: only one may go. The ordering is proven by the
