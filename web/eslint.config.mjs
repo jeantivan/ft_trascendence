@@ -27,7 +27,7 @@ const eslintConfig = defineConfig([
           selector:
             "TryStatement[handler] > BlockStatement.block CallExpression[callee.name='requireAdmin']",
           message:
-            "Call requireAdmin() outside try/catch: redirect() and forbidden() throw, and a catch would swallow them.",
+            "Call requireAdmin() outside try/catch: redirect() and notFound() throw, and a catch would swallow them.",
         },
       ],
     },
