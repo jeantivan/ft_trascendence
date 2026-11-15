@@ -11,6 +11,15 @@ export class OrganizationNameTakenError extends Error {
   }
 }
 
+// No Admin account can be Manager of a club, not the Admin acting nor any other: the Admin
+// is not a role with access to personal data (matrix #2) and a Manager reads RPE and Feedback
+export class AdminCannotBeManagerError extends Error {
+  constructor(message = "No Admin account can be Manager of a club") {
+    super(message);
+    this.name = "AdminCannotBeManagerError";
+  }
+}
+
 export class AlreadyManagerError extends Error {
   constructor(message = "The user is already a Manager of the club") {
     super(message);
@@ -76,11 +85,13 @@ export interface OrganizationRepository {
   // Changes what a Manager may edit; returns the new page, or null when the club does not exist
   update(orgId: string, data: OrganizationEdit): Promise<OrganizationDetail | null>;
   // Admin only: creates the club and makes each of managerIds its Manager, all or
-  // nothing. adminId is who does it, for the audit rows written in the same transaction.
+  // nothing (UserNotFoundError if one does not exist, then AdminCannotBeManagerError if one
+  // is an Admin account; neither creates anything). adminId is who does it, for the audit rows written in the same transaction.
   createWithManagers(adminId: string, input: CreateOrganizationInput): Promise<OrganizationDetail>;
   // Admin only: makes the user a Manager of the club, joining it if not yet a member
   // (AlreadyManagerError if already Manager). UserNotFoundError if the user does not exist,
-  // then OrganizationNotFoundError if the club does not; neither changes anything.
+  // then OrganizationNotFoundError if the club does not, then AdminCannotBeManagerError if the
+  // user is an Admin account; none changes anything.
   // adminId is for the audit row.
   assignManager(adminId: string, orgId: string, userId: string): Promise<void>;
   // Admin only: the Manager stays in the club as an athlete. NotManagerError if the user
@@ -111,15 +122,17 @@ export function isNameViolation(error: unknown): boolean {
 }
 
 // Locks every Manager's row, in id order so two creations cannot wait on each other, and checks
-// they all exist. A concurrent account deletion (delete-account.ts locks the user first, too)
+// they all exist and none is an Admin account (read under the lock, so it cannot change meanwhile). A concurrent account deletion (delete-account.ts locks the user first, too)
 // then waits until this transaction ends, so the memberships below cannot hit a missing user:
 // no P2003 has to be interpreted. FOR NO KEY UPDATE, not FOR UPDATE: it still conflicts with the
 // deletion's FOR UPDATE, but not with the KEY SHARE that a foreign key check takes (see
 // lockUserThenClub).
 async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): Promise<void> {
-  const users = await tx.$queryRaw<{ id: string }[]>`
-    SELECT id FROM users WHERE id = ANY(${userIds}::uuid[]) ORDER BY id FOR NO KEY UPDATE`;
+  const users = await tx.$queryRaw<{ id: string; is_admin: boolean }[]>`
+    SELECT id, role_global = 'admin' AS is_admin FROM users
+    WHERE id = ANY(${userIds}::uuid[]) ORDER BY id FOR NO KEY UPDATE`;
   if (users.length !== userIds.length) throw new UserNotFoundError();
+  if (users.some((user) => user.is_admin)) throw new AdminCannotBeManagerError();
 }
 
 // Role changes lock the target user, then the club: the order account deletion uses
@@ -127,18 +140,21 @@ async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): 
 // membership or the other Managers must be read after this, in a new statement.
 // The user row is taken FOR NO KEY UPDATE, not FOR UPDATE: deleting the last Manager of a club
 // notifies every Admin, and the notification's foreign key needs a KEY SHARE lock on the Admin's
-// row. With FOR UPDATE, an Admin being assigned here (row held, waiting for the club the deletion
+// row. With FOR UPDATE, an Admin being assigned here (rejected only after its row is locked: row held, waiting for the club the deletion
 // already holds) and that deletion would wait for each other (40P01). FOR NO KEY UPDATE does not
 // conflict with KEY SHARE, and still conflicts with the FOR UPDATE of the user's own deletion.
+// Returns whether the user is an Admin account, read under the lock.
 async function lockUserThenClub(
   tx: Prisma.TransactionClient,
   orgId: string,
   userId: string,
-): Promise<void> {
-  const users = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+): Promise<{ isAdmin: boolean }> {
+  const users = await tx.$queryRaw<{ is_admin: boolean }[]>`
+    SELECT role_global = 'admin' AS is_admin FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
   if (users.length === 0) throw new UserNotFoundError();
   const clubs = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM organizations WHERE id = ${orgId}::uuid FOR UPDATE`;
   if (clubs.length === 0) throw new OrganizationNotFoundError();
+  return { isAdmin: users[0].is_admin };
 }
 
 export class PrismaOrganizationRepository implements OrganizationRepository {
@@ -223,7 +239,8 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     userId = normalizeId(userId);
     await this.db.$transaction(
       async (tx) => {
-        await lockUserThenClub(tx, orgId, userId);
+        const { isAdmin } = await lockUserThenClub(tx, orgId, userId);
+        if (isAdmin) throw new AdminCannotBeManagerError();
         const membership = await tx.membership.findUnique({
           where: { userId_orgId: { userId, orgId } },
           select: { role: true },

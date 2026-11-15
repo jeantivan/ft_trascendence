@@ -7,6 +7,7 @@ import { CLUB_WITHOUT_MANAGER, deleteAccountWithOtp } from "@/lib/gdpr/delete-ac
 import { issueDeleteCode } from "../support/delete-account-helper";
 import { withLockHarness } from "../support/lock-harness";
 import {
+  AdminCannotBeManagerError,
   AlreadyManagerError,
   isNameViolation,
   LastManagerError,
@@ -41,6 +42,12 @@ async function createUsers(count: number): Promise<string[]> {
     });
     ids.push(user.id);
   }
+  return ids;
+}
+
+async function createAdmins(count: number): Promise<string[]> {
+  const ids = await createUsers(count);
+  await prisma.user.updateMany({ where: { id: { in: ids } }, data: { roleGlobal: "admin" } });
   return ids;
 }
 
@@ -96,6 +103,7 @@ runOrganizationRepositoryContract("Prisma", () => ({
   repo: repository,
   createClub,
   createUsers,
+  createAdmins,
   addAthlete,
 }));
 
@@ -805,11 +813,15 @@ describe("PrismaOrganizationRepository.assignManager / removeManager", () => {
         const rows = await auditRows(adminId);
 
         if (operation === "assign") {
-          if (roleResult.status === "rejected") throw roleResult.reason;
-          // Deletion first: the club had no other Manager, so every Admin was told; then the promotion
-          expect(await roleOf(orgId, recipient)).toBe("manager");
+          // No Admin account can be Manager, so the assignment ends in AdminCannotBeManagerError,
+          // but only after taking the Admin's row: a deadlock would show up as another error
+          if (roleResult.status === "fulfilled" || !(roleResult.reason instanceof AdminCannotBeManagerError)) {
+            throw roleResult.status === "rejected" ? roleResult.reason : new Error("an Admin was assigned");
+          }
+          // Deletion first: the club had no other Manager, so every Admin was told; the Admin stays an athlete
+          expect(await roleOf(orgId, recipient)).toBe("athlete");
           expect(clubNotices.some((notice) => notice.userId === recipient)).toBe(true);
-          expect(rows).toHaveLength(1);
+          expect(rows).toHaveLength(0);
         } else {
           // Deletion first: the recipient was the other Manager, so nobody was told; then the
           // removal finds them alone
@@ -823,7 +835,7 @@ describe("PrismaOrganizationRepository.assignManager / removeManager", () => {
       }
     }
 
-    it("assigning an Admin as Manager while the club's last Manager deletes their account: no deadlock, both complete", async () => {
+    it("assigning an Admin as Manager while the club's last Manager deletes their account: no deadlock, the assignment is rejected and the deletion completes", async () => {
       await roleOnAdminWhileLastManagerDeletesAccount("assign");
     });
 

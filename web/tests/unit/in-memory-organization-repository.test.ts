@@ -13,6 +13,12 @@ runOrganizationRepositoryContract("in memory", () => {
         repo.addUser(id);
         return id;
       }),
+    createAdmins: async (count) =>
+      Array.from({ length: count }, () => {
+        const id = randomUUID();
+        repo.addAdmin(id);
+        return id;
+      }),
     addAthlete: async (orgId, userId) => repo.addAthlete(orgId, userId),
   };
 });

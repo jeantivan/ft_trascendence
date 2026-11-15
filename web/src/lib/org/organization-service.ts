@@ -1,4 +1,5 @@
 import {
+  AdminCannotBeManagerError,
   OrganizationNotFoundError,
   organizationRepository,
   type OrganizationDetail,
@@ -8,14 +9,7 @@ import {
 import { createOrganizationSchema, normalizeId, updateOrganizationSchema } from "./schemas";
 
 // Defined in the repository (which also throws it); re-exported to keep this import path
-export { OrganizationNotFoundError };
-
-export class AdminCannotBeManagerError extends Error {
-  constructor(message = "The Admin cannot name themselves Manager") {
-    super(message);
-    this.name = "AdminCannotBeManagerError";
-  }
-}
+export { AdminCannotBeManagerError, OrganizationNotFoundError };
 
 /**
  * Domain service for clubs (#148).
@@ -48,8 +42,9 @@ export class OrganizationService {
     return this.repo.createWithManagers(adminId, validated);
   }
 
-  // Admin only: requireAdmin() gives the adminId. The Admin cannot name themselves Manager;
-  // the check comes first, so the rejection reads and writes nothing.
+  // Admin only: requireAdmin() gives the adminId. No Admin account can be Manager: the acting
+  // Admin is rejected here, before reading or writing anything; any other Admin account is
+  // rejected by the repository, which reads the role under the user's lock.
   async assignManager(adminId: string, orgId: string, userId: string): Promise<void> {
     if (normalizeId(userId) === normalizeId(adminId)) {
       throw new AdminCannotBeManagerError();

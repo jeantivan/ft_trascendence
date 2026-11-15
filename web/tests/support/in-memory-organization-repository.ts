@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  AdminCannotBeManagerError,
   AlreadyManagerError,
   LastManagerError,
   NotManagerError,
@@ -35,9 +36,16 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   private clubs: Map<string, StoredClub> = new Map();
   // Memory has no users table: the fixture registers the users that exist
   private users: Set<string> = new Set();
+  // The registered users that are Admin accounts
+  private admins: Set<string> = new Set();
 
   addUser(userId: string): void {
     this.users.add(normalizeId(userId));
+  }
+
+  addAdmin(userId: string): void {
+    this.addUser(userId);
+    this.admins.add(normalizeId(userId));
   }
 
   // Like the Prisma implementation: the user is checked first, then the club
@@ -92,6 +100,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     const managerIds = [...new Set(input.managerIds.map(normalizeId))];
     // Like the database: a Manager that does not exist stops the creation, nothing is created
     if (managerIds.some((userId) => !this.users.has(userId))) throw new UserNotFoundError();
+    if (managerIds.some((userId) => this.admins.has(userId))) throw new AdminCannotBeManagerError();
     // Like the unique index on organizations.name
     if ([...this.clubs.values()].some((club) => club.data.name === input.name)) {
       throw new OrganizationNameTakenError();
@@ -119,6 +128,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     orgId = normalizeId(orgId);
     userId = normalizeId(userId);
     const members = this.memberRoles(orgId, userId);
+    if (this.admins.has(userId)) throw new AdminCannotBeManagerError();
     if (members.get(userId) === "manager") throw new AlreadyManagerError();
     members.set(userId, "manager");
   }

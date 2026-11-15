@@ -98,7 +98,7 @@ export async function createOrganizationAction(
       return { success: false, error: "Ya existe un club con ese nombre" };
     }
     if (error instanceof AdminCannotBeManagerError) {
-      return { success: false, error: "El Admin no puede ser Manager del club" };
+      return { success: false, error: "Ninguna cuenta Admin puede ser Manager de un club" };
     }
     // A Manager that was deleted before or during the creation: no club is left behind
     if (error instanceof UserNotFoundError) {
@@ -179,7 +179,7 @@ export async function removeManagerAction(
 // AlreadyManagerError, remove throws NotManagerError and LastManagerError
 function managerErrorResult(error: unknown): ManagerActionResult {
   if (error instanceof AdminCannotBeManagerError) {
-    return { success: false, error: "El Admin no puede ser Manager del club" };
+    return { success: false, error: "Ninguna cuenta Admin puede ser Manager de un club" };
   }
   if (error instanceof AlreadyManagerError) {
     return { success: false, error: "El usuario ya es Manager del club" };

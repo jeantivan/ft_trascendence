@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AdminCannotBeManagerError,
   AlreadyManagerError,
   LastManagerError,
   NotManagerError,
@@ -27,6 +28,8 @@ export interface OrganizationFixture {
   createClub(club: NewClub): Promise<string>;
   // Users that exist, to be the Admin or a Manager of a club
   createUsers(count: number): Promise<string[]>;
+  // Users that exist and are Admin accounts
+  createAdmins(count: number): Promise<string[]>;
   // Makes an existing user an athlete member of an existing club
   addAthlete(orgId: string, userId: string): Promise<void>;
 }
@@ -196,6 +199,20 @@ export function runOrganizationRepositoryContract(
       expect(catalog.some((club) => club.name === data.name)).toBe(false);
     });
 
+    it("createWithManagers throws AdminCannotBeManagerError if a Manager is another Admin account and creates no club", async () => {
+      const { repo, createUsers, createAdmins } = createFixture();
+      const data = newClub();
+      const [adminId, managerId] = await createUsers(2);
+      const [otherAdminId] = await createAdmins(1);
+
+      await expect(
+        repo.createWithManagers(adminId, { ...data, managerIds: [managerId, otherAdminId.toUpperCase()] }),
+      ).rejects.toBeInstanceOf(AdminCannotBeManagerError);
+
+      const catalog = await repo.listCatalog();
+      expect(catalog.some((club) => club.name === data.name)).toBe(false);
+    });
+
     it("createWithManagers treats the same Manager in different capitalization as one", async () => {
       const { repo, createUsers } = createFixture();
       const data = newClub();
@@ -207,6 +224,18 @@ export function runOrganizationRepositoryContract(
       });
 
       expect(await repo.listManagerIds(created.id)).toEqual([managerId]);
+    });
+
+    it("assignManager throws AdminCannotBeManagerError for another Admin account and changes nothing", async () => {
+      const { repo, createUsers, createAdmins, createClub } = createFixture();
+      const [adminId] = await createUsers(1);
+      const [otherAdminId] = await createAdmins(1);
+      const orgId = await createClub(newClub());
+
+      await expect(repo.assignManager(adminId, orgId, otherAdminId)).rejects.toBeInstanceOf(
+        AdminCannotBeManagerError,
+      );
+      await expect(repo.listManagerIds(orgId)).resolves.toEqual([]);
     });
 
     // A club with one Manager, plus an admin and an athlete member to work with

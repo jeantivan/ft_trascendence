@@ -231,7 +231,7 @@ describe("createOrganizationAction", () => {
   it.each([
     ["invalid data (ZodError)", new ZodError([]), "Datos del club no válidos"],
     ["a taken name", new OrganizationNameTakenError(), "Ya existe un club con ese nombre"],
-    ["the Admin naming themselves Manager", new AdminCannotBeManagerError(), "El Admin no puede ser Manager del club"],
+    ["an Admin account as Manager", new AdminCannotBeManagerError(), "Ninguna cuenta Admin puede ser Manager de un club"],
     ["a Manager that does not exist", new UserNotFoundError(), "Alguno de los Managers ya no existe"],
   ])("translates %s into a controlled error", async (_label, error, message) => {
     createOrganization.mockRejectedValue(error);
@@ -261,7 +261,7 @@ describe.each([
     assignManagerAction,
     assignManager,
     [
-      ["the Admin as Manager", new AdminCannotBeManagerError(), "El Admin no puede ser Manager del club"],
+      ["an Admin account as Manager", new AdminCannotBeManagerError(), "Ninguna cuenta Admin puede ser Manager de un club"],
       ["a user who is already Manager", new AlreadyManagerError(), "El usuario ya es Manager del club"],
     ],
   ],

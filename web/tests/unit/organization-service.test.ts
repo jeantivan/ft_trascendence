@@ -163,6 +163,17 @@ describe("OrganizationService", () => {
     await expect(repo.listManagerIds(orgId)).resolves.toEqual([]);
   });
 
+  it("assignManager rejects another Admin account, which only the repository can tell", async () => {
+    const { service, repo } = createService();
+    const orgId = repo.add(CLUB);
+    repo.addAdmin(OTHER_MANAGER_ID);
+
+    await expect(service.assignManager(ADMIN_ID, orgId, OTHER_MANAGER_ID)).rejects.toBeInstanceOf(
+      AdminCannotBeManagerError,
+    );
+    await expect(repo.listManagerIds(orgId)).resolves.toEqual([]);
+  });
+
   it("assignManager makes the user a Manager of the club", async () => {
     const { service, repo } = createService();
     const orgId = repo.add(CLUB);
