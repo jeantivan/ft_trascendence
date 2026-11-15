@@ -87,6 +87,12 @@ export interface OrganizationRepository {
   // Admin only: creates the club and makes each of managerIds its Manager, all or
   // nothing (UserNotFoundError if one does not exist, then AdminCannotBeManagerError if one
   // is an Admin account; neither creates anything). adminId is who does it, for the audit rows written in the same transaction.
+  // Known limit: a blocked account (users.blocked_at) is accepted as Manager, and
+  // removeManager counts a blocked Manager as "another Manager". #148 says "otro Manager activo",
+  // which Marta reads as excluding blocked Managers (15-nov); not implemented because the
+  // condition is complex and the 42 demo does not reach it.
+  // Known limit: "a club has at least one Manager" is enforced by createOrganizationSchema
+  // (min 1 managerId), not here: a caller that skips the schema could create a club with none.
   createWithManagers(adminId: string, input: CreateOrganizationInput): Promise<OrganizationDetail>;
   // Admin only: makes the user a Manager of the club, joining it if not yet a member
   // (AlreadyManagerError if already Manager). UserNotFoundError if the user does not exist,
