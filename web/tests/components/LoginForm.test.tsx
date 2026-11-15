@@ -40,12 +40,13 @@ describe("LoginForm", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Iniciar Sesión" })).toHaveClass("font-heading");
   });
 
-  // #79: the link is a Button with href, no longer the default blue link
-  it("links to /register without the default blue", () => {
+  // #79: the link is a ghost Button with href (border, no volt fill), as Marta asked
+  it("links to /register as a ghost button", () => {
     render(<LoginForm />);
 
     const link = screen.getByRole("link", { name: "Regístrate aquí" });
     expect(link).toHaveAttribute("href", "/register");
-    expect(link).not.toHaveClass("text-blue-500");
+    expect(link).toHaveClass("border-border-strong");
+    expect(link).not.toHaveClass("bg-volt");
   });
 });
