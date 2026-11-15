@@ -137,7 +137,8 @@ export async function deleteAccountAsAdmin(
 async function deleteLockedAccount(userId: string, tx: Prisma.TransactionClient): Promise<string[]> {
   const { target, anotherAdminLeft } = await lockAccountAndAdmins(tx, userId);
   if (!target) throw new AccountNotFoundError();
-  if (target.roleGlobal === "admin" && !anotherAdminLeft) throw new LastAdminError();
+  // A blocked Admin does not count as an unblocked one, so deleting it leaves the number unchanged
+  if (target.roleGlobal === "admin" && target.blockedAt === null && !anotherAdminLeft) throw new LastAdminError();
 
   const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
   await deleteAccountRows(userId, tx);

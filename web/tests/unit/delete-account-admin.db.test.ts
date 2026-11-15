@@ -149,6 +149,24 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
     expect(await db.auditLog.count({ where: { subjectId: ADMIN_1 } })).toBe(0);
   });
 
+  it("un Admin bloqueado se puede borrar aunque no quede ningún Admin sin bloquear", async () => {
+    await createUser(ADMIN_2, "admin", true);
+
+    // onlyTheseAdmins blocks ADMIN_1 inside the transaction: ADMIN_2 is the only Admin row and it is blocked
+    const result = await deleteAccountAsAdmin(ADMIN_2, writeAudit(ADMIN_1, ADMIN_2), onlyTheseAdmins([ADMIN_2]));
+
+    expect(result).toEqual({ deleted: true });
+    expect(await db.user.findUnique({ where: { id: ADMIN_2 } })).toBeNull();
+  });
+
+  it("un id en mayúsculas encuentra la cuenta y sigue aplicando la regla del último Admin", async () => {
+    const asUser = await deleteAccountAsAdmin(USER_1.toUpperCase(), writeAudit(ADMIN_1, USER_1), onlyTheseAdmins([ADMIN_1]));
+    expect(asUser).toEqual({ deleted: true });
+
+    const asLastAdmin = await deleteAccountAsAdmin(ADMIN_1.toUpperCase(), writeAudit(ADMIN_1, ADMIN_1), onlyTheseAdmins([ADMIN_1]));
+    expect(asLastAdmin).toEqual({ deleted: false, reason: "last_admin" });
+  });
+
   it("el último Admin sin bloquear no se puede borrar a sí mismo con OTP, y el código no se gasta", async () => {
     const guarded = onlyTheseAdmins([ADMIN_1]);
 

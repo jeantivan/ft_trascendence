@@ -26,16 +26,18 @@ export async function lockAccountAndAdmins(
   tx: Prisma.TransactionClient,
   userId: string,
 ): Promise<LockAccountAndAdminsResult> {
+  // Postgres returns uuids in lowercase; a caller's id may not be
+  const id = userId.toLowerCase();
   const locked = await tx.$queryRaw<(LockedAccount)[]>`
     SELECT id, role_global AS "roleGlobal", blocked_at AS "blockedAt"
     FROM users
-    WHERE id = ${userId}::uuid OR role_global = 'admin'
+    WHERE id = ${id}::uuid OR role_global = 'admin'
     ORDER BY id
     FOR UPDATE`;
 
-  const target = locked.find((row) => row.id === userId) ?? null;
+  const target = locked.find((row) => row.id === id) ?? null;
   const anotherAdminLeft = locked.some(
-    (row) => row.id !== userId && row.roleGlobal === "admin" && row.blockedAt === null,
+    (row) => row.id !== id && row.roleGlobal === "admin" && row.blockedAt === null,
   );
   return { target, anotherAdminLeft };
 }
