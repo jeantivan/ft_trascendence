@@ -57,6 +57,8 @@ The passwords in `.env` are generated randomly the first time and are never prin
 
 The port can be changed with `HTTPS_PORT` in `.env`.
 
+With rootless Docker (as on the 42 campus computers), `make dev` and `make test` run their container as `root`, which there is your own user: the default `node` user cannot enter the mounted `web` folder. The Makefile detects it by itself (`scripts/container-user.sh`); nothing changes with normal Docker.
+
 ### Conventions
 - **Frontend tests**: automated frontend tests live in `web/tests/`, grouped by component or feature. Component tests go in `web/tests/components/` and import the code through the `@/` alias.
 - **Test mail inbox**: mail sent by the app goes to a test inbox at `/mailpit/`, and nothing leaves Docker. See [docs/mail.md](docs/mail.md).
