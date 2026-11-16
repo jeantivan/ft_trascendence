@@ -33,7 +33,7 @@ describe("POST /api/gdpr/export", () => {
   it("answers 401 without a session and does not touch the export", async () => {
     vi.mocked(requireApiAuth).mockResolvedValue(Response.json({ error: "Unauthorized" }, { status: 401 }));
 
-    const response = await POST(exportRequest({ code: "123456" }));
+    const response = await POST(exportRequest({ otp: "123456" }));
 
     expect(response.status).toBe(401);
     expect(requestExport).not.toHaveBeenCalled();
@@ -42,7 +42,7 @@ describe("POST /api/gdpr/export", () => {
   it("answers 202 with the export id and starts the generation after the response", async () => {
     vi.mocked(requestExport).mockResolvedValue({ requested: true, exportId: "export-1" });
 
-    const response = await POST(exportRequest({ code: "123456" }));
+    const response = await POST(exportRequest({ otp: "123456" }));
 
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ export_id: "export-1", status: "pending" });
@@ -56,7 +56,7 @@ describe("POST /api/gdpr/export", () => {
   it("answers 403 for a wrong, expired or exhausted code and generates nothing", async () => {
     vi.mocked(requestExport).mockResolvedValue({ requested: false, reason: "invalid_code" });
 
-    const response = await POST(exportRequest({ code: "000000" }));
+    const response = await POST(exportRequest({ otp: "000000" }));
 
     expect(response.status).toBe(403);
     expect(afterCallbacks).toHaveLength(0);
@@ -65,11 +65,11 @@ describe("POST /api/gdpr/export", () => {
   it("answers 409 when an export is already active", async () => {
     vi.mocked(requestExport).mockResolvedValue({ requested: false, reason: "already_active" });
 
-    expect((await POST(exportRequest({ code: "123456" }))).status).toBe(409);
+    expect((await POST(exportRequest({ otp: "123456" }))).status).toBe(409);
     expect(afterCallbacks).toHaveLength(0);
   });
 
-  it.each([["not json"], [{}], [{ code: 123456 }], [{ code: "" }]])("answers 400 for the body %j", async (body) => {
+  it.each([["not json"], [{}], [{ otp: 123456 }], [{ otp: "" }]])("answers 400 for the body %j", async (body) => {
     const response = await POST(exportRequest(body));
 
     expect(response.status).toBe(400);
