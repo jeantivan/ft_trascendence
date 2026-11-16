@@ -34,7 +34,7 @@ describe("cleanupInterruptedExports", () => {
   it("marks pending exports as failed and leaves ready ones alone", async () => {
     const pending = await db.dataExport.create({ data: { userId: USER_ID } });
     const ready = await db.dataExport.create({
-      data: { userId: USER_ID, status: "ready", tokenHash: "h", path: "exports/r.zip", expiresAt: new Date(Date.now() + 60_000) },
+      data: { userId: USER_ID, status: "ready", tokenHash: "h", path: "exports/r.zip", expiresAt: new Date(Date.now() + 60_000), deliveredAt: new Date() },
     });
 
     await cleanupInterruptedExports(db, uploadsDir);
@@ -46,7 +46,7 @@ describe("cleanupInterruptedExports", () => {
   it("removes the leftover .tmp files and the ZIP of a pending export, but not the ZIP of a ready one", async () => {
     const pending = await db.dataExport.create({ data: { userId: USER_ID } });
     const ready = await db.dataExport.create({
-      data: { userId: USER_ID, status: "ready", tokenHash: "h", path: "exports/ready.zip", expiresAt: new Date(Date.now() + 60_000) },
+      data: { userId: USER_ID, status: "ready", tokenHash: "h", path: "exports/ready.zip", expiresAt: new Date(Date.now() + 60_000), deliveredAt: new Date() },
     });
     const readyFile = `${ready.id}.zip`;
     await writeFile(path.join(uploadsDir, "exports", `${pending.id}.zip.tmp`), "half");
@@ -57,6 +57,23 @@ describe("cleanupInterruptedExports", () => {
     await cleanupInterruptedExports(db, uploadsDir);
 
     expect(await readdir(path.join(uploadsDir, "exports"))).toEqual([readyFile]);
+  });
+
+  it("fails a ready export that was never delivered and removes its ZIP", async () => {
+    const undelivered = await db.dataExport.create({
+      data: { userId: USER_ID, status: "ready", tokenHash: "h", path: "exports/u.zip", expiresAt: new Date(Date.now() + 60_000) },
+    });
+    await writeFile(path.join(uploadsDir, "exports", `${undelivered.id}.zip`), "nobody has the token");
+
+    await cleanupInterruptedExports(db, uploadsDir);
+
+    expect(await db.dataExport.findUniqueOrThrow({ where: { id: undelivered.id } })).toMatchObject({
+      status: "failed",
+      tokenHash: null,
+      path: null,
+      expiresAt: null,
+    });
+    expect(await readdir(path.join(uploadsDir, "exports"))).toEqual([]);
   });
 
   it("does nothing when the exports folder does not exist yet", async () => {

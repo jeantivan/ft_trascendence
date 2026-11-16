@@ -53,6 +53,7 @@ describe("deliverExport", () => {
     expect(sent[0].text).toContain("2026-11-22");
     const row = await db.dataExport.findUniqueOrThrow({ where: { id } });
     expect(row.status).toBe("ready");
+    expect(row.deliveredAt).toBeInstanceOf(Date);
     expect(existsSync(path.join(uploadsDir, `exports/${id}.zip`))).toBe(true);
   });
 

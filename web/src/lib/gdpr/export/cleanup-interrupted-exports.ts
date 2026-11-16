@@ -9,7 +9,9 @@ import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
 // generator when the previous process died. Marking it failed lets the user ask again
 // at once instead of waiting for STUCK_PENDING_MS, and removes what it left on disk:
 // the .tmp of a half-written ZIP, and a complete ZIP the row never claimed (killed
-// between the rename and the update to ready).
+// between the rename and the update to ready). A ready export that was never delivered
+// (killed between ready and the email) is failed too: its token existed only in memory, and
+// left alone it would block a new request until it expires.
 // Known limit: one app process. A second one starting would fail the first one's exports.
 export async function cleanupInterruptedExports(
   db: PrismaClient = prisma,
@@ -21,9 +23,18 @@ export async function cleanupInterruptedExports(
     data: { status: "failed" },
   });
 
+  const undelivered = await db.dataExport.findMany({
+    where: { status: "ready", deliveredAt: null },
+    select: { id: true },
+  });
+  await db.dataExport.updateMany({
+    where: { id: { in: undelivered.map((row) => row.id) }, status: "ready", deliveredAt: null },
+    data: { status: "failed", tokenHash: null, path: null, expiresAt: null },
+  });
+
   const exportsDir = path.join(uploadsDir, "exports");
   const files = await readdir(exportsDir).catch(() => []);
-  const interruptedFiles = new Set(interrupted.map((row) => `${row.id}.zip`));
+  const interruptedFiles = new Set([...interrupted, ...undelivered].map((row) => `${row.id}.zip`));
   for (const file of files) {
     if (file.endsWith(".tmp") || interruptedFiles.has(file)) {
       await rm(path.join(exportsDir, file), { force: true });

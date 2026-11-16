@@ -28,7 +28,12 @@ function bodyFor(link: string, expiresAt: Date): string {
 // hash. So if the email cannot be sent nobody could ever download the ZIP: the export is
 // marked failed (the user can ask again) and the ZIP is removed.
 //
-// Known limit: if that cleanup also fails (database or disk down), the export stays ready with a
+// deliveredAt is set once the email is sent. If the process dies between ready and that mark,
+// cleanupInterruptedExports fails the export at the next start (nobody has the token), so the
+// user is not blocked by an active export for 7 days. Known limit: dying right after the email
+// went out but before the mark also fails it, and the link stops working; the user asks again.
+//
+// Known limit: if the cleanup above also fails (database or disk down), the export stays ready with a
 // token nobody received and its ZIP on disk. Nobody can download it without the token, and it
 // expires after 7 days; nothing removes the ZIP before that.
 //
@@ -52,6 +57,11 @@ export async function deliverExport(
     if (row.expiresAt === null) throw new Error("ready export without expiry");
     const link = `${origin}/api/gdpr/export/${exportId}/download?token=${generated.token}`;
     await createMailer().send({ to: row.user.email, subject: SUBJECT, text: bodyFor(link, row.expiresAt) });
+    // The email is out: a failure here must not undo the export. Without the mark the next
+    // start would treat it as undelivered (cleanupInterruptedExports) and fail it
+    await db.dataExport
+      .updateMany({ where: { id: exportId, status: "ready" }, data: { deliveredAt: new Date() } })
+      .catch(() => console.warn(`Export ${exportId} was sent but could not be marked delivered`));
     return true;
   } catch (error) {
     // Only the error name: the message could carry the address or the link
