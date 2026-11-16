@@ -23,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
     // One answer for wrong, expired and exhausted codes: nothing to tell them apart
     return result.reason === "invalid_code"
       ? Response.json({ error: "Invalid or expired code" }, { status: 403 })
-      : Response.json({ error: "An export is already in progress" }, { status: 409 });
+      : Response.json({ error: "An export is already active" }, { status: 409 });
   }
 
   // generateExport never throws: a failure leaves the export marked failed

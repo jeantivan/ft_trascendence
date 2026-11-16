@@ -65,7 +65,11 @@ describe("POST /api/gdpr/export", () => {
   it("answers 409 when an export is already active", async () => {
     vi.mocked(requestExport).mockResolvedValue({ requested: false, reason: "already_active" });
 
-    expect((await POST(exportRequest({ otp: "123456" }))).status).toBe(409);
+    const response = await POST(exportRequest({ otp: "123456" }));
+
+    expect(response.status).toBe(409);
+    // Active covers a pending export and a ready one that has not expired
+    expect(await response.json()).toEqual({ error: "An export is already active" });
     expect(afterCallbacks).toHaveLength(0);
   });
 
