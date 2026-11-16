@@ -764,11 +764,18 @@ describe("PrismaOrganizationRepository.assignManager / removeManager", () => {
 
     // The recipient of the role operation is an Admin. Deleting a club's last Manager notifies
     // every Admin, and the notification's foreign key needs a KEY SHARE lock on the Admin's row.
-    // If assign/remove held that row with FOR UPDATE while waiting for the club, the two would
-    // wait for each other (40P01); FOR NO KEY UPDATE does not conflict with KEY SHARE.
-    // G holds the club and the deletion queues first, so it gets the club before the role
-    // operation, which by then holds the Admin's row. Returns how the role operation ended.
-    async function roleOnAdminWhileLastManagerDeletesAccount(operation: "assign" | "remove") {
+    // Since ADR 0004 the deletion takes every Admin row with FOR UPDATE before it reaches the
+    // club (lockAccountAndAdmins), and assign/remove take the Admin's row with FOR NO KEY UPDATE
+    // before the club, so whoever arrives second queues behind the first one on `users`: the
+    // lock order users -> organizations leaves no room for a deadlock (40P01).
+    // G holds the club. With "deletion" first the deletion holds the Admin rows and waits for the
+    // club, and the role operation waits behind it on `users`; with "role" first the role
+    // operation holds the Admin's row and waits for the club, and the deletion waits behind it on
+    // `users`. Returns how the role operation ended.
+    async function roleOnAdminWhileLastManagerDeletesAccount(
+      operation: "assign" | "remove",
+      first: "role" | "deletion" = "deletion",
+    ) {
       const { adminId, managerId: deleted, otherManagerId: recipient, athleteId, orgId } = await setup();
       await prisma.user.updateMany({ where: { id: { in: [adminId, recipient, athleteId] } }, data: { roleGlobal: "admin" } });
       if (operation === "assign") {
@@ -787,17 +794,37 @@ describe("PrismaOrganizationRepository.assignManager / removeManager", () => {
           );
           const deletionClient = harness.client("deletion", OTP_CLIENT);
           const roleClient = harness.client("role", OTP_CLIENT);
-          const deletionTarget = { name: "deletion", client: deletionClient, queryFragment: "FROM organizations" };
-          const roleTarget = { name: "role", client: roleClient, queryFragment: "FROM organizations" };
-
-          const deletion = harness.track(deleteAccountWithOtp(deleted, code, deletionClient.db));
-          await harness.waitUntilWaiting(gate, [deletionTarget], OTP_OBSERVE_MS);
+          // The one that arrives first waits for the club; the second one queues behind it on `users`
+          const deletionTarget = {
+            name: "deletion",
+            client: deletionClient,
+            queryFragment: first === "deletion" ? "FROM organizations" : "FROM users",
+          };
+          const roleTarget = {
+            name: "role",
+            client: roleClient,
+            queryFragment: first === "role" ? "FROM organizations" : "FROM users",
+          };
           const roleRepository = new PrismaOrganizationRepository(roleClient.db);
-          const role = harness.track(
-            operation === "assign"
-              ? roleRepository.assignManager(adminId, orgId, recipient)
-              : roleRepository.removeManager(adminId, orgId, recipient),
-          );
+          const startRole = () =>
+            harness.track(
+              operation === "assign"
+                ? roleRepository.assignManager(adminId, orgId, recipient)
+                : roleRepository.removeManager(adminId, orgId, recipient),
+            );
+          const startDeletion = () => harness.track(deleteAccountWithOtp(deleted, code, deletionClient.db));
+          let role!: ReturnType<typeof startRole>;
+          let deletion!: ReturnType<typeof startDeletion>;
+          const start = {
+            role: () => void (role = startRole()),
+            deletion: () => void (deletion = startDeletion()),
+          };
+          const targets = { role: roleTarget, deletion: deletionTarget };
+
+          const second = first === "role" ? "deletion" : "role";
+          start[first]();
+          await harness.waitUntilWaiting(gate, [targets[first]], OTP_OBSERVE_MS);
+          start[second]();
           await harness.waitUntilWaiting(gate, [deletionTarget, roleTarget], OTP_OBSERVE_MS);
 
           gate.release();
@@ -837,6 +864,10 @@ describe("PrismaOrganizationRepository.assignManager / removeManager", () => {
 
     it("assigning an Admin as Manager while the club's last Manager deletes their account: no deadlock, the assignment is rejected and the deletion completes", async () => {
       await roleOnAdminWhileLastManagerDeletesAccount("assign");
+    });
+
+    it("assigning an Admin as Manager before the club's last Manager's account deletion arrives: no deadlock, the assignment is rejected and the deletion completes", async () => {
+      await roleOnAdminWhileLastManagerDeletesAccount("assign", "role");
     });
 
     it("removing an Admin Manager after the other Manager's account deletion arrived first: the removal throws LastManagerError and nobody is notified", async () => {
