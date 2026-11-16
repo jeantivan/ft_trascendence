@@ -1,13 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  answerInvitationAction,
   assignManagerAction,
   createOrganizationAction,
+  inviteUserAction,
   removeManagerAction,
+  requestToJoinAction,
+  reviewRequestAction,
+  revokeInvitationAction,
   updateOrganizationAction,
+  withdrawRequestAction,
 } from "@/lib/org/actions";
+import { requireAuth } from "@/lib/permissions/require-auth";
 import {
   AlreadyManagerError,
+  AlreadyMemberError,
   LastManagerError,
+  MembershipRequestNotFoundError,
+  MembershipRequestNotPendingError,
+  RequestAlreadyPendingError,
   NotManagerError,
   OrganizationNameTakenError,
   UserNotFoundError,
@@ -22,9 +33,16 @@ const updateOrganization = vi.hoisted(() => vi.fn());
 const createOrganization = vi.hoisted(() => vi.fn());
 const assignManager = vi.hoisted(() => vi.fn());
 const removeManager = vi.hoisted(() => vi.fn());
+const inviteUser = vi.hoisted(() => vi.fn());
+const revokeInvitation = vi.hoisted(() => vi.fn());
+const requestToJoin = vi.hoisted(() => vi.fn());
+const withdrawRequest = vi.hoisted(() => vi.fn());
+const answerInvitation = vi.hoisted(() => vi.fn());
+const reviewRequest = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/permissions/require-org-role", () => ({ requireOrgRole: vi.fn() }));
 vi.mock("@/lib/permissions/require-admin", () => ({ requireAdmin: vi.fn() }));
+vi.mock("@/lib/permissions/require-auth", () => ({ requireAuth: vi.fn() }));
 // Real error classes, fake service: the schema does not run here, so a ZodError is simulated
 // and these tests check what the action passes on and how it translates errors
 vi.mock("@/lib/org/organization-service", async (importOriginal) => ({
@@ -34,6 +52,12 @@ vi.mock("@/lib/org/organization-service", async (importOriginal) => ({
     createOrganization = createOrganization;
     assignManager = assignManager;
     removeManager = removeManager;
+    inviteUser = inviteUser;
+    revokeInvitation = revokeInvitation;
+    requestToJoin = requestToJoin;
+    withdrawRequest = withdrawRequest;
+    answerInvitation = answerInvitation;
+    reviewRequest = reviewRequest;
   },
 }));
 
@@ -342,5 +366,130 @@ describe.each([
     serviceMethod.mockRejectedValue(unexpected);
 
     await expect(action(ORG_ID, null, formWith({ userId: USER_ID }))).rejects.toBe(unexpected);
+  });
+});
+
+describe("invitation and request actions", () => {
+  const REQUEST_ID = "22222222-2222-4222-8222-222222222222";
+  const USER_ID = "00000000-0000-4000-8000-000000000003";
+  const SESSION_USER = { id: "user-from-session", email: "u@b.c", nick: "Uno", roleGlobal: "user" as const };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(requireOrgRole).mockResolvedValue({ user: MANAGER, role: "manager" });
+    vi.mocked(requireAuth).mockResolvedValue(SESSION_USER);
+  });
+
+  it("inviteUserAction checks invitation.manage and invites with the Manager from the session", async () => {
+    inviteUser.mockResolvedValue({});
+
+    const result = await inviteUserAction(ORG_ID, undefined, formWith({ userId: USER_ID, managerId: "someone-else" }));
+
+    expect(requireOrgRole).toHaveBeenCalledWith(ORG_ID, ORG_ROLES["invitation.manage"]);
+    expect(inviteUser).toHaveBeenCalledWith(MANAGER.id, ORG_ID, USER_ID);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("the Manager actions do nothing if the permission check rejects", async () => {
+    vi.mocked(requireOrgRole).mockRejectedValue(new ForbiddenSignal());
+
+    await expect(inviteUserAction(ORG_ID, undefined, formWith({ userId: USER_ID }))).rejects.toBeInstanceOf(ForbiddenSignal);
+    await expect(revokeInvitationAction(ORG_ID, undefined, formWith({ requestId: REQUEST_ID }))).rejects.toBeInstanceOf(ForbiddenSignal);
+    await expect(
+      reviewRequestAction(ORG_ID, undefined, formWith({ requestId: REQUEST_ID, decision: "approve" })),
+    ).rejects.toBeInstanceOf(ForbiddenSignal);
+    expect(inviteUser).not.toHaveBeenCalled();
+    expect(revokeInvitation).not.toHaveBeenCalled();
+    expect(reviewRequest).not.toHaveBeenCalled();
+  });
+
+  it("inviteUserAction rejects a malformed user id without calling the service", async () => {
+    await expect(inviteUserAction(ORG_ID, undefined, formWith({ userId: "nope" }))).resolves.toEqual({
+      success: false,
+      error: "Usuario no válido",
+    });
+    expect(inviteUser).not.toHaveBeenCalled();
+  });
+
+  it("revokeInvitationAction and reviewRequestAction pass the lower-cased ids on", async () => {
+    await revokeInvitationAction(ORG_ID.toUpperCase(), undefined, formWith({ requestId: REQUEST_ID.toUpperCase() }));
+    await reviewRequestAction(ORG_ID, undefined, formWith({ requestId: REQUEST_ID, decision: "reject" }));
+
+    expect(revokeInvitation).toHaveBeenCalledWith(ORG_ID, REQUEST_ID);
+    expect(reviewRequest).toHaveBeenCalledWith(ORG_ID, REQUEST_ID, false);
+    expect(requireOrgRole).toHaveBeenLastCalledWith(ORG_ID, ORG_ROLES["membershipRequest.review"]);
+  });
+
+  it("reviewRequestAction and answerInvitationAction reject a decision that is not one of theirs", async () => {
+    const invalid = { success: false, error: "Solicitud no válida" };
+
+    await expect(reviewRequestAction(ORG_ID, undefined, formWith({ requestId: REQUEST_ID, decision: "accept" }))).resolves.toEqual(invalid);
+    await expect(answerInvitationAction(undefined, formWith({ requestId: REQUEST_ID, decision: "approve" }))).resolves.toEqual(invalid);
+    await expect(answerInvitationAction(undefined, formWith({ requestId: REQUEST_ID }))).resolves.toEqual(invalid);
+    await expect(withdrawRequestAction(undefined, fileForm("requestId"))).resolves.toEqual(invalid);
+    expect(reviewRequest).not.toHaveBeenCalled();
+    expect(answerInvitation).not.toHaveBeenCalled();
+    expect(withdrawRequest).not.toHaveBeenCalled();
+  });
+
+  it("the user actions take the user from the session, with requireAuth and no club role", async () => {
+    await requestToJoinAction(ORG_ID);
+    await withdrawRequestAction(undefined, formWith({ requestId: REQUEST_ID, userId: "someone-else" }));
+    await answerInvitationAction(undefined, formWith({ requestId: REQUEST_ID, decision: "accept" }));
+
+    expect(requestToJoin).toHaveBeenCalledWith(SESSION_USER.id, ORG_ID);
+    expect(withdrawRequest).toHaveBeenCalledWith(SESSION_USER.id, REQUEST_ID);
+    expect(answerInvitation).toHaveBeenCalledWith(SESSION_USER.id, REQUEST_ID, true);
+    expect(requireOrgRole).not.toHaveBeenCalled();
+  });
+
+  it("requestToJoinAction rejects a malformed club id", async () => {
+    await expect(requestToJoinAction("nope")).resolves.toEqual({
+      success: false,
+      error: "Club no válido",
+    });
+    expect(requestToJoin).not.toHaveBeenCalled();
+  });
+
+  it("the user actions do nothing if the session check rejects", async () => {
+    vi.mocked(requireAuth).mockRejectedValue(new NotFoundSignal());
+
+    await expect(requestToJoinAction(ORG_ID)).rejects.toBeInstanceOf(NotFoundSignal);
+    expect(requestToJoin).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [new AlreadyMemberError(), "Ya eres miembro del club"],
+    [new RequestAlreadyPendingError(), "Ya tienes una solicitud o invitación pendiente en el club"],
+    [new MembershipRequestNotFoundError(), "La solicitud ya no existe"],
+    [new MembershipRequestNotPendingError(), "La solicitud ya está resuelta"],
+    [new UserNotFoundError(), "Tu cuenta no puede realizar esta acción"],
+    [new OrganizationNotFoundError(), "El club ya no existe"],
+  ])("the user actions turn %o into a message", async (error, message) => {
+    requestToJoin.mockRejectedValue(error);
+
+    await expect(requestToJoinAction(ORG_ID)).resolves.toEqual({ success: false, error: message });
+  });
+
+  it("the Manager actions word the member and pending errors about the user, not about the caller", async () => {
+    inviteUser.mockRejectedValueOnce(new AlreadyMemberError());
+    inviteUser.mockRejectedValueOnce(new RequestAlreadyPendingError());
+
+    await expect(inviteUserAction(ORG_ID, undefined, formWith({ userId: USER_ID }))).resolves.toEqual({
+      success: false,
+      error: "El usuario ya es miembro del club",
+    });
+    await expect(inviteUserAction(ORG_ID, undefined, formWith({ userId: USER_ID }))).resolves.toEqual({
+      success: false,
+      error: "El usuario ya tiene una solicitud o invitación pendiente",
+    });
+  });
+
+  it("an unexpected error propagates", async () => {
+    answerInvitation.mockRejectedValue(new Error("database down"));
+
+    await expect(
+      answerInvitationAction(undefined, formWith({ requestId: REQUEST_ID, decision: "accept" })),
+    ).rejects.toThrow("database down");
   });
 });

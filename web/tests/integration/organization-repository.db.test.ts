@@ -11,11 +11,14 @@ import {
   AlreadyManagerError,
   isNameViolation,
   LastManagerError,
+  MembershipRequestNotPendingError,
   NotManagerError,
   OrganizationNotFoundError,
   PrismaOrganizationRepository,
+  RequestAlreadyPendingError,
   UserNotFoundError,
 } from "@/lib/org/organization-repository";
+import type { NotifyInput } from "@/lib/org/membership-notifier";
 import {
   runOrganizationRepositoryContract,
   type NewClub,
@@ -28,7 +31,12 @@ vi.mock("@/lib/gdpr/record-admin-action", async (importOriginal) => {
 });
 
 const PREFIX = "organization-repository-";
-const repository = new PrismaOrganizationRepository(prisma);
+// Stands in for the notifications of #153 until it is merged: it keeps what the repository sends
+const sentNotifications: NotifyInput[] = [];
+const repository = new PrismaOrganizationRepository(prisma, async (_tx, input) => {
+  sentNotifications.push(input);
+  return null;
+});
 // Clubs made with createClub are cleaned up by id
 const clubIds: string[] = [];
 let userCount = 0;
@@ -94,6 +102,7 @@ afterEach(async () => {
   await prisma.auditLog.deleteMany({ where: { actorId: { in: users.map((user) => user.id) } } });
   await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX } } });
   clubIds.length = 0;
+  sentNotifications.length = 0;
 });
 afterAll(async () => {
   await prisma.$disconnect();
@@ -105,7 +114,54 @@ runOrganizationRepositoryContract("Prisma", () => ({
   createUsers,
   createAdmins,
   addAthlete,
+  blockUser: async (userId) => {
+    await prisma.user.update({ where: { id: userId }, data: { blockedAt: new Date() } });
+  },
+  // A new array per fixture, so each test sees only what it sent
+  sent: () => sentNotifications,
 }));
+
+// What the contract cannot see: the partial unique index only exists in the database
+describe("PrismaOrganizationRepository membership requests", () => {
+  it("two requests at once leave one pending row, and the other gets RequestAlreadyPendingError", async () => {
+    const orgId = await createClub({ name: `${PREFIX}race`, description: null, timezone: "Europe/Madrid", members: 0 });
+    const [userId] = await createUsers(1);
+
+    const outcomes = await Promise.allSettled([
+      repository.requestToJoin(userId, orgId),
+      repository.requestToJoin(userId, orgId),
+    ]);
+
+    expect(outcomes.filter((o) => o.status === "fulfilled")).toHaveLength(1);
+    const failed = outcomes.find((o) => o.status === "rejected");
+    expect(failed?.status === "rejected" && failed.reason).toBeInstanceOf(RequestAlreadyPendingError);
+    await expect(prisma.membershipRequest.count({ where: { orgId, userId, status: "pending" } })).resolves.toBe(1);
+  });
+
+  it("the index lets a user have a new pending row after the previous was decided", async () => {
+    const orgId = await createClub({ name: `${PREFIX}reinvite`, description: null, timezone: "Europe/Madrid", members: 0 });
+    const [userId] = await createUsers(1);
+    const first = await repository.requestToJoin(userId, orgId);
+    await repository.withdrawRequest(userId, first.id);
+
+    await expect(repository.requestToJoin(userId, orgId)).resolves.toMatchObject({ status: "pending" });
+  });
+
+  it("two decisions at once on the same request: one wins, the other gets MembershipRequestNotPendingError", async () => {
+    const orgId = await createClub({ name: `${PREFIX}decide`, description: null, timezone: "Europe/Madrid", members: 0 });
+    const [userId] = await createUsers(1);
+    const request = await repository.requestToJoin(userId, orgId);
+
+    const outcomes = await Promise.allSettled([
+      repository.reviewRequest(orgId, request.id, true),
+      repository.reviewRequest(orgId, request.id, false),
+    ]);
+
+    expect(outcomes.filter((o) => o.status === "fulfilled")).toHaveLength(1);
+    const failed = outcomes.find((o) => o.status === "rejected");
+    expect(failed?.status === "rejected" && failed.reason).toBeInstanceOf(MembershipRequestNotPendingError);
+  });
+});
 
 // What the contract cannot see: roles and audit rows only exist in the database
 describe("PrismaOrganizationRepository.createWithManagers", () => {
