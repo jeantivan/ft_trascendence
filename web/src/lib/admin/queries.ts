@@ -6,9 +6,11 @@ import { prisma } from "@/lib/prisma";
 // requireAdmin first, outside try/catch: it redirects or answers 404 by throwing (#199)
 
 // ?page= comes from the address, so anyone can write anything there: only a whole
-// number from 1 up counts, anything else (abc, -3, 2.5, repeated...) shows page 1
+// number from 1 to 999999 counts, anything else (abc, -3, 2.5, repeated, too many
+// digits...) shows page 1. The limit keeps the database's OFFSET in range: a 20-digit
+// page gave a 500. 999999 pages of 50 are 50 million accounts
 function pageFromParam(pageParam: string | string[] | undefined): number {
-  return typeof pageParam === "string" && /^[1-9]\d*$/.test(pageParam) ? Number(pageParam) : 1;
+  return typeof pageParam === "string" && /^[1-9]\d{0,5}$/.test(pageParam) ? Number(pageParam) : 1;
 }
 
 // With the page it shows, so the page can build its previous and next links

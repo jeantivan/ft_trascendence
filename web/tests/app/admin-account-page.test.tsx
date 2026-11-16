@@ -83,4 +83,40 @@ describe("/admin/accounts/[id]", () => {
     expect(screen.queryByRole("button", { name: "Bloquear cuenta" })).not.toBeInTheDocument();
     expect(screen.getByText("Es tu cuenta: no puedes bloquear tu propia cuenta.")).toBeInTheDocument();
   });
+  // Until the last-Admin rule (#102): blocking an Admin is always refused, so no button for it
+  it("on another Admin's account there is no block button, only why", async () => {
+    vi.mocked(getAccountForAdmin).mockResolvedValue({
+      id: ID,
+      email: "otra-admin@demo.local",
+      nick: "Otra",
+      roleGlobal: "admin",
+      blockedAt: null,
+      createdAt: new Date("2026-10-01T10:00:00Z"),
+      clubs: [],
+      isSelf: false,
+    });
+
+    render(await AdminAccountPage({ params: params(ID) }));
+
+    expect(screen.queryByRole("button", { name: "Bloquear cuenta" })).not.toBeInTheDocument();
+    expect(screen.getByText("No se puede bloquear a un administrador.")).toBeInTheDocument();
+  });
+
+  it("an Admin's account that is already blocked still offers to unblock it", async () => {
+    vi.mocked(getAccountForAdmin).mockResolvedValue({
+      id: ID,
+      email: "otra-admin@demo.local",
+      nick: "Otra",
+      roleGlobal: "admin",
+      blockedAt: new Date("2026-11-01T10:00:00Z"),
+      createdAt: new Date("2026-10-01T10:00:00Z"),
+      clubs: [],
+      isSelf: false,
+    });
+
+    render(await AdminAccountPage({ params: params(ID) }));
+
+    expect(screen.getByRole("button", { name: "Desbloquear cuenta" })).toBeInTheDocument();
+    expect(screen.queryByText("No se puede bloquear a un administrador.")).not.toBeInTheDocument();
+  });
 });

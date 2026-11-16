@@ -106,13 +106,47 @@ describe("Admin account actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/admin/accounts", "layout");
   });
 
+  // changed: false means another Admin got there first: what the page shows is old
   it.each([
-    ["nothing changed", { ok: true, changed: false }],
-    ["the action was refused", { ok: false, reason: "self" }],
-  ] as const)("block: %s, nothing to redraw", async (_name, result) => {
-    vi.mocked(blockAccount).mockResolvedValue(result);
+    ["block", blockAccountAction, blockAccount],
+    ["unblock", unblockAccountAction, unblockAccount],
+    ["nick", updateAccountNickAction, updateAccountNick],
+  ] as const)("%s: already like that (another Admin was first) also redraws the panel", async (_name, action, service) => {
+    vi.mocked(service).mockResolvedValue({ ok: true, changed: false });
+
+    await action(null, formWith({ accountId: ACCOUNT_ID, nick: "Nuevo" }));
+
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/accounts", "layout");
+  });
+
+  // Refused for being an Admin: the account may have been made Admin after the page
+  // was drawn, so the page shows an old role and a button that no longer applies
+  it("block refused because the account is an Admin redraws the panel", async () => {
+    vi.mocked(blockAccount).mockResolvedValue({ ok: false, reason: "admin" });
 
     await blockAccountAction(null, formWith({ accountId: ACCOUNT_ID }));
+
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/accounts", "layout");
+  });
+
+  // The other refusals change nothing. not-found does not redraw either: the account
+  // page would turn into a 404 and the message "Esta cuenta ya no existe." would be lost
+  it.each([
+    ["block", blockAccountAction, blockAccount, "self"],
+    ["block", blockAccountAction, blockAccount, "not-found"],
+    ["unblock", unblockAccountAction, unblockAccount, "not-found"],
+  ] as const)("%s refused (%s): nothing to redraw", async (_name, action, service, reason) => {
+    vi.mocked(service).mockResolvedValue({ ok: false, reason });
+
+    await action(null, formWith({ accountId: ACCOUNT_ID }));
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("nick refused because it breaks the sign-up rule: nothing to redraw", async () => {
+    vi.mocked(updateAccountNick).mockResolvedValue({ ok: false, reason: "invalid-nick", message: "x" });
+
+    await updateAccountNickAction(null, formWith({ accountId: ACCOUNT_ID, nick: "A" }));
 
     expect(revalidatePath).not.toHaveBeenCalled();
   });

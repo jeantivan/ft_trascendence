@@ -28,7 +28,11 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function createUser(id: string, createdAt: string, extra: { blockedAt?: Date } = {}) {
+async function createUser(
+  id: string,
+  createdAt: string,
+  extra: { blockedAt?: Date; roleGlobal?: "user" | "admin" } = {},
+) {
   await prisma.user.create({
     data: {
       id,
@@ -95,6 +99,13 @@ describe("Integration: listAccounts", () => {
     expect(accounts).toHaveLength(50);
     expect(accounts.every((account) => account.email.endsWith("@admin-accounts.test"))).toBe(true);
     expect(hasNextPage).toBe(true);
+  });
+});
+
+describe("Integration: listAccounts at the highest page", () => {
+  // queries.ts lets ?page= go up to 999999: the database answers an empty page, not an error
+  it("gives an empty page for page 999999", async () => {
+    await expect(listAccounts(prisma, { page: 999999 })).resolves.toEqual({ accounts: [], hasNextPage: false });
   });
 });
 
@@ -189,6 +200,76 @@ describe("Integration: blockAccount and unblockAccount", () => {
     await expect(auditRows()).resolves.toEqual([]);
   });
 
+  // A form sent by hand can carry the id in any case: Postgres compares uuids by
+  // value, so "A0…" is the same account as "a0…"
+  it("does not let the Admin block their own account with the id in upper or mixed case", async () => {
+    // Letters in several groups, so upper case and mixed case are really different texts
+    const selfId = "abcdef00-0000-4000-8000-0000000002cd";
+    await createUser(selfId, "2099-01-04T00:00:00Z");
+
+    for (const accountId of ["ABCDEF00-0000-4000-8000-0000000002CD", "AbCdEf00-0000-4000-8000-0000000002Cd"]) {
+      await expect(blockAccount(prisma, { adminId: selfId, accountId })).resolves.toEqual({
+        ok: false,
+        reason: "self",
+      });
+    }
+    expect(await blockedAtOf(selfId)).toBeNull();
+    await expect(prisma.auditLog.findMany({ where: { actorId: selfId } })).resolves.toEqual([]);
+  });
+
+  it("blocks another account sent with the id in upper case, and audit_log keeps it in lowercase", async () => {
+    await createUser(target, "2099-01-02T00:00:00Z");
+
+    const result = await blockAccount(prisma, { adminId: ADMIN_ID, accountId: target.toUpperCase() });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await blockedAtOf(target)).toBeInstanceOf(Date);
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].subjectId).toBe(target);
+  });
+
+  // Until the last-Admin rule (#102, with lockAccountAndAdmins from #158): two Admins
+  // blocking each other at once would leave the app with none
+  it("does not block an Admin account, also with the id in upper case, and writes no row", async () => {
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+
+    for (const accountId of [target, target.toUpperCase()]) {
+      await expect(blockAccount(prisma, { adminId: ADMIN_ID, accountId })).resolves.toEqual({
+        ok: false,
+        reason: "admin",
+      });
+    }
+    expect(await blockedAtOf(target)).toBeNull();
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  // It is already as the Admin wanted: say so, like for any other account, not "cannot"
+  it("blocking an Admin account that is already blocked says it was already blocked", async () => {
+    const blockedAt = new Date("2099-01-05T00:00:00Z");
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin", blockedAt });
+
+    await expect(blockAccount(prisma, { adminId: ADMIN_ID, accountId: target })).resolves.toEqual({
+      ok: true,
+      changed: false,
+    });
+    expect(await blockedAtOf(target)).toEqual(blockedAt);
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  it("still unblocks an Admin account that was blocked before this rule", async () => {
+    await createUser(target, "2099-01-02T00:00:00Z", {
+      roleGlobal: "admin",
+      blockedAt: new Date("2099-01-05T00:00:00Z"),
+    });
+
+    await expect(unblockAccount(prisma, { adminId: ADMIN_ID, accountId: target })).resolves.toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(await blockedAtOf(target)).toBeNull();
+  });
+
   it("changes nothing and writes no row when the account is already blocked", async () => {
     const blockedAt = new Date("2099-01-05T00:00:00Z");
     await createUser(target, "2099-01-02T00:00:00Z", { blockedAt });
@@ -257,6 +338,16 @@ describe("Integration: updateAccountNick", () => {
     await prisma.auditLog.deleteMany({ where: { actorId: ADMIN_ID } });
     await prisma.user.deleteMany({ where: { email: { endsWith: "@admin-accounts.test" } } });
   });
+  it("changes the nick of an account sent with the id in upper case, and audit_log keeps it in lowercase", async () => {
+    await createUser(target, "2099-01-02T00:00:00Z");
+
+    const result = await updateAccountNick(prisma, { adminId: ADMIN_ID, accountId: target.toUpperCase(), nick: "Nuevo" });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await nickOf(target)).toBe("Nuevo");
+    expect((await auditRows())[0].subjectId).toBe(target);
+  });
+
   it("saves the new nick without spaces around it and writes one update row", async () => {
     await createUser(target, "2099-01-02T00:00:00Z");
 

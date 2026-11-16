@@ -1,6 +1,6 @@
 import type { GlobalRole, MembershipRole, Prisma, PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction, type AdminActionEntry } from "@/lib/gdpr/record-admin-action";
-import { registerSchema } from "@/lib/auth/schemas";
+import { nickSchema } from "@/lib/auth/schemas";
 import { isDbId } from "@/lib/permissions/is-db-id";
 
 // Admin panel (#102, parent #50). Callers check the Admin first (requireAdmin):
@@ -80,7 +80,7 @@ export async function getAccount(db: PrismaClient, accountId: string): Promise<A
 // changed: false when the account was already like that (see changeAccount)
 export type AccountActionResult =
   | { ok: true; changed: boolean }
-  | { ok: false; reason: "not-found" | "self" };
+  | { ok: false; reason: "not-found" | "self" | "admin" };
 
 // The audit actions on an account, as record-admin-action.ts lists them
 type AccountAuditAction = Extract<AdminActionEntry, { resource: "account" }>["action"];
@@ -93,8 +93,9 @@ interface AccountAction {
 // The blocked person's next request no longer gets in: requireAuth reads blockedAt
 // from the database on every request (#99)
 export async function blockAccount(db: PrismaClient, { adminId, accountId }: AccountAction): Promise<AccountActionResult> {
-  // Blocking yourself would lock you out of the panel
-  if (accountId === adminId) return { ok: false, reason: "self" };
+  // Blocking yourself would lock you out of the panel. Compared in lowercase: a form
+  // sent by hand can carry the id in upper case, and Postgres compares uuids by value
+  if (accountId.toLowerCase() === adminId.toLowerCase()) return { ok: false, reason: "self" };
   return setBlocked(db, { adminId, accountId }, true);
 }
 
@@ -102,36 +103,68 @@ export async function unblockAccount(db: PrismaClient, action: AccountAction): P
   return setBlocked(db, action, false);
 }
 
+// Blocking is refused for an Admin account that is not blocked yet, until the last-Admin
+// rule arrives (#102, with lockAccountAndAdmins from #158): two Admins blocking each
+// other at once would leave the app with none. An Admin that is already blocked is not
+// refused: it is already as the Admin wanted. The one place for this rule: setBlocked
+// refuses with it and the account page hides the block button with it (its where
+// below says the same in Prisma terms)
+export function isBlockRefusedForAdmin(account: { roleGlobal: GlobalRole; blockedAt: Date | null }): boolean {
+  return account.roleGlobal === "admin" && account.blockedAt === null;
+}
+
 async function setBlocked(
   db: PrismaClient,
   action: AccountAction,
   blocked: boolean,
 ): Promise<AccountActionResult> {
-  // Blocking an account that is already blocked keeps its first date: since when
-  return changeAccount(db, action, blocked ? "block" : "unblock", {
-    where: { blockedAt: blocked ? null : { not: null } },
-    data: { blockedAt: blocked ? new Date() : null },
-  });
+  if (!blocked) {
+    // Unblocking an Admin is still allowed: one blocked before the rule below must get back in
+    return changeAccount(db, action, "unblock", {
+      where: { blockedAt: { not: null } },
+      data: { blockedAt: null },
+    });
+  }
+  // Blocking an account that is already blocked keeps its first date: since when.
+  // Admins: see isBlockRefusedForAdmin. The role is also part of where (keep the two in
+  // step), so an account made Admin in the meantime is refused too
+  return changeAccount(
+    db,
+    action,
+    "block",
+    { where: { blockedAt: null, roleGlobal: { not: "admin" } }, data: { blockedAt: new Date() } },
+    { refuse: (account) => (isBlockRefusedForAdmin(account) ? "admin" : null) },
+  );
 }
+
+// The account as it is when nothing changed, for refuse to tell why
+type UnchangedAccount = { roleGlobal: GlobalRole; blockedAt: Date | null };
 
 // The common part of every change the panel makes to an account: change it only
 // if it is not like that already, and write the audit row in the same transaction.
 // where narrows the account to the rows that would change; when none does, the
-// account is either already like that (changed: false, and no audit row, since
-// nothing happened) or does not exist. So two Admins doing the same thing at once
-// write one audit row, not two
+// account does not exist (not-found), is refused for a reason refuse gives (an
+// Admin, for blocking), or is already like that (changed: false, and no audit row,
+// since nothing happened). So two Admins doing the same thing at once write one
+// audit row, not two
 async function changeAccount(
   db: PrismaClient,
   { adminId, accountId }: AccountAction,
   auditAction: AccountAuditAction,
   { where, data }: { where: Prisma.UserWhereInput; data: Prisma.UserUpdateManyMutationInput },
+  { refuse }: { refuse?: (account: UnchangedAccount) => "admin" | null } = {},
 ): Promise<AccountActionResult> {
   if (!isDbId(accountId)) return { ok: false, reason: "not-found" };
   return db.$transaction(async (tx) => {
     const { count } = await tx.user.updateMany({ where: { ...where, id: accountId }, data });
     if (count === 0) {
-      const exists = await tx.user.count({ where: { id: accountId } });
-      return exists ? { ok: true, changed: false } : { ok: false, reason: "not-found" };
+      const account = await tx.user.findUnique({
+        where: { id: accountId },
+        select: { roleGlobal: true, blockedAt: true },
+      });
+      if (!account) return { ok: false, reason: "not-found" };
+      const reason = refuse?.(account);
+      return reason ? { ok: false, reason } : { ok: true, changed: false };
     }
     // Ids only: what changed (a nick, say) never goes to audit_log
     await recordAdminAction(tx, { adminId, action: auditAction, resource: "account", subjectId: accountId });
@@ -149,7 +182,7 @@ export async function updateAccountNick(
   db: PrismaClient,
   { adminId, accountId, nick }: AccountAction & { nick: string },
 ): Promise<UpdateNickResult> {
-  const parsed = registerSchema.shape.nick.safeParse(nick);
+  const parsed = nickSchema.safeParse(nick);
   if (!parsed.success) {
     return { ok: false, reason: "invalid-nick", message: parsed.error.issues[0].message };
   }

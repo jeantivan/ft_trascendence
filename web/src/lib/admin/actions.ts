@@ -15,9 +15,14 @@ import { prisma } from "@/lib/prisma";
 // The Admin comes from the session and the database (requireAdmin), never from
 // the form. Outside try/catch: requireAdmin redirects or answers 404 by throwing (#199)
 
-// After a change, the list and the account page are drawn again with the new data
-function redrawPanelIfChanged<T extends AccountActionResult | UpdateNickResult>(result: T): T {
-  if (result.ok && result.changed) revalidatePath("/admin/accounts", "layout");
+// The list and the account page are drawn again with the database's data after an
+// action that went through, also with changed: false (another Admin got there first,
+// so what the page shows is old), and after a refusal for being an Admin (the account
+// may have been made Admin after the page was drawn). Not after the other refusals:
+// nothing changed, and for not-found the account page would turn into a 404 and lose
+// its message
+function redrawPanelIfStale<T extends AccountActionResult | UpdateNickResult>(result: T): T {
+  if (result.ok || result.reason === "admin") revalidatePath("/admin/accounts", "layout");
   return result;
 }
 
@@ -29,21 +34,21 @@ function textField(formData: FormData, name: string): string {
 
 export async function blockAccountAction(_prevState: unknown, formData: FormData): Promise<AccountActionResult> {
   const admin = await requireAdmin();
-  return redrawPanelIfChanged(
+  return redrawPanelIfStale(
     await blockAccount(prisma, { adminId: admin.id, accountId: textField(formData, "accountId") }),
   );
 }
 
 export async function unblockAccountAction(_prevState: unknown, formData: FormData): Promise<AccountActionResult> {
   const admin = await requireAdmin();
-  return redrawPanelIfChanged(
+  return redrawPanelIfStale(
     await unblockAccount(prisma, { adminId: admin.id, accountId: textField(formData, "accountId") }),
   );
 }
 
 export async function updateAccountNickAction(_prevState: unknown, formData: FormData): Promise<UpdateNickResult> {
   const admin = await requireAdmin();
-  return redrawPanelIfChanged(
+  return redrawPanelIfStale(
     await updateAccountNick(prisma, {
       adminId: admin.id,
       accountId: textField(formData, "accountId"),

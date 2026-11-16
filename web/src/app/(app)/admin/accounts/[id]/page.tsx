@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { AccountBlockForm } from "@/components/admin/AccountBlockForm";
 import { AccountNickForm } from "@/components/admin/AccountNickForm";
 import { AccountProfile } from "@/components/admin/AccountProfile";
+import { ADMIN_BLOCK_REFUSED } from "@/components/admin/result-message";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { isBlockRefusedForAdmin } from "@/lib/admin/accounts";
 import { getAccountForAdmin } from "@/lib/admin/queries";
 
 // Admin panel (#102): one account. getAccountForAdmin checks the Admin first (404 for
@@ -31,8 +33,11 @@ export default async function AdminAccountPage({ params }: { params: Promise<{ i
         <AccountNickForm accountId={account.id} nick={account.nick} />
         {account.isSelf ? (
           <p className="text-sm text-text-secondary">Es tu cuenta: no puedes bloquear tu propia cuenta.</p>
+        ) : isBlockRefusedForAdmin(account) ? (
+          // blockAccount would refuse it; an Admin already blocked still gets the form, to unblock it
+          <p className="text-sm text-text-secondary">{ADMIN_BLOCK_REFUSED}</p>
         ) : (
-          <AccountBlockForm accountId={account.id} blocked={account.blockedAt !== null} />
+          <AccountBlockForm accountId={account.id} blockedAt={account.blockedAt} />
         )}
       </Card>
     </div>
