@@ -61,3 +61,7 @@ fill_if_empty POSTGRES_PASSWORD -hex 32
 # Hexadecimal too: it goes inside MP_UI_AUTH (user:password) in docker-compose.yml.
 # Only 8 characters: unlike the others, a person types this one to read the test inbox
 fill_if_empty MAILPIT_PASSWORD -hex 4
+# The initial Admin (#213) and the demo users (make seed): 8 characters too, the
+# sign-up minimum, because someone types them on another computer during the evaluation
+fill_if_empty ADMIN_PASSWORD -hex 4
+fill_if_empty SEED_USER_PASSWORD -hex 4
