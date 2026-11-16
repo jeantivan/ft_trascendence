@@ -61,6 +61,9 @@ export async function deleteAccountAction(
 
   const result = await deleteAccountWithOtp(user.id, code);
   if (!result.deleted) {
+    if (result.reason === "last_admin") {
+      return { success: false, error: "Eres el último Admin: nombra a otra persona Admin antes de borrar tu cuenta." };
+    }
     return { success: false, error: "Código no válido o caducado" };
   }
 
