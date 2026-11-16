@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
+import { Readable } from "node:stream";
 import path from "node:path";
 import { findExportForDownload } from "@/lib/gdpr/export/find-export-for-download";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
@@ -31,10 +32,11 @@ export async function GET(
     return notFound();
   }
 
-  // Response only takes bytes backed by a plain ArrayBuffer, as readFile returns
-  let bytes: Uint8Array<ArrayBuffer>;
+  // The file is streamed, never read whole: an export can be big. The handle is opened once
+  // and sized from the same handle, so a file removed meanwhile cannot make them disagree
+  let handle;
   try {
-    bytes = await readFile(path.join(UPLOADS_DIR, relativePath));
+    handle = await open(path.join(UPLOADS_DIR, relativePath));
   } catch (error) {
     // The row without its file (cleaned up or lost) is "not found"; any other disk error is a real failure
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -42,11 +44,18 @@ export async function GET(
     }
     throw error;
   }
+  const { size } = await handle.stat().catch(async (error) => {
+    await handle.close();
+    throw error;
+  });
+  // The stream closes the handle when it ends, fails or the client cancels
+  const body = Readable.toWeb(handle.createReadStream()) as ReadableStream<Uint8Array>;
 
   // no-store: the ZIP holds personal data, no cache (browser, NGINX, proxy) may keep it
-  return new Response(bytes, {
+  return new Response(body, {
     headers: {
       "Content-Type": "application/zip",
+      "Content-Length": String(size),
       "Content-Disposition": 'attachment; filename="my-data.zip"',
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",

@@ -58,11 +58,23 @@ describe("GET /api/gdpr/export/[id]/download", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("zip-bytes");
     expect(response.headers.get("Content-Type")).toBe("application/zip");
+    expect(response.headers.get("Content-Length")).toBe("9");
     expect(response.headers.get("Content-Disposition")).toMatch(/^attachment/);
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     // The user id comes from the session
     expect(findExportForDownload).toHaveBeenCalledWith(USER.id, EXPORT_ID, "abc");
+  });
+
+  it("streams a file bigger than a stream chunk intact", async () => {
+    const big = Buffer.alloc(5 * 1024 * 1024, "ab");
+    await writeFile(path.join(uploads.dir, "exports", "big.zip"), big);
+    vi.mocked(findExportForDownload).mockResolvedValue("exports/big.zip");
+
+    const response = await call(EXPORT_ID);
+
+    expect(response.headers.get("Content-Length")).toBe(String(big.length));
+    expect(Buffer.from(await response.arrayBuffer()).equals(big)).toBe(true);
   });
 
   it("answers 404 when the lookup finds nothing (wrong token, not theirs, expired)", async () => {
