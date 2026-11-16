@@ -3,7 +3,7 @@
 Plataforma para clubes de running: grupos por nivel y objetivo, entrenamientos planificados por managers, y eventos presenciales para fomentar el contacto en la vida real.
 
 - **Organization (Club)**: Entidad que agrupa a Managers, Athletes y Groups bajo un mismo entorno. Pueden existir varios clubes en la plataforma.
-- **Admin**: Rol de plataforma, ajeno a cualquier club. Es el único que crea clubes y da o retira el rol de Manager. Gestiona cuentas y contenido denunciado, pero no lee DM ni RPE.
+- **Admin**: Rol de plataforma, ajeno a cualquier club. Es el único que crea clubes y da o retira el rol de Manager; ninguna cuenta Admin puede ser Manager de un club. Gestiona cuentas y contenido denunciado, pero no lee DM ni RPE.
 - **Manager**: Entrenador de un club, nombrado por el Admin. Un club siempre tiene al menos uno. El rol es por club, no global. Crea Groups, Training Templates, Events y Customized Sessions; administra el chat de los Events y da Feedback en ellos.
 - **Athlete**: Corredor miembro de un club. Entra por invitación de un Manager o por solicitud que un Manager aprueba. Registra las métricas de sus Sessions, confirma asistencia a Events y gestiona sus Contacts.
 - **Group**: Conjunto de Athletes de un club definido por dos atributos independientes: nivel y objetivo (maratón, carrera corta, media distancia, marcha...). Un Athlete puede estar en varios Groups.
