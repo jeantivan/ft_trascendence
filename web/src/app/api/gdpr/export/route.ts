@@ -1,11 +1,13 @@
-import { after } from "next/server";
-import { generateExport } from "@/lib/gdpr/export/generate-export";
+import { after, NextRequest } from "next/server";
+import { withPublicUrl } from "@/lib/auth/public-url";
+import { deliverExport } from "@/lib/gdpr/export/deliver-export";
 import { requestExport } from "@/lib/gdpr/export/request-export";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
 
 // POST /api/gdpr/export: the signed-in user asks for their data export (#165) with the
 // code from POST /api/gdpr/export/otp. Body: { "otp": "123456" }. The ZIP is built
-// after the response; the link arrives by email when it is ready.
+// after the response; the link arrives by email when it is ready (a failed
+// email marks the export failed).
 export async function POST(request: Request): Promise<Response> {
   const user = await requireApiAuth();
   if (user instanceof Response) {
@@ -26,9 +28,11 @@ export async function POST(request: Request): Promise<Response> {
       : Response.json({ error: "An export is already active" }, { status: 409 });
   }
 
-  // generateExport never throws: a failure leaves the export marked failed
+  // The link in the email must point where the user reaches the app, not at the container
+  const { origin } = new URL(withPublicUrl(new NextRequest(request.url, { headers: request.headers })).url);
+  // deliverExport never throws: a failure leaves the export marked failed
   after(async () => {
-    await generateExport(result.exportId);
+    await deliverExport(result.exportId, origin);
   });
   return Response.json({ export_id: result.exportId, status: "pending" }, { status: 202 });
 }

@@ -1,17 +1,20 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/gdpr/export/route";
-import { generateExport } from "@/lib/gdpr/export/generate-export";
+import { deliverExport } from "@/lib/gdpr/export/deliver-export";
 import { requestExport } from "@/lib/gdpr/export/request-export";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
 
 // The real ones need NextAuth and the database: these tests only check what the route does with them
 vi.mock("@/lib/permissions/require-api-auth", () => ({ requireApiAuth: vi.fn() }));
 vi.mock("@/lib/gdpr/export/request-export", () => ({ requestExport: vi.fn() }));
-vi.mock("@/lib/gdpr/export/generate-export", () => ({ generateExport: vi.fn() }));
+vi.mock("@/lib/gdpr/export/deliver-export", () => ({ deliverExport: vi.fn() }));
 // after() only works inside a real request: keep its callbacks to run them by hand
 const afterCallbacks = vi.hoisted(() => [] as Array<() => Promise<void> | void>);
-vi.mock("next/server", () => ({ after: (callback: () => Promise<void> | void) => afterCallbacks.push(callback) }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (callback: () => Promise<void> | void) => afterCallbacks.push(callback),
+}));
 
 const USER = { id: "00000000-0000-0000-0000-000000000001", email: "runner@example.com", nick: "runner", roleGlobal: "user" as const };
 
@@ -48,9 +51,23 @@ describe("POST /api/gdpr/export", () => {
     expect(await response.json()).toEqual({ export_id: "export-1", status: "pending" });
     expect(requestExport).toHaveBeenCalledWith(USER.id, "123456");
     // Not before the response: the user must not wait for the ZIP
-    expect(generateExport).not.toHaveBeenCalled();
+    expect(deliverExport).not.toHaveBeenCalled();
     await afterCallbacks[0]();
-    expect(generateExport).toHaveBeenCalledWith("export-1");
+    expect(deliverExport).toHaveBeenCalledWith("export-1", "http://localhost");
+  });
+
+  it("builds the link origin from the public address nginx forwards, not the container's", async () => {
+    vi.mocked(requestExport).mockResolvedValue({ requested: true, exportId: "export-1" });
+    const request = new Request("http://0.0.0.0:3000/api/gdpr/export", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-host": "localhost:8443", "x-forwarded-proto": "https" },
+      body: JSON.stringify({ otp: "123456" }),
+    });
+
+    await POST(request);
+    await afterCallbacks[0]();
+
+    expect(deliverExport).toHaveBeenCalledWith("export-1", "https://localhost:8443");
   });
 
   it("answers 403 for a wrong, expired or exhausted code and generates nothing", async () => {
