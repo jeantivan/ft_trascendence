@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type AuthActionResult } from "@/lib/auth/actions";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
 
@@ -16,6 +17,8 @@ interface LoginFormProps {
 
 export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
+  // A failed login attempt replaces the notice that came with the page
+  const message = state.success ? notice : state.error;
 
   return (
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
@@ -25,13 +28,9 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
         <input type="hidden" name="callbackUrl" value={callbackUrl} />
       )}
 
-      {/* A failed login attempt replaces the notice that came with the page */}
-      <AuthErrorBanner error={state.success ? notice : state.error} />
+      {message && <Alert variant="error">{message}</Alert>}
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="email" className="text-sm font-medium">
-          Email
-        </label>
+      <FormField label="Email" htmlFor="email">
         <Input
           id="email"
           name="email"
@@ -40,12 +39,9 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
           autoComplete="email"
           placeholder="runner@42madrid.com"
         />
-      </div>
+      </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm font-medium">
-          Contraseña
-        </label>
+      <FormField label="Contraseña" htmlFor="password">
         <Input
           id="password"
           name="password"
@@ -54,7 +50,7 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
           autoComplete="current-password"
           placeholder="••••••••"
         />
-      </div>
+      </FormField>
 
       <Button type="submit" disabled={isPending} className="mt-2">
         {isPending ? "Iniciando sesión..." : "Entrar"}

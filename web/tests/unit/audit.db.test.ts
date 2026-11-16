@@ -9,7 +9,7 @@ import { deleteWithFreshOtp } from "../support/delete-account-helper";
 const url = process.env.DATABASE_URL_TEST;
 const isTestDatabase = url !== undefined && new URL(url).pathname.endsWith("_test");
 
-const ACTOR_ID = "99999999-9999-4999-8999-999999999991";
+const ACTOR_ID = "99999999-9999-4999-8999-999999999996";
 const SUBJECT_ID = "99999999-9999-4999-8999-999999999992";
 
 describe.skipIf(!isTestDatabase)("recordAudit", { timeout: 30_000 }, () => {

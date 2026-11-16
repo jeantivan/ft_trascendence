@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
 import { deleteAccountAsAdmin } from "@/lib/gdpr/delete-account";
 import { deleteWithFreshOtp } from "../support/delete-account-helper";
 
@@ -17,7 +18,8 @@ const ADMIN_2 = "a1000000-0000-4000-8000-000000000002";
 const USER_1 = "a1000000-0000-4000-8000-000000000011";
 const ORG_1 = "b1000000-0000-4000-8000-000000000001";
 const MISSING = "a1000000-0000-4000-8000-0000000000ff";
-const USER_IDS = [ADMIN_1, ADMIN_2, USER_1];
+const ADMIN_3 = "a1000000-0000-4000-8000-000000000003";
+const USER_IDS = [ADMIN_1, ADMIN_2, ADMIN_3, USER_1];
 
 // Real password hashing on every OTP: with other test files running in parallel the 5 s default is too tight
 describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 }, () => {
@@ -30,28 +32,48 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
   }
 
   // Other test files share this database and create their own Admins while these tests run, so
-  // "the only Admin" would not hold. This client unblocks nothing and blocks every Admin outside
-  // `keepIds` inside the transaction under test, and puts them back before the commit, so the
-  // rule sees just this file's Admins and no other file ever sees the change.
-  function onlyTheseAdmins(keepIds: string[]): PrismaClient {
+  // "the only Admin" would not hold. This client blocks every Admin outside `keepIds` inside the
+  // transaction under test and puts them back before the commit, so the rule sees just this file's
+  // Admins and no other file ever sees the change.
+  // REPEATABLE READ: the snapshot is taken by the first statement (the lock below), so an Admin
+  // another file creates afterwards is invisible to lockAccountAndAdmins. If a locked Admin was
+  // changed by another file first, Postgres aborts with 40001 (40001) and the whole
+  // transaction is retried.
+  // `afterBlock` runs once the other Admins are blocked and before the code under test starts: the exact
+  // window in which another file can commit a new Admin. There is no lock to wait on between two
+  // statements of one transaction, so a lock harness cannot stop the deletion there; the hook can.
+  function onlyTheseAdmins(keepIds: string[], afterBlock?: () => Promise<void>): PrismaClient {
     return new Proxy(db, {
       get(target, prop, receiver) {
         if (prop !== "$transaction") return Reflect.get(target, prop, receiver);
-        return (fn: (tx: PrismaClient) => Promise<unknown>, options?: object) =>
-          target.$transaction(async (tx) => {
-            // Same order as lockAccountAndAdmins (ADR 0004): without it, an updateMany in any order plus
-            // another file's deletion locking by id can deadlock (40P01)
-            await tx.$queryRaw`SELECT id FROM users WHERE role_global = 'admin' ORDER BY id FOR UPDATE`;
-            const others = await tx.user.findMany({
-              where: { roleGlobal: "admin", blockedAt: null, id: { notIn: keepIds } },
-              select: { id: true },
-            });
-            const ids = others.map((row) => row.id);
-            await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: new Date() } });
-            const result = await fn(tx as unknown as PrismaClient);
-            await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: null } });
-            return result;
-          }, options);
+        return async (fn: (tx: PrismaClient) => Promise<unknown>, options?: object) => {
+          for (let attempt = 1; ; attempt++) {
+            try {
+              return await target.$transaction(
+                async (tx) => {
+                  // Same order as lockAccountAndAdmins (ADR 0004): without it, an updateMany in any order plus
+                  // another file's deletion locking by id can deadlock (40P01)
+                  await tx.$queryRaw`SELECT id FROM users WHERE role_global = 'admin' ORDER BY id FOR UPDATE`;
+                  const others = await tx.user.findMany({
+                    where: { roleGlobal: "admin", blockedAt: null, id: { notIn: keepIds } },
+                    select: { id: true },
+                  });
+                  const ids = others.map((row) => row.id);
+                  await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: new Date() } });
+                  await afterBlock?.();
+                  const result = await fn(tx as unknown as PrismaClient);
+                  await tx.user.updateMany({ where: { id: { in: ids } }, data: { blockedAt: null } });
+                  return result;
+                },
+                { ...options, isolationLevel: "RepeatableRead" },
+              );
+            } catch (error) {
+              // A raw query reports it as P2010 with the SQLSTATE in the message, the rest as P2034
+              const serialization = /P2034|40001/.test(`${(error as { code?: string }).code} ${String(error)}`);
+              if (!serialization || attempt >= 5) throw error;
+            }
+          }
+        };
       },
     }) as PrismaClient;
   }
@@ -99,8 +121,11 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
       expect(await db.membership.count({ where: { userId: USER_1 } })).toBe(0);
       expect(await db.avatar.count({ where: { ownerId: USER_1 } })).toBe(0);
       expect(existsSync(path.join(uploadsDir, "avatars", "admin-test.png"))).toBe(false);
-      const notices = await db.notification.findMany({ where: { userId: ADMIN_1, type: "club_without_manager" } });
-      expect(notices.map((row) => (row.payload as { orgId: string }).orgId)).toEqual([ORG_1]);
+      // Only this club: other files delete Managers too, and every Admin gets their notices
+      const notices = await db.notification.findMany({
+        where: { userId: ADMIN_1, type: "club_without_manager", payload: { path: ["orgId"], equals: ORG_1 } },
+      });
+      expect(notices).toHaveLength(1);
     } finally {
       await db.organization.deleteMany({ where: { id: ORG_1 } });
       await rm(uploadsDir, { recursive: true, force: true });
@@ -125,6 +150,24 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
     expect(await db.auditLog.count({ where: { subjectId: ADMIN_1 } })).toBe(0);
   });
 
+  it("un Admin bloqueado se puede borrar aunque no quede ningún Admin sin bloquear", async () => {
+    await createUser(ADMIN_2, "admin", true);
+
+    // onlyTheseAdmins blocks ADMIN_1 inside the transaction: ADMIN_2 is the only Admin row and it is blocked
+    const result = await deleteAccountAsAdmin(ADMIN_2, writeAudit(ADMIN_1, ADMIN_2), onlyTheseAdmins([ADMIN_2]));
+
+    expect(result).toEqual({ deleted: true });
+    expect(await db.user.findUnique({ where: { id: ADMIN_2 } })).toBeNull();
+  });
+
+  it("un id en mayúsculas encuentra la cuenta y sigue aplicando la regla del último Admin", async () => {
+    const asUser = await deleteAccountAsAdmin(USER_1.toUpperCase(), writeAudit(ADMIN_1, USER_1), onlyTheseAdmins([ADMIN_1]));
+    expect(asUser).toEqual({ deleted: true });
+
+    const asLastAdmin = await deleteAccountAsAdmin(ADMIN_1.toUpperCase(), writeAudit(ADMIN_1, ADMIN_1), onlyTheseAdmins([ADMIN_1]));
+    expect(asLastAdmin).toEqual({ deleted: false, reason: "last_admin" });
+  });
+
   it("el último Admin sin bloquear no se puede borrar a sí mismo con OTP, y el código no se gasta", async () => {
     const guarded = onlyTheseAdmins([ADMIN_1]);
 
@@ -144,6 +187,17 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
     expect(await db.user.findUnique({ where: { id: ADMIN_1 } })).toBeNull();
   });
 
+  // The race behind the old flaky test: an Admin committed by another file after the snapshot must not
+  // count as "another Admin that stays". Without REPEATABLE READ this deletes the last Admin.
+  it("un Admin creado por otro archivo a mitad del borrado no cuenta: sigue siendo el último", async () => {
+    const guarded = onlyTheseAdmins([ADMIN_1], () => createUser(ADMIN_3, "admin"));
+
+    const result = await deleteAccountAsAdmin(ADMIN_1, writeAudit(ADMIN_1, ADMIN_1), guarded);
+
+    expect(result).toEqual({ deleted: false, reason: "last_admin" });
+    expect(await db.user.findUnique({ where: { id: ADMIN_1 } })).not.toBeNull();
+  });
+
   // Waits until some connection is blocked by the lock holderPid holds. Filtered by holder, not
   // "anyone waiting": other test files share this database.
   async function waitUntilBlockedBy(holderPid: number): Promise<void> {
@@ -159,29 +213,30 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
     throw new Error(`No connection was blocked by ${holderPid} within 5 s`);
   }
 
-  // Deterministic, no timing luck: the test holds ADMIN_1's lock in a raw transaction, the deletion
-  // of ADMIN_2 starts and waits, and then the test asks for ADMIN_2's lock. The deletion takes the
-  // rows in id order in ONE statement, so it holds nothing of ADMIN_2 while it waits and the test
-  // gets it. If it locked its own row (ADMIN_2) first, the test would wait for it while it waits
-  // for ADMIN_1: a deadlock (40P01), and the test fails.
-  it("el borrado de un Admin espera por la fila menor sin retener la propia, así que no hay deadlock", async () => {
+  // Deterministic, no timing luck, and WITHOUT onlyTheseAdmins: that proxy locks every Admin in id
+  // order before the code under test, which would hide a wrong lock order. The test holds ADMIN_1's
+  // lock in a raw transaction, lockAccountAndAdmins for ADMIN_2 starts and waits, and then the test
+  // asks for ADMIN_2's lock. The helper takes the rows in id order in ONE statement, so it holds
+  // nothing of ADMIN_2 while it waits and the test gets it. If it locked its own row (ADMIN_2)
+  // first, the test would wait for it while it waits for ADMIN_1: a deadlock (40P01).
+  // Admins from other files may be locked too (a short wait); it never changes the order.
+  it("lockAccountAndAdmins espera por la fila menor sin retener la propia, así que no hay deadlock", async () => {
     await createUser(ADMIN_2, "admin");
-    let deletion!: Promise<unknown>;
+    let locking!: Promise<unknown>;
 
     await db.$transaction(async (tx) => {
       const [{ pid }] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${ADMIN_1}::uuid FOR UPDATE`;
 
-      deletion = deleteAccountAsAdmin(ADMIN_2, writeAudit(ADMIN_1, ADMIN_2), onlyTheseAdmins([ADMIN_1, ADMIN_2]));
+      locking = db.$transaction((other) => lockAccountAndAdmins(other, ADMIN_2), { timeout: 20_000 });
       await waitUntilBlockedBy(pid);
 
-      // Would raise 40P01 (and fail the test) if the deletion already held ADMIN_2
+      // Would raise 40P01 (and fail the test) if the helper already held ADMIN_2
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${ADMIN_2}::uuid FOR UPDATE`;
-    });
+    }, { timeout: 20_000 });
 
-    // The test committed: ADMIN_1 stays unblocked, so ADMIN_2 may go
-    expect(await deletion).toEqual({ deleted: true });
-    expect(await db.user.findUnique({ where: { id: ADMIN_2 } })).toBeNull();
+    const { target } = (await locking) as Awaited<ReturnType<typeof lockAccountAndAdmins>>;
+    expect(target?.id).toBe(ADMIN_2);
   });
 
   // Two Admins deleting each other at the same time: only one may go. The ordering is proven by the

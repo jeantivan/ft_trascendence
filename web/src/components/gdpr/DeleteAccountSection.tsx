@@ -1,7 +1,10 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { deleteAccountAction, requestDeleteCodeAction } from "@/lib/gdpr/actions";
 
@@ -42,10 +45,7 @@ export function DeleteAccountSection() {
   }
 
   return (
-    <section
-      aria-labelledby="delete-account-title"
-      className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface-elevated p-6"
-    >
+    <Card as="section" aria-labelledby="delete-account-title" className="flex flex-col gap-4">
       <h2 id="delete-account-title" className="font-heading text-xl font-bold text-text-primary">
         Borrar cuenta
       </h2>
@@ -60,22 +60,15 @@ export function DeleteAccountSection() {
           {isRequesting ? "Enviando…" : cooldown > 0 ? `Reenviar en ${cooldown} s` : "Enviar código"}
         </Button>
         {feedback?.kind === "sent" && (
-          <p role="status" className="text-sm text-text-secondary">
-            Te hemos enviado un código a tu correo. Caduca en 10 minutos.
-          </p>
+          <Alert variant="info">Te hemos enviado un código a tu correo. Caduca en 10 minutos.</Alert>
         )}
         {feedback?.kind === "error" && (
-          <p role="alert" className="text-sm text-red-400">
-            {feedback.message}
-          </p>
+          <Alert variant="error">{feedback.message}</Alert>
         )}
       </div>
 
       <form action={deleteAction} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="delete-account-code" className="text-sm font-medium text-text-primary">
-            Código de confirmación
-          </label>
+        <FormField label="Código de confirmación" htmlFor="delete-account-code">
           <Input
             id="delete-account-code"
             name="code"
@@ -86,16 +79,14 @@ export function DeleteAccountSection() {
             autoComplete="one-time-code"
             maxLength={CODE_LENGTH}
           />
-        </div>
+        </FormField>
         {!deleteState.success && (
-          <p role="alert" className="text-sm text-red-400">
-            {deleteState.error}
-          </p>
+          <Alert variant="error">{deleteState.error}</Alert>
         )}
         <Button type="submit" variant="destructive" disabled={busy || code.length !== CODE_LENGTH}>
           {isDeleting ? "Borrando…" : "Borrar mi cuenta definitivamente"}
         </Button>
       </form>
-    </section>
+    </Card>
   );
 }

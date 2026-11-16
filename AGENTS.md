@@ -28,7 +28,7 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. T
 
 - Toda UI nueva o modificada sigue `ideas/stitch_athlete_training_dashboard/kinetic_obsidian/DESIGN.md` (paleta, tipografías, botones, inputs, estados). Leerlo antes de tocar estilos.
 - Usar los tokens de `web/src/app/globals.css` y las fuentes de `web/src/app/layout.tsx` (`font-heading`, `font-sans`) en lugar de colores o fuentes sueltas.
-- Antes de escribir UI, leer `web/src/components/ui/README.md` (tokens, lista de componentes y reglas) y reutilizar sus componentes en lugar de crear clases sueltas.
+- Antes de escribir UI, leer `web/src/components/ui/README.md` (tokens y reglas) y la carpeta `web/src/components/ui/docs/` (un fichero por componente, escrito en inglés), y reutilizar sus componentes en lugar de crear clases sueltas.
 - `DESIGN.md` es el diseño acordado (diseño de Stitch de Jean). Si algo no está en él, preguntar; no decidirlo por cuenta propia. Esta regla prevalece sobre skills de diseño genéricas.
 
 ## Antes de tocar código
@@ -47,6 +47,8 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. T
 
 - No leer, mostrar ni versionar `.env`, tokens, claves privadas ni certificados. Si se añade una variable, actualizar `.env.example` con valores vacíos o ficticios.
 - RPE y Feedback son datos de salud: no van a logs ni dentro del payload de eventos SSE o notificaciones. El evento lleva solo ids; el cliente pide el dato a un endpoint que comprueba permisos.
+- Un token en un enlace va siempre en el parámetro `token` (`?token=...`), nunca en la ruta: así NGINX y `next dev` lo dejan fuera de sus logs (#185). Su ruta necesita además su propio bloque `location` en `nginx/app.conf`, como el de la descarga de la exportación, para que el log de errores de NGINX tampoco lo copie. El `callbackUrl` de `/login` ya lo cubre su propio bloque: no hace falta otro para eso.
+- Una página que recibe un token en su enlace no se muestra con el token en la URL: un Route Handler o `proxy.ts` lo gasta (verificar el email) o, si hace falta después (el formulario de cambiar la contraseña), lo guarda en una cookie `HttpOnly; Secure; SameSite=Lax`, solo para esa ruta y que caduque con el token, y redirige (303) a la misma página sin él. Así sus peticiones (CSS, imágenes, datos) no llevan el token en el `Referer`, ni siquiera desde un cliente que ignore `Referrer-Policy` (#185).
 
 ## Operaciones destructivas
 

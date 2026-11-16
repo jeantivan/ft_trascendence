@@ -16,28 +16,16 @@ describe("LoginPage & RegisterPage", () => {
   });
 
   it("links to /privacy and /terms on the login page", async () => {
-    render(await LoginPage({}));
+    const { container } = render(await LoginPage({}));
 
-    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
-      "href",
-      "/privacy"
-    );
-    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
-      "href",
-      "/terms"
-    );
+    expect(container.querySelector('footer a[href="/privacy"]')).toBeInTheDocument();
+    expect(container.querySelector('footer a[href="/terms"]')).toBeInTheDocument();
   });
 
   it("links to /privacy and /terms on the register page", () => {
-    render(<RegisterPage />);
+    const { container } = render(<RegisterPage />);
 
-    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
-      "href",
-      "/privacy"
-    );
-    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
-      "href",
-      "/terms"
-    );
+    expect(container.querySelector('footer a[href="/privacy"]')).toBeInTheDocument();
+    expect(container.querySelector('footer a[href="/terms"]')).toBeInTheDocument();
   });
 });

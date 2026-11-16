@@ -87,7 +87,7 @@ Convenciones:
   },
   "consents": {
     "health_consent_at": "2026-02-01T10:00:00Z",
-    "health_consent_version": "[FORMATO DE VERSIÓN: pendiente de decidir]"
+    "health_consent_version": 1
   },
   "memberships": [
     { "org_id": "uuid", "org_name": "Club Running Madrid", "role": "athlete", "joined_at": "2026-01-15T00:00:00Z" }
@@ -117,7 +117,7 @@ Convenciones:
 |---|---|---|
 | `profile` | `users` | `login_methods` sale de `accounts.provider` y de si hay `password_hash`. **No** se exportan `password_hash`, `totp_secret` ni tokens de `accounts` |
 | `settings` | `users` | |
-| `consents` | `users` | `health_consent_version` depende del campo que cree #19 |
+| `consents` | `users` | `health_consent_version` es un entero o `null`, tal como está guardado (no un string), y coincide con `health_consent_at` en estar informado o ser `null` los dos |
 | `memberships` | `memberships` + `organizations.name` | Solo los clubes del usuario |
 | `groups` | `group_members` + `groups` | Solo los grupos del usuario |
 | `events` | `spot_requests` + `events` | Solo los Events a los que el usuario pidió plaza |
@@ -147,6 +147,8 @@ uuid-2,false,5,,600,2026-10-02T18:15:00Z,time_constraints
 ```
 
 `incompletion_reason` sale de `session_logs.extra`. Es el único campo que lleva `extra` (enum cerrado, sin texto libre).
+
+Tras la purga de datos de salud (#131), `rpe` queda vacío en las filas purgadas: la celda sale vacía (ni `0` ni `null`) y el resto de columnas no cambia.
 
 ### 3.4 `messages.csv`
 
@@ -178,7 +180,7 @@ CONTENIDO:
 CAMPOS:
 - distance_m: distancia en metros
 - duration_s: duración en segundos
-- rpe: escala 1-10 (percepción de esfuerzo)
+- rpe: escala 1-10 (percepción de esfuerzo); vacío si lo borraste
 - incompletion_reason: motivo si no se completó
   - time_constraints: falta de tiempo
   - schedule_conflict: conflicto de horario
@@ -218,9 +220,8 @@ Si necesitas más datos de los que incluye la descarga, escribe a
 
 ## 6. Decisiones abiertas
 
-Cerradas: `notifications` se exporta sin `payload`; los mensajes borrados por el usuario se incluyen con `deleted_at`; la descarga exige token válido **y** sesión iniciada del mismo usuario (requisito, no opción); el ZIP se guarda en el volumen local privado de Docker, sin NGINX exponiéndolo y con borrado a los 7 días o al borrar la cuenta (confirmado por Jean en #8).
+Cerradas: `notifications` se exporta sin `payload`; los mensajes borrados por el usuario se incluyen con `deleted_at`; la descarga exige token válido **y** sesión iniciada del mismo usuario (requisito, no opción); el ZIP se guarda en el volumen local privado de Docker, sin NGINX exponiéndolo y con borrado a los 7 días o al borrar la cuenta (confirmado por Jean en #8); `health_consent_version` se exporta como entero o `null`, según lo que define el esquema.
 
 | Tema | Propuesta | Quién decide |
 |---|---|---|
-| Formato de `health_consent_version` | Resolver en #19 | Equipo |
 | Límite de peticiones por día | Una exportación activa a la vez (sección 1) | Equipo |

@@ -137,7 +137,8 @@ export async function deleteAccountAsAdmin(
 async function deleteLockedAccount(userId: string, tx: Prisma.TransactionClient): Promise<string[]> {
   const { target, anotherAdminLeft } = await lockAccountAndAdmins(tx, userId);
   if (!target) throw new AccountNotFoundError();
-  if (target.roleGlobal === "admin" && !anotherAdminLeft) throw new LastAdminError();
+  // A blocked Admin does not count as an unblocked one, so deleting it leaves the number unchanged
+  if (target.roleGlobal === "admin" && target.blockedAt === null && !anotherAdminLeft) throw new LastAdminError();
 
   const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
   await deleteAccountRows(userId, tx);
@@ -156,9 +157,9 @@ async function deleteLockedAccount(userId: string, tx: Prisma.TransactionClient)
 // Managers are counted. The second transaction waits for the first one's commit
 // and then counts again, so it sees the real state.
 //
-// Known limit, pending the Manager management ticket: this only serializes
-// deletions with each other. An Admin granting or removing a Manager at the same
-// time is not covered unless that flow locks the club row the same way.
+// Known limit: this lock only protects against code that takes it too. Granting and
+// removing a Manager (OrganizationRepository) locks the user row and then the club
+// row, like this function; any other code that writes memberships must do the same.
 async function deleteAccountRows(userId: string, tx: Prisma.TransactionClient): Promise<void> {
   const managed = await tx.membership.findMany({
     where: { userId, role: "manager" },
