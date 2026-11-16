@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { EventData, EventRepository } from "@/lib/events/event-repository";
+import type { SessionOrigin } from "@/generated/prisma/enums";
+import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
+
+// A valid id that no Session has
+const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
 
 // A fixed "now", so no test depends on the clock
 const NOW = new Date("2030-01-01T10:00:00.000Z");
@@ -14,6 +18,15 @@ export interface EventFixture {
   // A new user who is a Manager or an Athlete of that club; returns their id
   addManager(orgId: string): Promise<string>;
   addAthlete(orgId: string): Promise<string>;
+  // A new Session of that club; returns its id. A group Session copied from a
+  // Training Template has origin "template" and no athleteId
+  addSession(orgId: string, session: NewSession): Promise<string>;
+}
+
+export interface NewSession {
+  origin: SessionOrigin;
+  // null: a group Session; set: a personal one (customized or free)
+  athleteId: string | null;
 }
 
 function eventData(overrides: Partial<EventData> = {}): EventData {
@@ -26,6 +39,15 @@ function eventData(overrides: Partial<EventData> = {}): EventData {
   };
 }
 
+// The id of an Event that had to be created; fails the test if it was not.
+// Exported for the tests that only run on Postgres
+export function eventIdOf(result: CreateEventResult): string {
+  if (!result.ok) {
+    throw new Error(`createEvent failed: ${result.reason}`);
+  }
+  return result.eventId;
+}
+
 // Rules every EventRepository must follow
 export function runEventRepositoryContract(name: string, createFixture: () => EventFixture) {
   describe(`EventRepository contract: ${name}`, () => {
@@ -36,11 +58,11 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       const athleteId = await addAthlete(orgId);
       const data = eventData();
 
-      const created = await repo.createEvent(orgId, managerId, data, NOW);
-      const view = await repo.getEventForMember(orgId, created.eventId, athleteId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, data, NOW));
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
 
       expect(view).toEqual({
-        id: created.eventId,
+        id: eventId,
         orgId,
         title: data.title,
         location: data.location,
@@ -58,9 +80,96 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       const orgB = await createClub();
       const managerA = await addManager(orgA);
       const athleteB = await addAthlete(orgB);
-      const created = await repo.createEvent(orgA, managerA, eventData(), NOW);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
 
-      await expect(repo.getEventForMember(orgB, created.eventId, athleteB)).resolves.toBeNull();
+      await expect(repo.getEventForMember(orgB, eventId, athleteB)).resolves.toBeNull();
+    });
+
+    it("createEvent rejects an Event that starts right now", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+
+      // NOW and not yesterday: the limit. Starting at now already counts as started
+      await expect(
+        repo.createEvent(orgId, managerId, eventData({ startsAt: NOW }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "starts-in-the-past" });
+    });
+
+    it("createEvent rejects a Session of another club", async () => {
+      const { repo, createClub, addManager, addSession } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      // A valid Session in every other way: only the club is wrong
+      const sessionB = await addSession(orgB, { origin: "template", athleteId: null });
+
+      await expect(
+        repo.createEvent(orgA, managerA, eventData({ sessionId: sessionB }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "invalid-session" });
+    });
+
+    it("createEvent rejects a Session that does not come from a Training Template", async () => {
+      const { repo, createClub, addManager, addSession } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      // athleteId null on purpose, so only the origin is wrong
+      const sessionId = await addSession(orgId, { origin: "free", athleteId: null });
+
+      await expect(
+        repo.createEvent(orgId, managerId, eventData({ sessionId }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "invalid-session" });
+    });
+
+    it("createEvent rejects an Athlete's own Session, even one copied from a Training Template", async () => {
+      const { repo, createClub, addManager, addAthlete, addSession } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      // origin "template" on purpose, so only the athleteId is wrong
+      const sessionId = await addSession(orgId, { origin: "template", athleteId });
+
+      await expect(
+        repo.createEvent(orgId, managerId, eventData({ sessionId }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "invalid-session" });
+    });
+
+    it("createEvent rejects a Session that does not exist", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+
+      await expect(
+        repo.createEvent(orgId, managerId, eventData({ sessionId: UNKNOWN_ID }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "invalid-session" });
+    });
+
+    it("createEvent checks the start before the Session", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      // Both wrong: the first reason in the fixed order wins
+      const data = eventData({ startsAt: NOW, sessionId: UNKNOWN_ID });
+
+      await expect(repo.createEvent(orgId, managerId, data, NOW)).resolves.toEqual({
+        ok: false,
+        reason: "starts-in-the-past",
+      });
+    });
+
+    it("createEvent links a group Session of a Training Template of the same club", async () => {
+      const { repo, createClub, addManager, addAthlete, addSession } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const sessionId = await addSession(orgId, { origin: "template", athleteId: null });
+
+      const eventId = eventIdOf(
+        await repo.createEvent(orgId, managerId, eventData({ sessionId }), NOW),
+      );
+
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.sessionId).toBe(sessionId);
     });
   });
 }

@@ -2,7 +2,11 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { PrismaEventRepository } from "@/lib/events/event-repository";
-import { runEventRepositoryContract } from "../support/event-repository-contract";
+import {
+  eventIdOf,
+  runEventRepositoryContract,
+  type NewSession,
+} from "../support/event-repository-contract";
 
 const PREFIX = "event-repository-";
 const repository = new PrismaEventRepository(prisma);
@@ -27,7 +31,25 @@ async function addMember(orgId: string, role: "manager" | "athlete"): Promise<st
   return user.id;
 }
 
+// A real Session of the club. Type and date are fixed: no rule of the Event looks at them
+async function addSession(orgId: string, session: NewSession): Promise<string> {
+  const created = await prisma.trainingSession.create({
+    data: {
+      orgId,
+      origin: session.origin,
+      athleteId: session.athleteId,
+      sessionType: "rodaje",
+      scheduledAt: new Date("2030-01-02T10:00:00.000Z"),
+    },
+  });
+  return created.id;
+}
+
 afterEach(async () => {
+  // Sessions first: a club that has them cannot be deleted (onDelete: Restrict)
+  await prisma.trainingSession.deleteMany({
+    where: { organization: { name: { startsWith: PREFIX } } },
+  });
   // Deleting the club also deletes its Events and memberships (onDelete: Cascade)
   await prisma.organization.deleteMany({ where: { name: { startsWith: PREFIX } } });
   await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX } } });
@@ -41,6 +63,7 @@ runEventRepositoryContract("Prisma", () => ({
   createClub,
   addManager: (orgId) => addMember(orgId, "manager"),
   addAthlete: (orgId) => addMember(orgId, "athlete"),
+  addSession,
 }));
 
 // What the contract cannot see: the interface has no read for an Event's chat
@@ -57,7 +80,7 @@ describe("PrismaEventRepository.createEvent", () => {
     const orgId = await createClub();
     const managerId = await addMember(orgId, "manager");
 
-    const { eventId } = await repository.createEvent(orgId, managerId, DATA, NOW);
+    const eventId = eventIdOf(await repository.createEvent(orgId, managerId, DATA, NOW));
 
     const chats = await prisma.conversation.findMany({ where: { eventId }, select: { kind: true } });
     expect(chats).toEqual([{ kind: "event" }]);

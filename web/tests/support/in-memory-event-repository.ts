@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { EventMemberView } from "@/lib/events/contracts";
-import type { EventData, EventRepository } from "@/lib/events/event-repository";
+import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
+import type { NewSession } from "./event-repository-contract";
 
 // An Event as stored: like a row of the events table
 interface StoredEvent extends EventData {
@@ -15,13 +16,39 @@ interface StoredEvent extends EventData {
 export class InMemoryEventRepository implements EventRepository {
   // Events by id
   private events = new Map<string, StoredEvent>();
+  // Sessions by id: only what the rules of a linked Session look at
+  private sessions = new Map<string, NewSession & { orgId: string }>();
+
+  // For the tests only, not part of EventRepository: in production the
+  // Sessions come from the Training Templates
+  addSession(orgId: string, session: NewSession): string {
+    const id = randomUUID();
+    this.sessions.set(id, { ...session, orgId });
+    return id;
+  }
 
   async createEvent(
     orgId: string,
     createdBy: string,
     data: EventData,
-    _now: Date,
-  ): Promise<{ ok: true; eventId: string }> {
+    now: Date,
+  ): Promise<CreateEventResult> {
+    // Starting at now already counts as started
+    if (data.startsAt <= now) {
+      return { ok: false, reason: "starts-in-the-past" };
+    }
+    if (data.sessionId !== null) {
+      const session = this.sessions.get(data.sessionId);
+      // Only a group Session of a Training Template of the same club (#147, question f)
+      if (
+        !session ||
+        session.orgId !== orgId ||
+        session.origin !== "template" ||
+        session.athleteId !== null
+      ) {
+        return { ok: false, reason: "invalid-session" };
+      }
+    }
     const id = randomUUID();
     this.events.set(id, { ...data, id, orgId, createdBy, cancelledAt: null });
     return { ok: true, eventId: id };

@@ -12,6 +12,17 @@ export interface EventData {
   sessionId: string | null;
 }
 
+// An expected failure is a value, not an exception: the caller checks ok and,
+// if false, turns reason into a message. Exceptions are only for the unexpected
+export type CreateEventResult =
+  | { ok: true; eventId: string }
+  // startsAt is now or earlier: the Event would be born already started
+  | { ok: false; reason: "starts-in-the-past" }
+  // The linked Session does not exist, is from another club or is not a group
+  // Session of a Training Template. One reason for all three: the caller cannot
+  // tell whether another club's Session exists
+  | { ok: false; reason: "invalid-session" };
+
 // Event and its chat (#231). It does not know roles: the caller checks the
 // permission first (requireOrgRole / requireOrgResource). Every operation takes
 // orgId: an Event of another club is treated as if it did not exist
@@ -23,7 +34,7 @@ export interface EventRepository {
     createdBy: string,
     data: EventData,
     now: Date,
-  ): Promise<{ ok: true; eventId: string }>;
+  ): Promise<CreateEventResult>;
 
   // null: the Event does not exist or is from another club
   getEventForMember(
@@ -42,8 +53,24 @@ export class PrismaEventRepository implements EventRepository {
     orgId: string,
     createdBy: string,
     data: EventData,
-    _now: Date,
-  ): Promise<{ ok: true; eventId: string }> {
+    now: Date,
+  ): Promise<CreateEventResult> {
+    // Starting at now already counts as started
+    if (data.startsAt <= now) {
+      return { ok: false, reason: "starts-in-the-past" };
+    }
+    if (data.sessionId !== null) {
+      const session = await this.db.trainingSession.findFirst({
+        // Only a group Session of a Training Template of the same club (#147, question f).
+        // Known limit (#238): a Session deleted between this read and the create
+        // makes the create throw (foreign key) instead of returning invalid-session
+        where: { id: data.sessionId, orgId, origin: "template", athleteId: null },
+        select: { id: true },
+      });
+      if (!session) {
+        return { ok: false, reason: "invalid-session" };
+      }
+    }
     const event = await this.db.event.create({
       data: {
         orgId,
