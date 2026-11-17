@@ -127,6 +127,27 @@ const EVENT_FIELDS = {
   _count: { select: { spotRequests: { where: { status: "approved" } } } },
 } satisfies Prisma.EventSelect;
 
+// What listEvents and getEventForMember read: the shared fields plus the
+// viewer's own Spot Request (0 or 1 rows, the key is (event_id, user_id))
+function memberSelect(viewerId: string) {
+  return {
+    ...EVENT_FIELDS,
+    spotRequests: { where: { userId: viewerId }, select: { status: true } },
+  } satisfies Prisma.EventSelect;
+}
+
+// The row Prisma returns for that select: only the fields it asks for
+type MemberRow = Prisma.EventGetPayload<{ select: ReturnType<typeof memberSelect> }>;
+
+// Rest: fields is the row without _count and spotRequests
+function toMemberView({ _count, spotRequests, ...fields }: MemberRow): EventMemberView {
+  return {
+    ...fields,
+    approvedCount: _count.spotRequests,
+    mySpotRequest: spotRequests[0]?.status ?? null,
+  };
+}
+
 // The production EventRepository, on Postgres
 export class PrismaEventRepository implements EventRepository {
   // The client comes in from outside, like the other repositories: a test can pass its own
@@ -291,17 +312,10 @@ export class PrismaEventRepository implements EventRepository {
       // gte: >= from, lt: < to. Cancelled ones too: no filter on cancelledAt
       where: { orgId, startsAt: { gte: range.from, lt: range.to } },
       orderBy: { startsAt: "asc" },
-      select: {
-        ...EVENT_FIELDS,
-        spotRequests: { where: { userId: viewerId }, select: { status: true } },
-      },
+      select: memberSelect(viewerId),
     });
     // One query for the whole list: the counts come in the same SELECT
-    return events.map(({ _count, spotRequests, ...fields }) => ({
-      ...fields,
-      approvedCount: _count.spotRequests,
-      mySpotRequest: spotRequests[0]?.status ?? null,
-    }));
+    return events.map(toMemberView);
   }
 
   async getEventForMember(
@@ -313,22 +327,12 @@ export class PrismaEventRepository implements EventRepository {
     // Another club's Event is treated as one that does not exist
     const event = await this.db.event.findFirst({
       where: { id: eventId, orgId },
-      select: {
-        ...EVENT_FIELDS,
-        // The viewer's own Spot Request: 0 or 1 rows, the key is (event_id, user_id)
-        spotRequests: { where: { userId: viewerId }, select: { status: true } },
-      },
+      select: memberSelect(viewerId),
     });
     if (!event) {
       return null;
     }
-    // Rest: fields is the Event without _count and spotRequests
-    const { _count, spotRequests, ...fields } = event;
-    return {
-      ...fields,
-      approvedCount: _count.spotRequests,
-      mySpotRequest: spotRequests[0]?.status ?? null,
-    };
+    return toMemberView(event);
   }
 
   async getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null> {
