@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { EventManagerView, EventMemberView } from "./contracts";
 
@@ -57,6 +57,21 @@ export interface EventRepository {
   getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null>;
 }
 
+// What every read of an Event selects: its own fields and how many spots are
+// approved, as a COUNT in Postgres: how many, never who (#2).
+// satisfies checks it is a valid select but keeps its exact type, so Prisma
+// still knows which fields come back. A ": Prisma.EventSelect" would lose that
+const EVENT_FIELDS = {
+  id: true,
+  orgId: true,
+  title: true,
+  location: true,
+  startsAt: true,
+  sessionId: true,
+  cancelledAt: true,
+  _count: { select: { spotRequests: { where: { status: "approved" } } } },
+} satisfies Prisma.EventSelect;
+
 // The production EventRepository, on Postgres
 export class PrismaEventRepository implements EventRepository {
   // The client comes in from outside, like the other repositories: a test can pass its own
@@ -111,14 +126,7 @@ export class PrismaEventRepository implements EventRepository {
       where: { orgId, startsAt: { gte: range.from, lt: range.to } },
       orderBy: { startsAt: "asc" },
       select: {
-        id: true,
-        orgId: true,
-        title: true,
-        location: true,
-        startsAt: true,
-        sessionId: true,
-        cancelledAt: true,
-        _count: { select: { spotRequests: { where: { status: "approved" } } } },
+        ...EVENT_FIELDS,
         spotRequests: { where: { userId: viewerId }, select: { status: true } },
       },
     });
@@ -140,15 +148,7 @@ export class PrismaEventRepository implements EventRepository {
     const event = await this.db.event.findFirst({
       where: { id: eventId, orgId },
       select: {
-        id: true,
-        orgId: true,
-        title: true,
-        location: true,
-        startsAt: true,
-        sessionId: true,
-        cancelledAt: true,
-        // A COUNT in Postgres: how many, never who (#2)
-        _count: { select: { spotRequests: { where: { status: "approved" } } } },
+        ...EVENT_FIELDS,
         // The viewer's own Spot Request: 0 or 1 rows, the key is (event_id, user_id)
         spotRequests: { where: { userId: viewerId }, select: { status: true } },
       },
@@ -169,14 +169,7 @@ export class PrismaEventRepository implements EventRepository {
     const event = await this.db.event.findFirst({
       where: { id: eventId, orgId },
       select: {
-        id: true,
-        orgId: true,
-        title: true,
-        location: true,
-        startsAt: true,
-        sessionId: true,
-        cancelledAt: true,
-        _count: { select: { spotRequests: { where: { status: "approved" } } } },
+        ...EVENT_FIELDS,
         // Every Spot Request, oldest first, with the nick through the user relation
         spotRequests: {
           orderBy: { createdAt: "asc" },
