@@ -47,8 +47,8 @@ export type CancelEventResult =
   // startsAt is now or earlier: no Feedback may hang from a cancelled Event
   | { ok: false; reason: "started" };
 
-// Who deletes: only the Admin's deletion is audited (Marta, question e of #147),
-// so only the Admin carries an id. The Manager's audit is #163
+// Who deletes: only the Admin's deletion is audited (Marta, question e of #147:
+// the Privacy Policy, section 7, promises nothing more), so only the Admin carries an id
 export type DeleteEventActor = { kind: "manager" } | { kind: "admin"; adminId: string };
 
 export type DeleteEventResult =

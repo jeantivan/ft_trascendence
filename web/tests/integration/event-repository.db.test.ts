@@ -196,7 +196,7 @@ describe("PrismaEventRepository.deleteEvent", () => {
 
     await repository.deleteEvent(orgId, eventId, { kind: "manager" });
 
-    // The Manager's audit is #163
+    // Only the Admin is audited (Privacy Policy, section 7)
     await expect(
       prisma.auditLog.count({ where: { resource: "event", resourceId: eventId } }),
     ).resolves.toBe(0);
