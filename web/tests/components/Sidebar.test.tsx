@@ -36,4 +36,15 @@ describe("Sidebar", () => {
       screen.getByRole("button", { name: /cerrar sesión/i })
     ).toBeInTheDocument();
   });
+
+  it("sin ser administrador no enseña el enlace al panel", () => {
+    render(<Sidebar />);
+    expect(screen.queryByRole("link", { name: "Administración" })).not.toBeInTheDocument();
+  });
+
+  it("al administrador le enseña el enlace al panel (#102)", () => {
+    render(<Sidebar isAdmin />);
+    const nav = screen.getByRole("navigation", { name: "Principal" });
+    expect(within(nav).getByRole("link", { name: "Administración" })).toHaveAttribute("href", "/admin/accounts");
+  });
 });

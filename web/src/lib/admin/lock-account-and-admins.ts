@@ -1,6 +1,6 @@
-import type { Prisma } from "@/generated/prisma/client";
+import type { GlobalRole, Prisma } from "@/generated/prisma/client";
 
-export type LockedAccount = { id: string; roleGlobal: string; blockedAt: Date | null };
+export type LockedAccount = { id: string; roleGlobal: GlobalRole; blockedAt: Date | null };
 
 export type LockAccountAndAdminsResult = {
   // null when the account does not exist (any more)
