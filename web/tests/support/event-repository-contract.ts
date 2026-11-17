@@ -34,8 +34,8 @@ export interface EventFixture {
   // Without a nick, the user has none (nick is optional in users)
   addManager(orgId: string): Promise<string>;
   addAthlete(orgId: string, nick?: string): Promise<string>;
-  // A new Session of that club; returns its id. A group Session copied from a
-  // Training Template has origin "template" and no athleteId
+  // A new Session of that club; returns its id. A Template Session of the Group
+  // has origin "template" and no athleteId
   addSession(orgId: string, session: NewSession): Promise<string>;
   // A Spot Request of that user in that Event, already in that status. The
   // interface cannot create one until #232. createdAt fixes the order of the
@@ -182,7 +182,7 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       });
     });
 
-    it("createEvent links a group Session of a Training Template of the same club", async () => {
+    it("createEvent links a Template Session of the Group of the same club", async () => {
       const { repo, createClub, addManager, addAthlete, addSession } = createFixture();
       const orgId = await createClub();
       const managerId = await addManager(orgId);

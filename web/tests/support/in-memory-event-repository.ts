@@ -124,8 +124,8 @@ export class InMemoryEventRepository implements EventRepository {
     return event;
   }
 
-  // Whether a Session can be linked to an Event of that club: only a group
-  // Session of a Training Template of the same club (#147, question f).
+  // Whether a Session can be linked to an Event of that club: only a Template
+  // Session of the Group (no athleteId) of the same club (#147, question f).
   // Shared by createEvent and updateEvent
   private sessionIsValid(orgId: string, sessionId: string): boolean {
     const session = this.sessions.get(sessionId);

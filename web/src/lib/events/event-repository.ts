@@ -19,9 +19,9 @@ export type CreateEventResult =
   | { ok: true; eventId: string }
   // startsAt is now or earlier: the Event would be born already started
   | { ok: false; reason: "starts-in-the-past" }
-  // The linked Session does not exist, is from another club or is not a group
-  // Session of a Training Template. One reason for all three: the caller cannot
-  // tell whether another club's Session exists
+  // The linked Session does not exist, is from another club or is not a
+  // Template Session of the Group (no athleteId). One reason for all three:
+  // the caller cannot tell whether another club's Session exists
   | { ok: false; reason: "invalid-session" };
 
 // The reasons in the fixed order of the spec: when several apply, the first wins
@@ -236,8 +236,8 @@ export class PrismaEventRepository implements EventRepository {
     throw new Error(`updateEvent wrote nothing for Event ${eventId} without a reason`);
   }
 
-  // Whether a Session can be linked to an Event of that club: only a group
-  // Session of a Training Template of the same club (#147, question f).
+  // Whether a Session can be linked to an Event of that club: only a Template
+  // Session of the Group (no athleteId) of the same club (#147, question f).
   // Shared by createEvent and updateEvent. Known limit (#238): a Session deleted
   // between this read and the write makes it throw P2003 (foreign key) instead
   // of returning invalid-session
