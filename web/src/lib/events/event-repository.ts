@@ -46,6 +46,15 @@ export type CancelEventResult =
   // startsAt is now or earlier: no Feedback may hang from a cancelled Event
   | { ok: false; reason: "started" };
 
+// Who deletes: only the Admin's deletion is audited (Marta, question e of #147),
+// so only the Admin carries an id. The Manager's audit is #163
+export type DeleteEventActor = { kind: "manager" } | { kind: "admin"; adminId: string };
+
+export type DeleteEventResult =
+  | { ok: true }
+  // Does not exist or is from another club
+  | { ok: false; reason: "not-found" };
+
 // Event and its chat (#231). It does not know roles: the caller checks the
 // permission first (requireOrgRole / requireOrgResource). Every operation takes
 // orgId: an Event of another club is treated as if it did not exist
@@ -71,6 +80,10 @@ export interface EventRepository {
   // before started in the fixed order: a second cancel after the start is
   // still { ok: true, changed: false }
   cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult>;
+
+  // At any moment, started or cancelled too: no now. Its chat and Spot Requests
+  // go with it; its Feedback stays, without the Event
+  deleteEvent(orgId: string, eventId: string, actor: DeleteEventActor): Promise<DeleteEventResult>;
 
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
@@ -238,6 +251,22 @@ export class PrismaEventRepository implements EventRepository {
       return { ok: true, changed: false };
     }
     return { ok: false, reason: "started" };
+  }
+
+  // _actor: not used yet. The Admin's audit row comes in the next step of #231
+  async deleteEvent(
+    orgId: string,
+    eventId: string,
+    _actor: DeleteEventActor,
+  ): Promise<DeleteEventResult> {
+    // deleteMany and not delete: delete throws (P2025) when no row matches,
+    // deleteMany returns count. Postgres deletes its chat and Spot Requests too
+    // (onDelete: Cascade) and sets event_id to null in its Feedback (SetNull)
+    const { count } = await this.db.event.deleteMany({ where: { id: eventId, orgId } });
+    if (count === 0) {
+      return { ok: false, reason: "not-found" };
+    }
+    return { ok: true };
   }
 
   async listEvents(

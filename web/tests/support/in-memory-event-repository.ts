@@ -4,6 +4,8 @@ import type { EventManagerView, EventMemberView } from "@/lib/events/contracts";
 import type {
   CancelEventResult,
   CreateEventResult,
+  DeleteEventActor,
+  DeleteEventResult,
   EventData,
   EventRepository,
   UpdateEventResult,
@@ -141,6 +143,27 @@ export class InMemoryEventRepository implements EventRepository {
     // event is a reference to the object in the Map: this changes the stored one
     event.cancelledAt = now;
     return { ok: true, changed: true };
+  }
+
+  // _actor: no audit rows here, so who deletes changes nothing
+  async deleteEvent(
+    orgId: string,
+    eventId: string,
+    _actor: DeleteEventActor,
+  ): Promise<DeleteEventResult> {
+    const event = this.events.get(eventId);
+    if (!event || event.orgId !== orgId) {
+      return { ok: false, reason: "not-found" };
+    }
+    this.events.delete(eventId);
+    // Its Spot Requests go with it, like onDelete: Cascade in the schema.
+    // Deleting from a Map while looping over it is safe in JavaScript
+    for (const [key, request] of this.spotRequests) {
+      if (request.eventId === eventId) {
+        this.spotRequests.delete(key);
+      }
+    }
+    return { ok: true };
   }
 
   async listEvents(

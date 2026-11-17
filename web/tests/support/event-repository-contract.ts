@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { SessionOrigin, SpotRequestStatus } from "@/generated/prisma/enums";
-import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
+import type {
+  CreateEventResult,
+  DeleteEventActor,
+  EventData,
+  EventRepository,
+} from "@/lib/events/event-repository";
 
 // A valid id that no Session or Event has
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
@@ -15,6 +20,9 @@ const TOMORROW_END = new Date("2030-01-03T00:00:00.000Z");
 // shows cancelledAt comes from the parameter
 const CANCEL_AT = new Date("2030-01-01T12:00:00.000Z");
 const CANCEL_AGAIN_AT = new Date("2030-01-01T15:00:00.000Z");
+// The actor of the contract's deletions. The Admin is audited, and only Prisma
+// writes audit rows: its tests are in event-repository.db.test.ts
+const MANAGER: DeleteEventActor = { kind: "manager" };
 
 // What each implementation gives the contract: the repository, and a way to put
 // in it what the interface cannot create yet (a real database needs real rows)
@@ -638,6 +646,53 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
         ok: false,
         reason: "starts-in-the-past",
       });
+    });
+
+    it("deleteEvent deletes the Event", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.deleteEvent(orgId, eventId, MANAGER);
+
+      expect(result).toEqual({ ok: true });
+      await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toBeNull();
+    });
+
+    it("deleteEvent deletes a cancelled Event too", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // Unlike edit and cancel: a cancelled Event can still be removed
+      await expect(repo.deleteEvent(orgId, eventId, MANAGER)).resolves.toEqual({ ok: true });
+      await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toBeNull();
+    });
+
+    it("deleteEvent of an id no Event has is not-found", async () => {
+      const { repo, createClub } = createFixture();
+      const orgId = await createClub();
+
+      await expect(repo.deleteEvent(orgId, UNKNOWN_ID, MANAGER)).resolves.toEqual({
+        ok: false,
+        reason: "not-found",
+      });
+    });
+
+    it("deleteEvent of an Event of another club is not-found and leaves it there", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+
+      const result = await repo.deleteEvent(orgB, eventId, MANAGER);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      await expect(repo.getEventForMember(orgA, eventId, managerA)).resolves.not.toBeNull();
     });
   });
 }
