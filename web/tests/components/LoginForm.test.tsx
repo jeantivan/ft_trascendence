@@ -32,4 +32,21 @@ describe("LoginForm", () => {
     expect(await screen.findByText("Email o contraseña incorrectos o cuenta bloqueada")).toBeInTheDocument();
     expect(screen.queryByText("Tu cuenta está bloqueada.")).not.toBeInTheDocument();
   });
+
+  // #79: titles use Space Grotesk (font-heading), as DESIGN.md says
+  it("shows its title as the page heading, in the heading font", () => {
+    render(<LoginForm />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Iniciar Sesión" })).toHaveClass("font-heading");
+  });
+
+  // #79: the link is a ghost Button with href (border, no volt fill), as Marta asked
+  it("links to /register as a ghost button", () => {
+    render(<LoginForm />);
+
+    const link = screen.getByRole("link", { name: "Regístrate aquí" });
+    expect(link).toHaveAttribute("href", "/register");
+    expect(link).toHaveClass("border-border-strong");
+    expect(link).not.toHaveClass("bg-volt");
+  });
 });
