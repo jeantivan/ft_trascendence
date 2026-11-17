@@ -172,4 +172,13 @@ export class InMemoryEventRepository implements EventRepository {
       spotRequests,
     };
   }
+
+  async findEventOrg(eventId: string): Promise<{ id: string; orgId: string } | null> {
+    const event = this.events.get(eventId);
+    if (!event) {
+      return null;
+    }
+    // Only these two fields, like the select of the Prisma one
+    return { id: event.id, orgId: event.orgId };
+  }
 }

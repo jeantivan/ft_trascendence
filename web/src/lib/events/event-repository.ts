@@ -55,6 +55,11 @@ export interface EventRepository {
   // The only read that says who asked: the Spot Requests with their nick, oldest
   // first. The caller checks event.readAttendees. null: does not exist or another club
   getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null>;
+
+  // The only operation without orgId: it finds the club, so findOrgResource +
+  // requireOrgResource can check the permission. findOrgResource already turns a
+  // malformed id into null before calling it. null: no Event with that id
+  findEventOrg(eventId: string): Promise<{ id: string; orgId: string } | null>;
 }
 
 // What every read of an Event selects: its own fields and how many spots are
@@ -193,5 +198,13 @@ export class PrismaEventRepository implements EventRepository {
         createdAt: request.createdAt,
       })),
     };
+  }
+
+  async findEventOrg(eventId: string): Promise<{ id: string; orgId: string } | null> {
+    // findUnique: the where has only the primary key. Already { id, orgId } or null
+    return this.db.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, orgId: true },
+    });
   }
 }

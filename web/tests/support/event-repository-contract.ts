@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionOrigin, SpotRequestStatus } from "@/generated/prisma/enums";
 import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
 
-// A valid id that no Session has
+// A valid id that no Session or Event has
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
 
 // A fixed "now", so no test depends on the clock
@@ -357,6 +357,23 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
         { id: early, approvedCount: 1, mySpotRequest: "pending" },
         { id: late, approvedCount: 0, mySpotRequest: null },
       ]);
+    });
+
+    it("findEventOrg gives the id and the club of an Event", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      // Two clubs: the club must come from the Event, not be the only one there is
+      await createClub();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      await expect(repo.findEventOrg(eventId)).resolves.toEqual({ id: eventId, orgId });
+    });
+
+    it("findEventOrg of an id no Event has is null", async () => {
+      const { repo } = createFixture();
+
+      await expect(repo.findEventOrg(UNKNOWN_ID)).resolves.toBeNull();
     });
   });
 }
