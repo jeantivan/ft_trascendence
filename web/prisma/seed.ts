@@ -1,6 +1,7 @@
-// Development demo data (issue #19): 1 Admin, 1 Club with 1 Manager,
+// Demo data (issue #19): 1 Admin, 1 Club with 1 Manager,
 // 2 Athletes and 2 Groups, plus 6 weeks of session history per Group (issue
-// #23, seed/session-logs.ts). Never run in production.
+// #23, seed/session-logs.ts). make dev loads it on every start; in make mode,
+// only when someone runs make seed (#213).
 // Safe to run many times: every write is an upsert ("create it if it does not
 // exist; if it exists, leave it as it is") or an updateMany that only fills
 // fields that are still empty, except the session history: each run deletes
@@ -11,9 +12,9 @@
 // at those sessions goes too: logs typed by hand (Cascade), and Events lose
 // their link (SetNull).
 // A database seeded before users had fixed ids fails here with a duplicate
-// email: recreate it with make fclean + make dev. WARNING: make fclean
-// DELETES ALL the local data stored in the project's Docker volumes
-// (the database and any other volume), not only the demo data.
+// email: recreate it with make fclean + make dev (or make + make seed).
+// WARNING: make fclean DELETES ALL the local data stored in the project's
+// Docker volumes (the database and any other volume), not only the demo data.
 // Demo users' password is configured via SEED_USER_PASSWORD env var.
 import { hashPassword } from "../src/lib/auth/password";
 import { prisma } from "../src/lib/prisma";
