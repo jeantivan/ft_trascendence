@@ -8,6 +8,9 @@ const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
 // A fixed "now", so no test depends on the clock
 const NOW = new Date("2030-01-01T10:00:00.000Z");
 const TOMORROW = new Date("2030-01-02T10:00:00.000Z");
+// Later the same day, and the end of that day: for the lists
+const TOMORROW_LATE = new Date("2030-01-02T18:00:00.000Z");
+const TOMORROW_END = new Date("2030-01-03T00:00:00.000Z");
 
 // What each implementation gives the contract: the repository, and a way to put
 // in it what the interface cannot create yet (a real database needs real rows)
@@ -296,6 +299,64 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       const view = await repo.getEventForManager(orgId, eventId);
 
       expect(view).toMatchObject({ approvedCount: 0, spotRequests: [] });
+    });
+
+    it("listEvents returns the Events of [from, to), ordered by startsAt", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const viewerId = await addAthlete(orgId);
+      const from = new Date("2030-01-05T00:00:00.000Z");
+      const to = new Date("2030-01-12T00:00:00.000Z");
+      // Created out of order on purpose: the order must come from startsAt
+      const create = async (startsAt: Date) =>
+        eventIdOf(await repo.createEvent(orgId, managerId, eventData({ startsAt }), NOW));
+      const middle = await create(new Date("2030-01-08T18:00:00.000Z"));
+      await create(to); // right at to: left out
+      const atFrom = await create(from); // right at from: included
+      await create(new Date("2030-01-04T23:59:00.000Z")); // just before from
+
+      const list = await repo.listEvents(orgId, viewerId, { from, to });
+
+      expect(list.map((event) => event.id)).toEqual([atFrom, middle]);
+    });
+
+    it("listEvents leaves out the Events of another club", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const managerB = await addManager(orgB);
+      const viewerA = await addAthlete(orgA);
+      // Same time for both: only the club tells them apart
+      const eventA = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+      await repo.createEvent(orgB, managerB, eventData(), NOW);
+
+      const list = await repo.listEvents(orgA, viewerA, { from: NOW, to: TOMORROW_END });
+
+      // The ids and not just the length: the stub [] must not pass
+      expect(list.map((event) => event.id)).toEqual([eventA]);
+    });
+
+    it("each listed Event has its own approvedCount and mySpotRequest", async () => {
+      const { repo, createClub, addManager, addAthlete, addSpotRequest } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const viewerId = await addAthlete(orgId);
+      const early = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      const late = eventIdOf(
+        await repo.createEvent(orgId, managerId, eventData({ startsAt: TOMORROW_LATE }), NOW),
+      );
+      // Everything in the early Event: the late one must not borrow any of it
+      await addSpotRequest(early, await addAthlete(orgId), "approved");
+      await addSpotRequest(early, viewerId, "pending");
+
+      const list = await repo.listEvents(orgId, viewerId, { from: NOW, to: TOMORROW_END });
+
+      expect(list).toMatchObject([
+        { id: early, approvedCount: 1, mySpotRequest: "pending" },
+        { id: late, approvedCount: 0, mySpotRequest: null },
+      ]);
     });
   });
 }

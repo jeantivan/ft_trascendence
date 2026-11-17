@@ -81,6 +81,22 @@ export class InMemoryEventRepository implements EventRepository {
     return { ok: true, eventId: id };
   }
 
+  async listEvents(
+    orgId: string,
+    viewerId: string,
+    range: { from: Date; to: Date },
+  ): Promise<EventMemberView[]> {
+    const list: EventMemberView[] = [];
+    for (const event of this.events.values()) {
+      // [from, to): from included, to left out. Cancelled ones too
+      if (event.orgId === orgId && event.startsAt >= range.from && event.startsAt < range.to) {
+        list.push(this.memberView(event, viewerId));
+      }
+    }
+    list.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+    return list;
+  }
+
   async getEventForMember(
     orgId: string,
     eventId: string,
@@ -91,13 +107,19 @@ export class InMemoryEventRepository implements EventRepository {
     if (!event || event.orgId !== orgId) {
       return null;
     }
+    return this.memberView(event, viewerId);
+  }
+
+  // What a member sees of an Event already found: shared by listEvents and
+  // getEventForMember. private: only the methods of this class can call it
+  private memberView(event: StoredEvent, viewerId: string): EventMemberView {
     let approvedCount = 0;
     for (const request of this.spotRequests.values()) {
-      if (request.eventId === eventId && request.status === "approved") {
+      if (request.eventId === event.id && request.status === "approved") {
         approvedCount++;
       }
     }
-    const mine = this.spotRequests.get(`${eventId}/${viewerId}`);
+    const mine = this.spotRequests.get(`${event.id}/${viewerId}`);
     return {
       id: event.id,
       orgId: event.orgId,

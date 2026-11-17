@@ -36,6 +36,15 @@ export interface EventRepository {
     now: Date,
   ): Promise<CreateEventResult>;
 
+  // The Events of the club that start in [from, to): from included, to left out,
+  // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
+  // ones included, no size limit. For members, Managers and the Admin alike
+  listEvents(
+    orgId: string,
+    viewerId: string,
+    range: { from: Date; to: Date },
+  ): Promise<EventMemberView[]>;
+
   // null: the Event does not exist or is from another club
   getEventForMember(
     orgId: string,
@@ -90,6 +99,35 @@ export class PrismaEventRepository implements EventRepository {
       select: { id: true },
     });
     return { ok: true, eventId: event.id };
+  }
+
+  async listEvents(
+    orgId: string,
+    viewerId: string,
+    range: { from: Date; to: Date },
+  ): Promise<EventMemberView[]> {
+    const events = await this.db.event.findMany({
+      // gte: >= from, lt: < to. Cancelled ones too: no filter on cancelledAt
+      where: { orgId, startsAt: { gte: range.from, lt: range.to } },
+      orderBy: { startsAt: "asc" },
+      select: {
+        id: true,
+        orgId: true,
+        title: true,
+        location: true,
+        startsAt: true,
+        sessionId: true,
+        cancelledAt: true,
+        _count: { select: { spotRequests: { where: { status: "approved" } } } },
+        spotRequests: { where: { userId: viewerId }, select: { status: true } },
+      },
+    });
+    // One query for the whole list: the counts come in the same SELECT
+    return events.map(({ _count, spotRequests, ...fields }) => ({
+      ...fields,
+      approvedCount: _count.spotRequests,
+      mySpotRequest: spotRequests[0]?.status ?? null,
+    }));
   }
 
   async getEventForMember(
