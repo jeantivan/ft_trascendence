@@ -607,6 +607,46 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       expect(view?.sessionId).toBeNull();
     });
 
+    // The other three invalid Sessions of createEvent: the contract cannot assume
+    // both operations share the check
+    it("updateEvent rejects a Session that does not come from a Training Template", async () => {
+      const { repo, createClub, addManager, addSession } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      // athleteId null on purpose, so only the origin is wrong
+      const sessionId = await addSession(orgId, { origin: "free", athleteId: null });
+
+      await expect(
+        repo.updateEvent(orgId, eventId, eventData({ sessionId }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "invalid-session" });
+    });
+
+    it("updateEvent rejects an Athlete's own Session, even one copied from a Training Template", async () => {
+      const { repo, createClub, addManager, addAthlete, addSession } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      // origin "template" on purpose, so only the athleteId is wrong
+      const sessionId = await addSession(orgId, { origin: "template", athleteId });
+
+      await expect(
+        repo.updateEvent(orgId, eventId, eventData({ sessionId }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "invalid-session" });
+    });
+
+    it("updateEvent rejects a Session that does not exist", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      await expect(
+        repo.updateEvent(orgId, eventId, eventData({ sessionId: UNKNOWN_ID }), NOW),
+      ).resolves.toEqual({ ok: false, reason: "invalid-session" });
+    });
+
     // The fixed order: the state of the stored Event before the new data, and
     // inside the new data the start before the Session, as in createEvent
     it("updateEvent of an Event cancelled and started is cancelled", async () => {
