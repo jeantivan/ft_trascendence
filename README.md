@@ -52,7 +52,7 @@ The passwords in `.env` are generated randomly the first time and are never prin
 | `make migrate name=<name>` | Creates a Prisma migration from `web/prisma/schema.prisma` and applies it (needs `make dev` running) |
 | `make logs` / `make ps` | Follows the logs / lists the containers |
 | `make down` / `make clean` | Stops and removes the containers; the data is kept |
-| `make fclean` | Removes everything the project created: the containers and the network; the volumes, that is **the database, the uploaded files** and the HTTPS certificate (the next start makes a new one); and the images it built (`app`, `migrate`, `nginx` and `transcendence-app-dev`). `transcendence-app-dev` is the `make dev` / `make test` image, shared by every clone on the computer, so it is removed for all of them (the next `make dev` or `make test` rebuilds it). Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them |
+| `make fclean` | Removes everything the project created: the containers and the network; the volumes, that is **the database, the uploaded files** and the HTTPS certificate (the next start makes a new one); and the images it built (`app`, `migrate`, `nginx` and `transcendence-app-dev`), plus the old untagged versions of those images that rebuilding left behind (only this project's; they take about 1.5 GB each). `transcendence-app-dev` is the `make dev` / `make test` image, shared by every clone on the computer, so it is removed for all of them (the next `make dev` or `make test` rebuilds it). Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them |
 | `make re` | `make clean` followed by `make` |
 
 The port can be changed with `HTTPS_PORT` in `.env`.
