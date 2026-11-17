@@ -84,4 +84,16 @@ describe("MobileNav", () => {
     // Si el menú se cierra aquí, el navegador cancela el envío del formulario
     expect(logout).toBeInTheDocument();
   });
+
+  it("sin ser administrador no enseña el enlace al panel", () => {
+    render(<MobileNav />);
+    fireEvent.click(screen.getByRole("button", { name: "Menú" }));
+    expect(screen.queryByRole("link", { name: "Administración" })).not.toBeInTheDocument();
+  });
+
+  it("al administrador le enseña el enlace al panel (#102)", () => {
+    render(<MobileNav isAdmin />);
+    fireEvent.click(screen.getByRole("button", { name: "Menú" }));
+    expect(screen.getByRole("link", { name: "Administración" })).toHaveAttribute("href", "/admin/accounts");
+  });
 });

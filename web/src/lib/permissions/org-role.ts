@@ -1,10 +1,10 @@
-import { z } from "zod";
 import type { MembershipRole } from "@/generated/prisma/client";
 import {
   getCurrentUser,
   type CurrentUser,
   type CurrentUserResult,
 } from "./current-user";
+import { isDbId } from "./is-db-id";
 import { membershipRepository, type MembershipRepository } from "./membership-repository";
 
 // The role a request enters a club with: a club role, or "admin" when an Admin
@@ -34,8 +34,7 @@ export async function getOrgRole(
   }
 
   // A malformed id would make Prisma throw (500); for the caller it is just a club they cannot see
-  // z.guid(), not z.uuid(): any 8-4-4-4-12 hex id, like Postgres (z.uuid() rejects the seed's 00000000-...-0001)
-  if (!z.guid().safeParse(orgId).success) {
+  if (!isDbId(orgId)) {
     return { ok: false, reason: "not-member" };
   }
 

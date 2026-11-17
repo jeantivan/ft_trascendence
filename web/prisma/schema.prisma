@@ -152,7 +152,8 @@ model RecoveryCode {
 // A club. Only the Admin creates them.
 model Organization {
   id          String   @id @default(uuid()) @db.Uuid
-  name        String
+  // Exact match, case included: two clubs cannot share a name
+  name        String   @unique
   description String?
   // IANA zone, e.g. "Europe/Madrid": weekly stats are grouped by the club's week
   timezone    String
@@ -352,8 +353,8 @@ model SessionLog {
   sessionId   String   @map("session_id") @db.Uuid
   athleteId   String   @map("athlete_id") @db.Uuid
   completed   Boolean
-  // 1-10, validated by the server
-  rpe         Int      @db.SmallInt
+  // 1-10, validated by the server; null if purged or logged without consent (#66, #131)
+  rpe         Int?     @db.SmallInt
   distanceM   Int?     @map("distance_m")
   durationS   Int?     @map("duration_s")
   performedAt DateTime @map("performed_at") @db.Timestamptz(3)
