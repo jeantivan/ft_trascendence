@@ -17,7 +17,7 @@ describe("LoginForm", () => {
   it("replaces the notice with the error of a failed login attempt", async () => {
     vi.mocked(loginAction).mockResolvedValue({
       success: false,
-      error: "Email o contraseña incorrectos",
+      error: "Email o contraseña incorrectos o cuenta bloqueada",
     });
     render(<LoginForm notice="Tu cuenta está bloqueada." />);
 
@@ -29,7 +29,7 @@ describe("LoginForm", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
 
-    expect(await screen.findByText("Email o contraseña incorrectos")).toBeInTheDocument();
+    expect(await screen.findByText("Email o contraseña incorrectos o cuenta bloqueada")).toBeInTheDocument();
     expect(screen.queryByText("Tu cuenta está bloqueada.")).not.toBeInTheDocument();
   });
 });
