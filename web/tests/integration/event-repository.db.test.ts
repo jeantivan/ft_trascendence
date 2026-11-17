@@ -158,7 +158,9 @@ describe("PrismaEventRepository.createEvent", () => {
       await expect(repository.createEvent(club.id, managerId, DATA, NOW)).rejects.toThrow(
         "test: chat rejected",
       );
-      await expect(prisma.event.count({ where: { orgId: club.id } })).resolves.toBe(0);
+      // No id to look for: createEvent threw. The range holds DATA.startsAt
+      const range = { from: NOW, to: new Date("2030-01-03T00:00:00.000Z") };
+      await expect(repository.listEvents(club.id, managerId, range)).resolves.toEqual([]);
     } finally {
       await prisma.$executeRawUnsafe("DROP TRIGGER IF EXISTS test_reject_event_chat ON conversations");
       await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS test_reject_event_chat()");
@@ -218,7 +220,7 @@ describe("PrismaEventRepository.deleteEvent", () => {
 
     // Inside the transaction the Event was already gone: the rollback brought it back
     expect(seen.eventsInTx).toBe(0);
-    await expect(prisma.event.count({ where: { id: eventId } })).resolves.toBe(1);
+    await expect(repository.findEventOrg(eventId)).resolves.toEqual({ id: eventId, orgId });
     await expect(prisma.auditLog.count({ where: { actorId: adminId } })).resolves.toBe(0);
   });
 
@@ -234,7 +236,7 @@ describe("PrismaEventRepository.deleteEvent", () => {
     // A deletion that did not happen is not audited
     expect(result).toEqual({ ok: false, reason: "not-found" });
     await expect(prisma.auditLog.count({ where: { actorId: adminId } })).resolves.toBe(0);
-    await expect(prisma.event.count({ where: { id: eventId } })).resolves.toBe(1);
+    await expect(repository.findEventOrg(eventId)).resolves.toEqual({ id: eventId, orgId: orgA });
   });
 
   // Invented text: Feedback is health data and real text never goes in a test
