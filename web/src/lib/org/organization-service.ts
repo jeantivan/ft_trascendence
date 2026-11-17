@@ -6,7 +6,11 @@ import {
   type OrganizationRepository,
   type OrganizationSummary,
 } from "./organization-repository";
+import { PrismaClubExit } from "./club-exit";
 import { createOrganizationSchema, normalizeId, updateOrganizationSchema } from "./schemas";
+
+// What the service needs from PrismaClubExit; a test passes a fake
+type ClubExit = Pick<PrismaClubExit, "leave" | "expel">;
 
 // Defined in the repository (which also throws it); re-exported to keep this import path
 export { AdminCannotBeManagerError, OrganizationNotFoundError };
@@ -18,7 +22,10 @@ export { AdminCannotBeManagerError, OrganizationNotFoundError };
  * ORG_ROLES["organization.read"]) for a club's page. This service does not.
  */
 export class OrganizationService {
-  constructor(private readonly repo: OrganizationRepository = organizationRepository) {}
+  constructor(
+    private readonly repo: OrganizationRepository = organizationRepository,
+    private readonly clubExit: ClubExit = new PrismaClubExit(),
+  ) {}
 
   // Any signed-in user, member of a club or not
   listCatalog(): Promise<OrganizationSummary[]> {
@@ -56,6 +63,19 @@ export class OrganizationService {
   // LastManagerError if no other Manager would remain.
   removeManager(adminId: string, orgId: string, userId: string): Promise<void> {
     return this.repo.removeManager(adminId, orgId, userId);
+  }
+
+  // Any member: requireOrgRole(orgId, ORG_ROLES["membership.leave"]) gives the userId. Leaving never
+  // blocks, not even the last Manager (the Admins are warned); NotMemberError if not in the club.
+  leaveClub(userId: string, orgId: string): Promise<void> {
+    return this.clubExit.leave(normalizeId(userId), normalizeId(orgId));
+  }
+
+  // Manager or Admin: requireOrgRole(orgId, ORG_ROLES["member.expel"]) gives the actor and its role.
+  // The expelled user is notified; an Admin's expulsion is audited. NotMemberError if the target
+  // is not in the club, CannotExpelSelfError if it is the actor.
+  expelMember(actor: { id: string; role: "manager" | "admin" }, orgId: string, targetId: string): Promise<void> {
+    return this.clubExit.expel({ ...actor, id: normalizeId(actor.id) }, normalizeId(orgId), normalizeId(targetId));
   }
 
   // Manager only: requireOrgRole(orgId, ORG_ROLES["organization.updateDescription"])
