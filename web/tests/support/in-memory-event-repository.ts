@@ -86,9 +86,9 @@ export class InMemoryEventRepository implements EventRepository {
     data: EventData,
     now: Date,
   ): Promise<UpdateEventResult> {
-    const event = this.events.get(eventId);
+    const event = this.findInClub(orgId, eventId);
     // The ifs follow the fixed order: not-found, cancelled, started
-    if (!event || event.orgId !== orgId) {
+    if (!event) {
       return { ok: false, reason: "not-found" };
     }
     if (event.cancelledAt !== null) {
@@ -114,6 +114,16 @@ export class InMemoryEventRepository implements EventRepository {
     return { ok: true };
   }
 
+  // The Event of that club, or undefined. Another club's Event is treated as
+  // one that does not exist. Shared by every operation that takes orgId
+  private findInClub(orgId: string, eventId: string): StoredEvent | undefined {
+    const event = this.events.get(eventId);
+    if (!event || event.orgId !== orgId) {
+      return undefined;
+    }
+    return event;
+  }
+
   // Whether a Session can be linked to an Event of that club: only a group
   // Session of a Training Template of the same club (#147, question f).
   // Shared by createEvent and updateEvent
@@ -128,9 +138,9 @@ export class InMemoryEventRepository implements EventRepository {
   }
 
   async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {
-    const event = this.events.get(eventId);
+    const event = this.findInClub(orgId, eventId);
     // The ifs follow the fixed order: not-found, cancelled, started
-    if (!event || event.orgId !== orgId) {
+    if (!event) {
       return { ok: false, reason: "not-found" };
     }
     if (event.cancelledAt !== null) {
@@ -151,8 +161,8 @@ export class InMemoryEventRepository implements EventRepository {
     eventId: string,
     _actor: DeleteEventActor,
   ): Promise<DeleteEventResult> {
-    const event = this.events.get(eventId);
-    if (!event || event.orgId !== orgId) {
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
       return { ok: false, reason: "not-found" };
     }
     this.events.delete(eventId);
@@ -187,9 +197,8 @@ export class InMemoryEventRepository implements EventRepository {
     eventId: string,
     viewerId: string,
   ): Promise<EventMemberView | null> {
-    const event = this.events.get(eventId);
-    // Another club's Event is treated as one that does not exist
-    if (!event || event.orgId !== orgId) {
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
       return null;
     }
     return this.memberView(event, viewerId);
@@ -220,9 +229,8 @@ export class InMemoryEventRepository implements EventRepository {
   }
 
   async getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null> {
-    const event = this.events.get(eventId);
-    // Another club's Event is treated as one that does not exist
-    if (!event || event.orgId !== orgId) {
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
       return null;
     }
     // The type of the spotRequests field of EventManagerView
