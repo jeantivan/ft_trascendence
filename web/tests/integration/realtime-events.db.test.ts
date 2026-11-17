@@ -17,6 +17,7 @@ const testUser = {
   nick: "runner",
   roleGlobal: "user" as const,
 };
+const OTHER_USER_ID = "00000000-0000-0000-0000-000000000002";
 
 // Needs a real Postgres (LISTEN/NOTIFY): skipped locally without DATABASE_URL_TEST (#83),
 // but CI must always run it, so a missing test database fails there.
@@ -89,6 +90,31 @@ describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
     });
     const received = await readUntil(reader, '{"id":"after"}');
     expect(received).not.toContain("rolled-back");
+
+    await reader.cancel();
+  });
+  it("delivers a notification only to the stream of its user", async () => {
+    const response = await GET(new Request("http://localhost/api/events"));
+    const body = response.body;
+    if (!body) {
+      throw new Error("the SSE response has no body");
+    }
+    const reader = body.getReader();
+    await readUntil(reader, ": connected");
+
+    // publish() directly, not notify(): this checks the stream filter, and
+    // testUser only exists in the requireApiAuth mock, not in the database
+    await prisma.$transaction(async (tx) => {
+      await publish(tx, "notification", { notificationId: "1", userId: OTHER_USER_ID });
+    });
+    // Commit order again: the other user's one would show up before this one
+    await prisma.$transaction(async (tx) => {
+      await publish(tx, "notification", { notificationId: "2", userId: testUser.id });
+    });
+    const received = await readUntil(reader, '"notificationId":"2"');
+
+    expect(received).toContain('"notificationId":"2"');
+    expect(received).not.toContain('"notificationId":"1"');
 
     await reader.cancel();
   });
