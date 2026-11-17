@@ -236,4 +236,50 @@ describe("PrismaEventRepository.deleteEvent", () => {
     await expect(prisma.auditLog.count({ where: { actorId: adminId } })).resolves.toBe(0);
     await expect(prisma.event.count({ where: { id: eventId } })).resolves.toBe(1);
   });
+
+  // Invented text: Feedback is health data and real text never goes in a test
+  const FEEDBACK_BODY = "feedback de prueba";
+
+  // An Event with everything that hangs from it: a Spot Request, a Feedback and
+  // one message in its chat. Then the Manager deletes it
+  async function deleteEventWithDependents() {
+    const orgId = await createClub();
+    const managerId = await addMember(orgId, "manager");
+    const athleteId = await addMember(orgId, "athlete");
+    const eventId = eventIdOf(await repository.createEvent(orgId, managerId, DATA, NOW));
+    await addSpotRequest(eventId, athleteId, "approved");
+    const feedback = await prisma.feedback.create({
+      data: { eventId, athleteId, managerId, body: FEEDBACK_BODY },
+    });
+    const chat = await prisma.conversation.findUniqueOrThrow({ where: { eventId } });
+    await prisma.message.create({ data: { conversationId: chat.id, authorId: managerId, body: "hola" } });
+
+    await repository.deleteEvent(orgId, eventId, { kind: "manager" });
+
+    return { eventId, chatId: chat.id, feedbackId: feedback.id };
+  }
+
+  it("deleting an Event deletes its chat and the chat's messages", async () => {
+    const { chatId } = await deleteEventWithDependents();
+
+    await expect(prisma.conversation.count({ where: { id: chatId } })).resolves.toBe(0);
+    await expect(prisma.message.count({ where: { conversationId: chatId } })).resolves.toBe(0);
+  });
+
+  it("deleting an Event deletes its Spot Requests", async () => {
+    const { eventId } = await deleteEventWithDependents();
+
+    await expect(prisma.spotRequest.count({ where: { eventId } })).resolves.toBe(0);
+  });
+
+  it("deleting an Event keeps its Feedback, with the same body and no Event", async () => {
+    const { feedbackId } = await deleteEventWithDependents();
+
+    // The Athlete keeps their history (schema: onDelete SetNull)
+    const feedback = await prisma.feedback.findUnique({
+      where: { id: feedbackId },
+      select: { body: true, eventId: true },
+    });
+    expect(feedback).toEqual({ body: FEEDBACK_BODY, eventId: null });
+  });
 });
