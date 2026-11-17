@@ -11,6 +11,10 @@ const TOMORROW = new Date("2030-01-02T10:00:00.000Z");
 // Later the same day, and the end of that day: for the lists
 const TOMORROW_LATE = new Date("2030-01-02T18:00:00.000Z");
 const TOMORROW_END = new Date("2030-01-03T00:00:00.000Z");
+// Two moments to cancel at, after NOW and before TOMORROW: not NOW, so the test
+// shows cancelledAt comes from the parameter
+const CANCEL_AT = new Date("2030-01-01T12:00:00.000Z");
+const CANCEL_AGAIN_AT = new Date("2030-01-01T15:00:00.000Z");
 
 // What each implementation gives the contract: the repository, and a way to put
 // in it what the interface cannot create yet (a real database needs real rows)
@@ -374,6 +378,99 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       const { repo } = createFixture();
 
       await expect(repo.findEventOrg(UNKNOWN_ID)).resolves.toBeNull();
+    });
+
+    it("cancelEvent sets cancelledAt to the moment it is cancelled", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, managerId);
+      expect(view?.cancelledAt).toEqual(CANCEL_AT);
+    });
+
+    it("cancelling twice changes nothing and keeps the first date", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      const again = await repo.cancelEvent(orgId, eventId, CANCEL_AGAIN_AT);
+
+      expect(again).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, managerId);
+      expect(view?.cancelledAt).toEqual(CANCEL_AT);
+    });
+
+    it("cancelEvent rejects an Event that starts right now", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      // now equal to startsAt: the limit. Starting at now already counts as started
+      const result = await repo.cancelEvent(orgId, eventId, TOMORROW);
+
+      expect(result).toEqual({ ok: false, reason: "started" });
+      const view = await repo.getEventForMember(orgId, eventId, managerId);
+      expect(view?.cancelledAt).toBeNull();
+    });
+
+    it("cancelling again after the start is still no change", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // Cancelled and started: cancelled comes first in the fixed order
+      const again = await repo.cancelEvent(orgId, eventId, TOMORROW_LATE);
+
+      expect(again).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, managerId);
+      expect(view?.cancelledAt).toEqual(CANCEL_AT);
+    });
+
+    it("cancelEvent of an id no Event has is not-found", async () => {
+      const { repo, createClub } = createFixture();
+      const orgId = await createClub();
+
+      await expect(repo.cancelEvent(orgId, UNKNOWN_ID, CANCEL_AT)).resolves.toEqual({
+        ok: false,
+        reason: "not-found",
+      });
+    });
+
+    it("cancelEvent of an Event of another club is not-found and leaves it as it was", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+
+      const result = await repo.cancelEvent(orgB, eventId, CANCEL_AT);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      const view = await repo.getEventForMember(orgA, eventId, managerA);
+      expect(view?.cancelledAt).toBeNull();
+    });
+
+    it("a cancelled Event still shows in listEvents", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      const list = await repo.listEvents(orgId, managerId, { from: NOW, to: TOMORROW_END });
+
+      // So the calendar can show why it no longer happens
+      expect(list).toMatchObject([{ id: eventId, cancelledAt: CANCEL_AT }]);
     });
   });
 }

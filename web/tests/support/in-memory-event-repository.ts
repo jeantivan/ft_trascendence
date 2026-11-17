@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { SpotRequestStatus } from "@/generated/prisma/enums";
 import type { EventManagerView, EventMemberView } from "@/lib/events/contracts";
-import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
+import type {
+  CancelEventResult,
+  CreateEventResult,
+  EventData,
+  EventRepository,
+} from "@/lib/events/event-repository";
 import type { NewSession } from "./event-repository-contract";
 
 // An Event as stored: like a row of the events table
@@ -79,6 +84,24 @@ export class InMemoryEventRepository implements EventRepository {
     const id = randomUUID();
     this.events.set(id, { ...data, id, orgId, createdBy, cancelledAt: null });
     return { ok: true, eventId: id };
+  }
+
+  async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {
+    const event = this.events.get(eventId);
+    // The ifs follow the fixed order: not-found, cancelled, started
+    if (!event || event.orgId !== orgId) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: true, changed: false };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // event is a reference to the object in the Map: this changes the stored one
+    event.cancelledAt = now;
+    return { ok: true, changed: true };
   }
 
   async listEvents(

@@ -23,6 +23,15 @@ export type CreateEventResult =
   // tell whether another club's Session exists
   | { ok: false; reason: "invalid-session" };
 
+export type CancelEventResult =
+  // changed false: it was already cancelled, and keeps the first date. So a
+  // double click is not an error
+  | { ok: true; changed: boolean }
+  // Does not exist or is from another club
+  | { ok: false; reason: "not-found" }
+  // startsAt is now or earlier: no Feedback may hang from a cancelled Event
+  | { ok: false; reason: "started" };
+
 // Event and its chat (#231). It does not know roles: the caller checks the
 // permission first (requireOrgRole / requireOrgResource). Every operation takes
 // orgId: an Event of another club is treated as if it did not exist
@@ -35,6 +44,11 @@ export interface EventRepository {
     data: EventData,
     now: Date,
   ): Promise<CreateEventResult>;
+
+  // Sets cancelledAt to now, only before it starts. Already cancelled comes
+  // before started in the fixed order: a second cancel after the start is
+  // still { ok: true, changed: false }
+  cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult>;
 
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
@@ -119,6 +133,32 @@ export class PrismaEventRepository implements EventRepository {
       select: { id: true },
     });
     return { ok: true, eventId: event.id };
+  }
+
+  async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {
+    // Check and write in one UPDATE ... WHERE, like a compare-and-swap: of two
+    // cancels at the same time (a double click) only one finds cancelledAt null,
+    // so the second can never overwrite the first date. updateMany and not
+    // update: the where has fields that are not unique, and 0 rows is no error
+    const { count } = await this.db.event.updateMany({
+      where: { id: eventId, orgId, cancelledAt: null, startsAt: { gt: now } },
+      data: { cancelledAt: now },
+    });
+    if (count === 1) {
+      return { ok: true, changed: true };
+    }
+    // Nothing changed: read why, in the fixed order
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: { cancelledAt: true },
+    });
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: true, changed: false };
+    }
+    return { ok: false, reason: "started" };
   }
 
   async listEvents(
