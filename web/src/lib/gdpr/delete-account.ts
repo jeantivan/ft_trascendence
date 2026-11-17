@@ -6,7 +6,10 @@ import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
 import { deleteAvatarFiles } from "@/lib/uploads/delete-avatar-files";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
 
-export const CLUB_WITHOUT_MANAGER = "club_without_manager";
+import { notifyAdminsOfClubsWithoutManager } from "@/lib/org/club-without-manager";
+
+// Defined next to the helper that creates it; re-exported to keep this import path
+export { CLUB_WITHOUT_MANAGER } from "@/lib/org/club-without-manager";
 
 export type DeleteAccountResult =
   // avatarCleanupFailed is only present when some avatar file could not be removed
@@ -160,6 +163,7 @@ async function deleteLockedAccount(userId: string, tx: Prisma.TransactionClient)
 // Known limit: this lock only protects against code that takes it too. Granting and
 // removing a Manager (OrganizationRepository) locks the user row and then the club
 // row, like this function; any other code that writes memberships must do the same.
+// Leaving or being expelled from a club (#150) goes through the same helper.
 async function deleteAccountRows(userId: string, tx: Prisma.TransactionClient): Promise<void> {
   const managed = await tx.membership.findMany({
     where: { userId, role: "manager" },
@@ -167,35 +171,7 @@ async function deleteAccountRows(userId: string, tx: Prisma.TransactionClient): 
   });
   const orgIds = managed.map((membership) => membership.orgId);
 
-  if (orgIds.length > 0) {
-    await tx.$queryRaw`SELECT id FROM organizations WHERE id = ANY(${orgIds}::uuid[]) ORDER BY id FOR UPDATE`;
-
-    // Counted after the lock, in a new statement, so it sees what the other transaction committed
-    const withoutManager: string[] = [];
-    for (const orgId of orgIds) {
-      const others = await tx.membership.count({
-        where: { orgId, role: "manager", userId: { not: userId } },
-      });
-      if (others === 0) withoutManager.push(orgId);
-    }
-
-    if (withoutManager.length > 0) {
-      const admins = await tx.user.findMany({
-        where: { roleGlobal: "admin", id: { not: userId } },
-        select: { id: true },
-      });
-      // The payload carries only the club id (ADR 0001)
-      await tx.notification.createMany({
-        data: admins.flatMap((admin) =>
-          withoutManager.map((orgId) => ({
-            userId: admin.id,
-            type: CLUB_WITHOUT_MANAGER,
-            payload: { orgId },
-          })),
-        ),
-      });
-    }
-  }
+  await notifyAdminsOfClubsWithoutManager(tx, orgIds, userId);
 
   await deleteDirectMessagesLeftEmpty(userId, tx);
 
