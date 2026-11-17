@@ -91,7 +91,7 @@ export class PrismaEventRepository implements EventRepository {
   async getEventForMember(
     orgId: string,
     eventId: string,
-    _viewerId: string,
+    viewerId: string,
   ): Promise<EventMemberView | null> {
     // findFirst and not findUnique: the where also has orgId, which is not unique.
     // Another club's Event is treated as one that does not exist
@@ -105,12 +105,21 @@ export class PrismaEventRepository implements EventRepository {
         startsAt: true,
         sessionId: true,
         cancelledAt: true,
+        // A COUNT in Postgres: how many, never who (#2)
+        _count: { select: { spotRequests: { where: { status: "approved" } } } },
+        // The viewer's own Spot Request: 0 or 1 rows, the key is (event_id, user_id)
+        spotRequests: { where: { userId: viewerId }, select: { status: true } },
       },
     });
     if (!event) {
       return null;
     }
-    // No Spot Requests yet (#232)
-    return { ...event, approvedCount: 0, mySpotRequest: null };
+    // Rest: fields is the Event without _count and spotRequests
+    const { _count, spotRequests, ...fields } = event;
+    return {
+      ...fields,
+      approvedCount: _count.spotRequests,
+      mySpotRequest: spotRequests[0]?.status ?? null,
+    };
   }
 }

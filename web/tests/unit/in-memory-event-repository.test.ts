@@ -11,5 +11,6 @@ runEventRepositoryContract("in memory", () => {
     addManager: async () => randomUUID(),
     addAthlete: async () => randomUUID(),
     addSession: async (orgId, session) => repo.addSession(orgId, session),
+    addSpotRequest: async (eventId, userId, status) => repo.addSpotRequest(eventId, userId, status),
   };
 });

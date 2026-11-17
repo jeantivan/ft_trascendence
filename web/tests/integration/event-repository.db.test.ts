@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterAll, afterEach, describe, expect, it } from "vitest";
+import type { SpotRequestStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { PrismaEventRepository } from "@/lib/events/event-repository";
 import {
@@ -45,6 +46,16 @@ async function addSession(orgId: string, session: NewSession): Promise<string> {
   return created.id;
 }
 
+// A real row in spot_requests: event_id and user_id must exist (foreign keys).
+// The club's deletion in afterEach removes it too (Event → Cascade)
+async function addSpotRequest(
+  eventId: string,
+  userId: string,
+  status: SpotRequestStatus,
+): Promise<void> {
+  await prisma.spotRequest.create({ data: { eventId, userId, status } });
+}
+
 afterEach(async () => {
   // Sessions first: a club that has them cannot be deleted (onDelete: Restrict)
   await prisma.trainingSession.deleteMany({
@@ -64,6 +75,7 @@ runEventRepositoryContract("Prisma", () => ({
   addManager: (orgId) => addMember(orgId, "manager"),
   addAthlete: (orgId) => addMember(orgId, "athlete"),
   addSession,
+  addSpotRequest,
 }));
 
 // What the contract cannot see: the interface has no read for an Event's chat

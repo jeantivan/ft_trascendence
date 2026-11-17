@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { SpotRequestStatus } from "@/generated/prisma/enums";
 import type { EventMemberView } from "@/lib/events/contracts";
 import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
 import type { NewSession } from "./event-repository-contract";
@@ -18,6 +19,12 @@ export class InMemoryEventRepository implements EventRepository {
   private events = new Map<string, StoredEvent>();
   // Sessions by id: only what the rules of a linked Session look at
   private sessions = new Map<string, NewSession & { orgId: string }>();
+  // Spot Requests by "eventId/userId": one per user and Event, like the
+  // primary key (event_id, user_id) of spot_requests
+  private spotRequests = new Map<
+    string,
+    { eventId: string; userId: string; status: SpotRequestStatus }
+  >();
 
   // For the tests only, not part of EventRepository: in production the
   // Sessions come from the Training Templates
@@ -25,6 +32,11 @@ export class InMemoryEventRepository implements EventRepository {
     const id = randomUUID();
     this.sessions.set(id, { ...session, orgId });
     return id;
+  }
+
+  // For the tests only, until #232 gives EventRepository its own operations
+  addSpotRequest(eventId: string, userId: string, status: SpotRequestStatus): void {
+    this.spotRequests.set(`${eventId}/${userId}`, { eventId, userId, status });
   }
 
   async createEvent(
@@ -57,13 +69,20 @@ export class InMemoryEventRepository implements EventRepository {
   async getEventForMember(
     orgId: string,
     eventId: string,
-    _viewerId: string,
+    viewerId: string,
   ): Promise<EventMemberView | null> {
     const event = this.events.get(eventId);
     // Another club's Event is treated as one that does not exist
     if (!event || event.orgId !== orgId) {
       return null;
     }
+    let approvedCount = 0;
+    for (const request of this.spotRequests.values()) {
+      if (request.eventId === eventId && request.status === "approved") {
+        approvedCount++;
+      }
+    }
+    const mine = this.spotRequests.get(`${eventId}/${viewerId}`);
     return {
       id: event.id,
       orgId: event.orgId,
@@ -72,9 +91,9 @@ export class InMemoryEventRepository implements EventRepository {
       startsAt: event.startsAt,
       sessionId: event.sessionId,
       cancelledAt: event.cancelledAt,
-      // No Spot Requests yet (#232)
-      approvedCount: 0,
-      mySpotRequest: null,
+      approvedCount,
+      // null: no Spot Request of their own
+      mySpotRequest: mine?.status ?? null,
     };
   }
 }

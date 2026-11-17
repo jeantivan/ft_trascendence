@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SessionOrigin } from "@/generated/prisma/enums";
+import type { SessionOrigin, SpotRequestStatus } from "@/generated/prisma/enums";
 import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
 
 // A valid id that no Session has
@@ -21,6 +21,9 @@ export interface EventFixture {
   // A new Session of that club; returns its id. A group Session copied from a
   // Training Template has origin "template" and no athleteId
   addSession(orgId: string, session: NewSession): Promise<string>;
+  // A Spot Request of that user in that Event, already in that status. The
+  // interface cannot create one until #232
+  addSpotRequest(eventId: string, userId: string, status: SpotRequestStatus): Promise<void>;
 }
 
 export interface NewSession {
@@ -170,6 +173,52 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
 
       const view = await repo.getEventForMember(orgId, eventId, athleteId);
       expect(view?.sessionId).toBe(sessionId);
+    });
+
+    it("approvedCount counts only approved Spot Requests", async () => {
+      const { repo, createClub, addManager, addAthlete, addSpotRequest } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      // One Athlete per status, approved twice: only those two count
+      for (const status of ["pending", "approved", "approved", "rejected", "withdrawn"] as const) {
+        await addSpotRequest(eventId, await addAthlete(orgId), status);
+      }
+      // A member without a Spot Request of their own
+      const viewerId = await addAthlete(orgId);
+
+      const view = await repo.getEventForMember(orgId, eventId, viewerId);
+
+      expect(view).toMatchObject({ approvedCount: 2, mySpotRequest: null });
+    });
+
+    it("mySpotRequest is the status of the viewer's own Spot Request", async () => {
+      const { repo, createClub, addManager, addAthlete, addSpotRequest } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      // pending and not approved: so it does not depend on approvedCount
+      await addSpotRequest(eventId, athleteId, "pending");
+
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it("Spot Requests of another Event do not count", async () => {
+      const { repo, createClub, addManager, addAthlete, addSpotRequest } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventA = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      const eventB = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      // Approved, and by the viewer: it would show in both fields of the Event A
+      await addSpotRequest(eventB, athleteId, "approved");
+
+      const view = await repo.getEventForMember(orgId, eventA, athleteId);
+
+      expect(view).toMatchObject({ approvedCount: 0, mySpotRequest: null });
     });
   });
 }
