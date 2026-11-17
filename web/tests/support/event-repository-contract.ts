@@ -712,6 +712,22 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toBeNull();
     });
 
+    it("deleteEvent deletes a started Event too", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      // deleteEvent takes no now: the Event has started for the real clock, so a
+      // check against the current time inside deleteEvent would make this fail
+      const startsAt = new Date("2020-01-02T10:00:00.000Z");
+      const createdAt = new Date("2020-01-01T10:00:00.000Z");
+      const eventId = eventIdOf(
+        await repo.createEvent(orgId, managerId, eventData({ startsAt }), createdAt),
+      );
+
+      await expect(repo.deleteEvent(orgId, eventId, MANAGER)).resolves.toEqual({ ok: true });
+      await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toBeNull();
+    });
+
     it("deleteEvent of an id no Event has is not-found", async () => {
       const { repo, createClub } = createFixture();
       const orgId = await createClub();
