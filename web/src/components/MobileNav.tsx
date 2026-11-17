@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/Logo";
-import { NAV_ITEMS } from "@/config/navigation";
+import { navItemsFor } from "@/config/navigation";
 import { LogoutButton } from "./LogoutButton";
 import { NavLink } from "./NavLink";
 
-export function MobileNav() {
+export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export function MobileNav() {
           }}
           className="flex flex-col gap-1 px-4 pb-4"
         >
-          {NAV_ITEMS.map((item) => (
+          {navItemsFor(isAdmin).map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} />
           ))}
           <LogoutButton />

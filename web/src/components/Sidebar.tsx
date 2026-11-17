@@ -1,15 +1,15 @@
 import { Logo } from "@/components/ui/Logo";
-import { NAV_ITEMS } from "@/config/navigation";
+import { navItemsFor } from "@/config/navigation";
 import { LogoutButton } from "./LogoutButton";
 import { NavLink } from "./NavLink";
 
-export function Sidebar() {
+export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   return (
     <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-border-subtle bg-surface-elevated p-4 md:flex">
       <div className="flex flex-col gap-6">
         <Logo className="mx-3 h-8 w-auto self-start" />
         <nav aria-label="Principal" className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
+          {navItemsFor(isAdmin).map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} />
           ))}
         </nav>

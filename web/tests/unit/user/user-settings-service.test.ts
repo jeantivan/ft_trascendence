@@ -9,6 +9,7 @@ import {
 } from "@/lib/user/user-settings-service";
 import { UserAlreadyExistsError } from "@/lib/auth/user-repository";
 import { hashPassword } from "@/lib/auth/password";
+import type { PurgeHealthDataInput } from "@/lib/user/schemas";
 
 describe("UserSettingsService", () => {
   let repo: InMemoryUserRepository;
@@ -252,6 +253,261 @@ describe("UserSettingsService", () => {
           newPassword: "short",
         })
       ).rejects.toThrow();
+    });
+  });
+
+  describe("updatePrivacy", () => {
+    it("updates privacy settings for active user", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const updated = await service.updatePrivacy(user.id, {
+        statsPublic: true,
+        showOnline: false,
+        notificationsEnabled: false,
+      });
+
+      expect(updated.statsPublic).toBe(true);
+      expect(updated.showOnline).toBe(false);
+      expect(updated.notificationsEnabled).toBe(false);
+    });
+
+    it("updates a single privacy setting without changing the others", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const updated = await service.updatePrivacy(user.id, {
+        showOnline: false,
+      });
+
+      expect(updated.showOnline).toBe(false);
+      expect(updated.statsPublic).toBe(false);
+      expect(updated.notificationsEnabled).toBe(true);
+    });
+
+    it("throws UserNotFoundError when user is blocked", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+      const inMemoryUser = await repo.findById(user.id);
+      if (inMemoryUser) inMemoryUser.blockedAt = new Date();
+
+      await expect(
+        service.updatePrivacy(user.id, { statsPublic: true })
+      ).rejects.toThrow(UserNotFoundError);
+    });
+  });
+
+  describe("health consent", () => {
+    it("gives health consent and creates audit log", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const updated = await service.giveHealthConsent(user.id);
+
+      expect(updated.healthConsentAt).not.toBeNull();
+      expect(updated.healthConsentVersion).toBe(1);
+      expect(repo.auditLogs).toHaveLength(1);
+      expect(repo.auditLogs[0]).toMatchObject({
+        actorId: user.id,
+        subjectId: user.id,
+        actorRole: null,
+        action: "consent_given",
+        resource: "health_consent",
+      });
+    });
+
+    it("withdraws health consent and creates audit log", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+      await service.giveHealthConsent(user.id);
+
+      const withdrawn = await service.withdrawHealthConsent(user.id);
+
+      expect(withdrawn.healthConsentAt).toBeNull();
+      expect(withdrawn.healthConsentVersion).toBeNull();
+      expect(repo.auditLogs).toHaveLength(2);
+      expect(repo.auditLogs[1]).toMatchObject({
+        actorId: user.id,
+        subjectId: user.id,
+        actorRole: null,
+        action: "consent_withdrawn",
+        resource: "health_consent",
+      });
+    });
+
+    it("is a no-op when giving health consent twice with the same version", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const first = await service.giveHealthConsent(user.id);
+      const second = await service.giveHealthConsent(user.id);
+
+      expect(second.healthConsentAt).toEqual(first.healthConsentAt);
+      expect(second.healthConsentVersion).toBe(first.healthConsentVersion);
+      expect(repo.auditLogs).toHaveLength(1);
+    });
+
+    it("is a no-op when withdrawing health consent without prior consent", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      const withdrawn = await service.withdrawHealthConsent(user.id);
+
+      expect(withdrawn.healthConsentAt).toBeNull();
+      expect(withdrawn.healthConsentVersion).toBeNull();
+      expect(repo.auditLogs).toHaveLength(0);
+    });
+
+    it("throws UserNotFoundError when user is blocked", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+      const inMemoryUser = await repo.findById(user.id);
+      if (inMemoryUser) inMemoryUser.blockedAt = new Date();
+
+      await expect(service.giveHealthConsent(user.id)).rejects.toThrow(UserNotFoundError);
+      await expect(service.withdrawHealthConsent(user.id)).rejects.toThrow(UserNotFoundError);
+    });
+  });
+
+  describe("purgeHealthData", () => {
+    it("purges RPE, strips cardiac metrics and deletes athlete feedback", async () => {
+      const athlete = await repo.createUser({
+        email: "athlete@42.com",
+        passwordHash: "hash123",
+        nick: "athlete42",
+      });
+      const other = await repo.createUser({
+        email: "other@42.com",
+        passwordHash: "hash123",
+        nick: "other42",
+      });
+
+      repo.sessionLogs.push(
+        {
+          id: "log-1",
+          athleteId: athlete.id,
+          completed: true,
+          rpe: 8,
+          distanceM: 10000,
+          durationS: 3600,
+          extra: { avgHeartRate: 165, incompletion_reason: "none" },
+        },
+        {
+          id: "log-2",
+          athleteId: other.id,
+          completed: true,
+          rpe: 7,
+          distanceM: 5000,
+          durationS: 1800,
+          extra: { avgHeartRate: 150 },
+        }
+      );
+
+      repo.feedbacks.push(
+        { id: "fb-1", athleteId: athlete.id, body: "Buen ritmo" },
+        { id: "fb-2", athleteId: other.id, body: "Ánimo" }
+      );
+
+      await service.purgeHealthData(athlete.id, { confirm: true });
+
+      // Athlete's log has rpe null, cardiac metrics stripped, but distance/duration/completed intact
+      const athleteLog = repo.sessionLogs.find((l) => l.id === "log-1");
+      expect(athleteLog).toEqual({
+        id: "log-1",
+        athleteId: athlete.id,
+        completed: true,
+        rpe: null,
+        distanceM: 10000,
+        durationS: 3600,
+        extra: { incompletion_reason: "none" },
+      });
+
+      // Other athlete's log untouched
+      const otherLog = repo.sessionLogs.find((l) => l.id === "log-2");
+      expect(otherLog?.rpe).toBe(7);
+      expect(otherLog?.extra).toEqual({ avgHeartRate: 150 });
+
+      // Athlete's feedback deleted; other athlete's feedback kept
+      expect(repo.feedbacks).toHaveLength(1);
+      expect(repo.feedbacks[0].id).toBe("fb-2");
+
+      expect(repo.auditLogs).toHaveLength(1);
+      expect(repo.auditLogs[0]).toMatchObject({
+        actorId: athlete.id,
+        subjectId: athlete.id,
+        actorRole: null,
+        action: "delete",
+        resource: "health_data",
+      });
+    });
+
+    it("rejects purge without confirmation", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+
+      repo.sessionLogs.push({
+        id: "log-keep",
+        athleteId: user.id,
+        completed: true,
+        rpe: 7,
+        distanceM: 5000,
+        durationS: 1800,
+        extra: { avgHeartRate: 155 },
+      });
+      repo.feedbacks.push({
+        id: "fb-keep",
+        athleteId: user.id,
+        body: "Buen ritmo",
+      });
+
+      await expect(
+        service.purgeHealthData(user.id, { confirm: false } as unknown as PurgeHealthDataInput)
+      ).rejects.toThrow();
+
+      expect(repo.sessionLogs[0]?.rpe).toBe(7);
+      expect(repo.sessionLogs[0]?.extra).toEqual({ avgHeartRate: 155 });
+      expect(repo.feedbacks).toHaveLength(1);
+    });
+
+    it("throws UserNotFoundError when user is blocked", async () => {
+      const user = await repo.createUser({
+        email: "runner@42.com",
+        passwordHash: "hash123",
+        nick: "runner42",
+      });
+      const inMemoryUser = await repo.findById(user.id);
+      if (inMemoryUser) inMemoryUser.blockedAt = new Date();
+
+      await expect(
+        service.purgeHealthData(user.id, { confirm: true })
+      ).rejects.toThrow(UserNotFoundError);
     });
   });
 });

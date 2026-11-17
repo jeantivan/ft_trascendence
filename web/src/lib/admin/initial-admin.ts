@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { hashPassword } from "@/lib/auth/password";
-import { emailSchema } from "@/lib/auth/schemas";
+import { emailSchema, passwordSchema } from "@/lib/auth/schemas";
 
 // The first Admin of a fresh install (#213): without one, nobody can create clubs
 // (matrix #2). Run on every start (make and make dev), before the app takes
@@ -19,6 +19,11 @@ export async function ensureInitialAdmin(
   // The errors name the .env variable to fix and never show a value (AGENTS.md)
   if (input.password.trim() === "") {
     throw new Error("ADMIN_PASSWORD is empty in .env: run make again to generate it");
+  }
+  // The same rule as sign-up, so a password edited by hand cannot be weaker than any user's.
+  // The ones make generates (8 characters) pass. Only the rule is named, never the value
+  if (!passwordSchema.safeParse(input.password).success) {
+    throw new Error("ADMIN_PASSWORD in .env must have 8 to 72 characters (and at most 72 bytes): fix it or empty it and run make again");
   }
   // Trimmed and in lowercase like sign-up, so an email edited by hand in .env
   // still finds the same account

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { verifyPassword } from "@/lib/auth/password";
+import { authorizeCredentials } from "@/lib/auth/credentials";
 import { ensureInitialAdmin } from "@/lib/admin/initial-admin";
 
 // Each test uses its own email, so files running at the same time never touch these rows
@@ -27,8 +27,12 @@ describe("Integration: ensureInitialAdmin", () => {
     expect(result).toEqual({ status: "created", email });
     const user = await userByEmail(email);
     expect(user?.roleGlobal).toBe("admin");
-    // Same hash as sign-up (hashPassword), so the login's verifyPassword accepts it
-    await expect(verifyPassword("a-long-random-password", user!.passwordHash!)).resolves.toBe(true);
+    // Through the real login (authorizeCredentials), not only verifyPassword: if the login gains
+    // another condition, an Admin that cannot sign in must not stay green
+    await expect(authorizeCredentials({ email, password: "a-long-random-password" })).resolves.toMatchObject({
+      email,
+      roleGlobal: "admin",
+    });
   });
 
   // Every make runs it again: the Admin may have changed the password since
@@ -71,6 +75,34 @@ describe("Integration: ensureInitialAdmin", () => {
     expect(error?.message).toMatch(variable);
     expect(error?.message).not.toContain("secret-value-123");
     await expect(prisma.user.count({ where: { email: { in: [input.email, "not-an-email"] } } })).resolves.toBe(0);
+  });
+
+  // Same rule as sign-up (passwordSchema): a password edited by hand in .env must not give the
+  // Admin a weaker one than any user has. The generated ones (8 characters) still pass
+  it.each([
+    ["a password shorter than 8 characters", "short-1"],
+    ["a password longer than 72 characters", "x".repeat(73)],
+    ["a password over 72 bytes", "é".repeat(40)],
+  ])("stops with %s, naming ADMIN_PASSWORD without showing it, and creates nothing", async (_name, password) => {
+    const email = `weak${DOMAIN}`;
+
+    const error = await ensureInitialAdmin(prisma, { email, password }).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+
+    expect(error?.message).toMatch(/ADMIN_PASSWORD/);
+    expect(error?.message).not.toContain(password);
+    await expect(prisma.user.count({ where: { email } })).resolves.toBe(0);
+  });
+
+  it("accepts a password of exactly 8 characters, like the ones make generates", async () => {
+    const email = `eight${DOMAIN}`;
+
+    await expect(ensureInitialAdmin(prisma, { email, password: "a1b2c3d4" })).resolves.toEqual({
+      status: "created",
+      email,
+    });
   });
 
   // .env is edited by hand: sign-up keeps emails trimmed and in lowercase, so this must too
