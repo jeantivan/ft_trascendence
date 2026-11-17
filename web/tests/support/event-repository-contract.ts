@@ -472,5 +472,96 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       // So the calendar can show why it no longer happens
       expect(list).toMatchObject([{ id: eventId, cancelledAt: CANCEL_AT }]);
     });
+
+    it("updateEvent changes every field and leaves cancelledAt alone", async () => {
+      const { repo, createClub, addManager, addSession } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      const sessionId = await addSession(orgId, { origin: "template", athleteId: null });
+      // All four different from eventData(), so each one is checked
+      const edited = eventData({
+        title: "Series en pista",
+        location: "Pista de Vallehermoso",
+        startsAt: TOMORROW_LATE,
+        sessionId,
+      });
+
+      const result = await repo.updateEvent(orgId, eventId, edited, NOW);
+
+      expect(result).toEqual({ ok: true });
+      await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toEqual({
+        id: eventId,
+        orgId,
+        ...edited,
+        cancelledAt: null,
+        approvedCount: 0,
+        mySpotRequest: null,
+      });
+    });
+
+    it("updateEvent of an id no Event has is not-found", async () => {
+      const { repo, createClub } = createFixture();
+      const orgId = await createClub();
+
+      await expect(repo.updateEvent(orgId, UNKNOWN_ID, eventData(), NOW)).resolves.toEqual({
+        ok: false,
+        reason: "not-found",
+      });
+    });
+
+    it("updateEvent of an Event of another club is not-found and leaves it as it was", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+
+      const result = await repo.updateEvent(orgB, eventId, eventData({ title: "Otro" }), NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      const view = await repo.getEventForMember(orgA, eventId, managerA);
+      expect(view?.title).toBe(eventData().title);
+    });
+
+    it("updateEvent rejects a cancelled Event and leaves it as it was", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // Later than the cancel and before the start: only the cancel is wrong
+      const result = await repo.updateEvent(
+        orgId,
+        eventId,
+        eventData({ title: "Otro" }),
+        CANCEL_AGAIN_AT,
+      );
+
+      expect(result).toEqual({ ok: false, reason: "cancelled" });
+      const view = await repo.getEventForMember(orgId, eventId, managerId);
+      expect(view?.title).toBe(eventData().title);
+    });
+
+    it("updateEvent rejects an Event that starts right now", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      // now equal to startsAt: the limit. The new startsAt is still in the
+      // future, so only the start of the stored Event is wrong
+      const result = await repo.updateEvent(
+        orgId,
+        eventId,
+        eventData({ startsAt: TOMORROW_END }),
+        TOMORROW,
+      );
+
+      expect(result).toEqual({ ok: false, reason: "started" });
+      const view = await repo.getEventForMember(orgId, eventId, managerId);
+      expect(view?.startsAt).toEqual(TOMORROW);
+    });
   });
 }

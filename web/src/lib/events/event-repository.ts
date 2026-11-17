@@ -23,6 +23,20 @@ export type CreateEventResult =
   // tell whether another club's Session exists
   | { ok: false; reason: "invalid-session" };
 
+// The reasons in the fixed order of the spec: when several apply, the first wins
+export type UpdateEventResult =
+  | { ok: true }
+  // Does not exist or is from another club
+  | { ok: false; reason: "not-found" }
+  // A cancelled Event is history: it is not edited
+  | { ok: false; reason: "cancelled" }
+  // startsAt is now or earlier: it may already have Feedback
+  | { ok: false; reason: "started" }
+  // The new startsAt is now or earlier: the Event would be frozen by accident
+  | { ok: false; reason: "starts-in-the-past" }
+  // As in CreateEventResult: one reason for the three cases
+  | { ok: false; reason: "invalid-session" };
+
 export type CancelEventResult =
   // changed false: it was already cancelled, and keeps the first date. So a
   // double click is not an error
@@ -44,6 +58,14 @@ export interface EventRepository {
     data: EventData,
     now: Date,
   ): Promise<CreateEventResult>;
+
+  // data has every field, not only the changed ones. Never touches cancelledAt
+  updateEvent(
+    orgId: string,
+    eventId: string,
+    data: EventData,
+    now: Date,
+  ): Promise<UpdateEventResult>;
 
   // Sets cancelledAt to now, only before it starts. Already cancelled comes
   // before started in the fixed order: a second cancel after the start is
@@ -133,6 +155,42 @@ export class PrismaEventRepository implements EventRepository {
       select: { id: true },
     });
     return { ok: true, eventId: event.id };
+  }
+
+  async updateEvent(
+    orgId: string,
+    eventId: string,
+    data: EventData,
+    now: Date,
+  ): Promise<UpdateEventResult> {
+    // The same compare-and-swap as cancelEvent: a cancel that lands between a
+    // check and the write can never let the edit through
+    const { count } = await this.db.event.updateMany({
+      where: { id: eventId, orgId, cancelledAt: null, startsAt: { gt: now } },
+      // Field by field and not data whole: an object may carry more fields than
+      // its type says, and cancelledAt must never change here
+      data: {
+        title: data.title,
+        location: data.location,
+        startsAt: data.startsAt,
+        sessionId: data.sessionId,
+      },
+    });
+    if (count === 1) {
+      return { ok: true };
+    }
+    // Nothing changed: read why, in the fixed order
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: { cancelledAt: true },
+    });
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    return { ok: false, reason: "started" };
   }
 
   async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {

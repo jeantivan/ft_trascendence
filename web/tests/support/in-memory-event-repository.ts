@@ -6,6 +6,7 @@ import type {
   CreateEventResult,
   EventData,
   EventRepository,
+  UpdateEventResult,
 } from "@/lib/events/event-repository";
 import type { NewSession } from "./event-repository-contract";
 
@@ -84,6 +85,33 @@ export class InMemoryEventRepository implements EventRepository {
     const id = randomUUID();
     this.events.set(id, { ...data, id, orgId, createdBy, cancelledAt: null });
     return { ok: true, eventId: id };
+  }
+
+  async updateEvent(
+    orgId: string,
+    eventId: string,
+    data: EventData,
+    now: Date,
+  ): Promise<UpdateEventResult> {
+    const event = this.events.get(eventId);
+    // The ifs follow the fixed order: not-found, cancelled, started
+    if (!event || event.orgId !== orgId) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Field by field and not { ...data }: an object may carry more fields than
+    // its type says, and cancelledAt must never change here
+    event.title = data.title;
+    event.location = data.location;
+    event.startsAt = data.startsAt;
+    event.sessionId = data.sessionId;
+    return { ok: true };
   }
 
   async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {
