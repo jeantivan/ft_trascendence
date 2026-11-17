@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import type { PrismaClient, GlobalRole } from "@/generated/prisma/client";
+import { Prisma, type PrismaClient, type GlobalRole } from "@/generated/prisma/client";
+import { stripCardiacMetrics } from "@/lib/user/strip-cardiac-metrics";
+import { recordAudit } from "@/lib/gdpr/audit";
 
 export class UserAlreadyExistsError extends Error {
   constructor(message = "User already exists") {
@@ -29,6 +31,14 @@ export interface CreateUserInput {
   nick: string;
 }
 
+export interface UpdatePrivacySettingsInput {
+  statsPublic?: boolean;
+  showOnline?: boolean;
+  notificationsEnabled?: boolean;
+}
+
+export const CURRENT_HEALTH_CONSENT_VERSION = 1;
+
 export interface UserRepository {
   findByEmail(email: string): Promise<AuthUser | null>;
   findById(id: string): Promise<AuthUser | null>;
@@ -36,6 +46,10 @@ export interface UserRepository {
   updateNick(id: string, nick: string): Promise<AuthUser>;
   updateEmail(id: string, email: string): Promise<AuthUser>;
   updatePassword(id: string, passwordHash: string): Promise<AuthUser>;
+  updatePrivacy(id: string, settings: UpdatePrivacySettingsInput): Promise<AuthUser>;
+  giveHealthConsent(id: string, version: number): Promise<AuthUser>;
+  withdrawHealthConsent(id: string): Promise<AuthUser>;
+  purgeHealthData(id: string): Promise<void>;
 }
 
 export const authUserSelect = {
@@ -155,6 +169,119 @@ export class PrismaUserRepository implements UserRepository {
       select: authUserSelect,
     });
     return this.toAuthUser(user);
+  }
+
+  async updatePrivacy(id: string, settings: UpdatePrivacySettingsInput): Promise<AuthUser> {
+    const user = await this.db.user.update({
+      where: { id },
+      data: {
+        ...(settings.statsPublic !== undefined && { statsPublic: settings.statsPublic }),
+        ...(settings.showOnline !== undefined && { showOnline: settings.showOnline }),
+        ...(settings.notificationsEnabled !== undefined && { notificationsEnabled: settings.notificationsEnabled }),
+      },
+      select: authUserSelect,
+    });
+    return this.toAuthUser(user);
+  }
+
+  private async setHealthConsent(
+    id: string,
+    consent: { healthConsentAt: Date | null; healthConsentVersion: number | null },
+    action: "consent_given" | "consent_withdrawn"
+  ): Promise<AuthUser> {
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
+
+      const current = await tx.user.findUniqueOrThrow({
+        where: { id },
+        select: authUserSelect,
+      });
+
+      const unchanged =
+        action === "consent_given"
+          ? current.healthConsentAt !== null &&
+            current.healthConsentVersion === consent.healthConsentVersion
+          : current.healthConsentAt === null;
+
+      if (unchanged) {
+        return this.toAuthUser(current);
+      }
+
+      const user = await tx.user.update({
+        where: { id },
+        data: consent,
+        select: authUserSelect,
+      });
+
+      await recordAudit(tx, {
+        actorId: id,
+        subjectId: id,
+        actorRole: null,
+        action,
+        resource: "health_consent",
+        resourceId: null,
+      });
+
+      return this.toAuthUser(user);
+    });
+  }
+
+  async giveHealthConsent(id: string, version: number): Promise<AuthUser> {
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: new Date(), healthConsentVersion: version },
+      "consent_given"
+    );
+  }
+
+  async withdrawHealthConsent(id: string): Promise<AuthUser> {
+    return this.setHealthConsent(
+      id,
+      { healthConsentAt: null, healthConsentVersion: null },
+      "consent_withdrawn"
+    );
+  }
+
+  async purgeHealthData(id: string): Promise<void> {
+    await this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
+
+      await tx.feedback.deleteMany({
+        where: { athleteId: id },
+      });
+
+      const logsWithExtra = await tx.sessionLog.findMany({
+        where: {
+          athleteId: id,
+          extra: { not: Prisma.JsonNullValueFilter.AnyNull },
+        },
+        select: { id: true, extra: true },
+      });
+
+      for (const log of logsWithExtra) {
+        const cleaned = stripCardiacMetrics(log.extra);
+        await tx.sessionLog.update({
+          where: { id: log.id },
+          data: {
+            extra: cleaned === null ? Prisma.DbNull : (cleaned as Prisma.InputJsonValue),
+          },
+        });
+      }
+
+      await tx.sessionLog.updateMany({
+        where: { athleteId: id },
+        data: { rpe: null },
+      });
+
+      await recordAudit(tx, {
+        actorId: id,
+        subjectId: id,
+        actorRole: null,
+        action: "delete",
+        resource: "health_data",
+        resourceId: null,
+      });
+    });
   }
 }
 

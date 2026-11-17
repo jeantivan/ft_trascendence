@@ -22,7 +22,7 @@ export type AuditEntry = {
   resource: string;
   resourceId: string | null;
 } & (
-  | { actorRole: null; action: SelfAction }
+  | { actorRole: null; action: SelfAction | "delete" }
   | { actorRole: "manager"; action: ManagerAction }
   | { actorRole: "admin"; action: AdminAction }
 );
