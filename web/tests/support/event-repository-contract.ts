@@ -563,5 +563,81 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       const view = await repo.getEventForMember(orgId, eventId, managerId);
       expect(view?.startsAt).toEqual(TOMORROW);
     });
+
+    it("updateEvent rejects a new start right now and leaves the Event as it was", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      // The stored Event has not started: only the new startsAt is wrong
+      const result = await repo.updateEvent(orgId, eventId, eventData({ startsAt: NOW }), NOW);
+
+      expect(result).toEqual({ ok: false, reason: "starts-in-the-past" });
+      const view = await repo.getEventForMember(orgId, eventId, managerId);
+      expect(view?.startsAt).toEqual(TOMORROW);
+    });
+
+    it("updateEvent rejects a Session of another club and leaves the Event as it was", async () => {
+      const { repo, createClub, addManager, addSession } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+      // A valid Session in every other way: only the club is wrong
+      const sessionB = await addSession(orgB, { origin: "template", athleteId: null });
+
+      const result = await repo.updateEvent(
+        orgA,
+        eventId,
+        eventData({ sessionId: sessionB }),
+        NOW,
+      );
+
+      expect(result).toEqual({ ok: false, reason: "invalid-session" });
+      const view = await repo.getEventForMember(orgA, eventId, managerA);
+      expect(view?.sessionId).toBeNull();
+    });
+
+    // The fixed order: the state of the stored Event before the new data, and
+    // inside the new data the start before the Session, as in createEvent
+    it("updateEvent of an Event cancelled and started is cancelled", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // now is TOMORROW: cancelled and started at once
+      await expect(
+        repo.updateEvent(orgId, eventId, eventData({ startsAt: TOMORROW_END }), TOMORROW),
+      ).resolves.toEqual({ ok: false, reason: "cancelled" });
+    });
+
+    it("updateEvent of a started Event with a new start in the past is started", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      // now is TOMORROW and the new startsAt is NOW, earlier: both wrong
+      await expect(
+        repo.updateEvent(orgId, eventId, eventData({ startsAt: NOW }), TOMORROW),
+      ).resolves.toEqual({ ok: false, reason: "started" });
+    });
+
+    it("updateEvent checks the new start before the Session", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      // Both wrong: the first reason in the fixed order wins
+      const data = eventData({ startsAt: NOW, sessionId: UNKNOWN_ID });
+
+      await expect(repo.updateEvent(orgId, eventId, data, NOW)).resolves.toEqual({
+        ok: false,
+        reason: "starts-in-the-past",
+      });
+    });
   });
 }

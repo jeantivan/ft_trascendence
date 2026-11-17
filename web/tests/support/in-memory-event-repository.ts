@@ -70,17 +70,8 @@ export class InMemoryEventRepository implements EventRepository {
     if (data.startsAt <= now) {
       return { ok: false, reason: "starts-in-the-past" };
     }
-    if (data.sessionId !== null) {
-      const session = this.sessions.get(data.sessionId);
-      // Only a group Session of a Training Template of the same club (#147, question f)
-      if (
-        !session ||
-        session.orgId !== orgId ||
-        session.origin !== "template" ||
-        session.athleteId !== null
-      ) {
-        return { ok: false, reason: "invalid-session" };
-      }
+    if (data.sessionId !== null && !this.sessionIsValid(orgId, data.sessionId)) {
+      return { ok: false, reason: "invalid-session" };
     }
     const id = randomUUID();
     this.events.set(id, { ...data, id, orgId, createdBy, cancelledAt: null });
@@ -105,6 +96,13 @@ export class InMemoryEventRepository implements EventRepository {
     if (event.startsAt <= now) {
       return { ok: false, reason: "started" };
     }
+    // The new data, after the state and in the same order as createEvent
+    if (data.startsAt <= now) {
+      return { ok: false, reason: "starts-in-the-past" };
+    }
+    if (data.sessionId !== null && !this.sessionIsValid(orgId, data.sessionId)) {
+      return { ok: false, reason: "invalid-session" };
+    }
     // Field by field and not { ...data }: an object may carry more fields than
     // its type says, and cancelledAt must never change here
     event.title = data.title;
@@ -112,6 +110,19 @@ export class InMemoryEventRepository implements EventRepository {
     event.startsAt = data.startsAt;
     event.sessionId = data.sessionId;
     return { ok: true };
+  }
+
+  // Whether a Session can be linked to an Event of that club: only a group
+  // Session of a Training Template of the same club (#147, question f).
+  // Shared by createEvent and updateEvent
+  private sessionIsValid(orgId: string, sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    return (
+      session !== undefined &&
+      session.orgId === orgId &&
+      session.origin === "template" &&
+      session.athleteId === null
+    );
   }
 
   async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {

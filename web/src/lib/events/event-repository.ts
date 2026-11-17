@@ -128,17 +128,8 @@ export class PrismaEventRepository implements EventRepository {
     if (data.startsAt <= now) {
       return { ok: false, reason: "starts-in-the-past" };
     }
-    if (data.sessionId !== null) {
-      const session = await this.db.trainingSession.findFirst({
-        // Only a group Session of a Training Template of the same club (#147, question f).
-        // Known limit (#238): a Session deleted between this read and the create
-        // makes the create throw (foreign key) instead of returning invalid-session
-        where: { id: data.sessionId, orgId, origin: "template", athleteId: null },
-        select: { id: true },
-      });
-      if (!session) {
-        return { ok: false, reason: "invalid-session" };
-      }
+    if (data.sessionId !== null && !(await this.sessionIsValid(orgId, data.sessionId))) {
+      return { ok: false, reason: "invalid-session" };
     }
     const event = await this.db.event.create({
       data: {
@@ -163,26 +154,36 @@ export class PrismaEventRepository implements EventRepository {
     data: EventData,
     now: Date,
   ): Promise<UpdateEventResult> {
-    // The same compare-and-swap as cancelEvent: a cancel that lands between a
-    // check and the write can never let the edit through
-    const { count } = await this.db.event.updateMany({
-      where: { id: eventId, orgId, cancelledAt: null, startsAt: { gt: now } },
-      // Field by field and not data whole: an object may carry more fields than
-      // its type says, and cancelledAt must never change here
-      data: {
-        title: data.title,
-        location: data.location,
-        startsAt: data.startsAt,
-        sessionId: data.sessionId,
-      },
-    });
-    if (count === 1) {
-      return { ok: true };
+    // The new data first, in the same order as createEvent. null: it is fine
+    let dataReason: "starts-in-the-past" | "invalid-session" | null = null;
+    if (data.startsAt <= now) {
+      dataReason = "starts-in-the-past";
+    } else if (data.sessionId !== null && !(await this.sessionIsValid(orgId, data.sessionId))) {
+      dataReason = "invalid-session";
     }
-    // Nothing changed: read why, in the fixed order
+    if (dataReason === null) {
+      // The same compare-and-swap as cancelEvent: a cancel that lands between a
+      // check and the write can never let the edit through
+      const { count } = await this.db.event.updateMany({
+        where: { id: eventId, orgId, cancelledAt: null, startsAt: { gt: now } },
+        // Field by field and not data whole: an object may carry more fields than
+        // its type says, and cancelledAt must never change here
+        data: {
+          title: data.title,
+          location: data.location,
+          startsAt: data.startsAt,
+          sessionId: data.sessionId,
+        },
+      });
+      if (count === 1) {
+        return { ok: true };
+      }
+    }
+    // Nothing written: read why. The state of the Event comes before the new
+    // data in the fixed order. startsAt too: the updateMany may not have run
     const event = await this.db.event.findFirst({
       where: { id: eventId, orgId },
-      select: { cancelledAt: true },
+      select: { cancelledAt: true, startsAt: true },
     });
     if (!event) {
       return { ok: false, reason: "not-found" };
@@ -190,7 +191,27 @@ export class PrismaEventRepository implements EventRepository {
     if (event.cancelledAt !== null) {
       return { ok: false, reason: "cancelled" };
     }
-    return { ok: false, reason: "started" };
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    if (dataReason !== null) {
+      return { ok: false, reason: dataReason };
+    }
+    // The updateMany wrote nothing, yet every check passes: it should never happen
+    throw new Error(`updateEvent wrote nothing for Event ${eventId} without a reason`);
+  }
+
+  // Whether a Session can be linked to an Event of that club: only a group
+  // Session of a Training Template of the same club (#147, question f).
+  // Shared by createEvent and updateEvent. Known limit (#238): a Session deleted
+  // between this read and the write makes it throw P2003 (foreign key) instead
+  // of returning invalid-session
+  private async sessionIsValid(orgId: string, sessionId: string): Promise<boolean> {
+    const session = await this.db.trainingSession.findFirst({
+      where: { id: sessionId, orgId, origin: "template", athleteId: null },
+      select: { id: true },
+    });
+    return session !== null;
   }
 
   async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {
