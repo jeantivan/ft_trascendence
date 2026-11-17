@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
 import { prisma } from "@/lib/prisma";
 import type { EventManagerView, EventMemberView } from "./contracts";
 
@@ -253,20 +254,32 @@ export class PrismaEventRepository implements EventRepository {
     return { ok: false, reason: "started" };
   }
 
-  // _actor: not used yet. The Admin's audit row comes in the next step of #231
   async deleteEvent(
     orgId: string,
     eventId: string,
-    _actor: DeleteEventActor,
+    actor: DeleteEventActor,
   ): Promise<DeleteEventResult> {
-    // deleteMany and not delete: delete throws (P2025) when no row matches,
-    // deleteMany returns count. Postgres deletes its chat and Spot Requests too
-    // (onDelete: Cascade) and sets event_id to null in its Feedback (SetNull)
-    const { count } = await this.db.event.deleteMany({ where: { id: eventId, orgId } });
-    if (count === 0) {
-      return { ok: false, reason: "not-found" };
-    }
-    return { ok: true };
+    // The deletion and the Admin's audit row in one transaction: if the row
+    // cannot be written, the rollback brings the Event back and the error goes up
+    return this.db.$transaction(async (tx): Promise<DeleteEventResult> => {
+      // deleteMany and not delete: delete throws (P2025) when no row matches,
+      // deleteMany returns count. Postgres deletes its chat and Spot Requests too
+      // (onDelete: Cascade) and sets event_id to null in its Feedback (SetNull)
+      const { count } = await tx.event.deleteMany({ where: { id: eventId, orgId } });
+      if (count === 0) {
+        // A deletion that did not happen is not audited
+        return { ok: false, reason: "not-found" };
+      }
+      if (actor.kind === "admin") {
+        await recordAdminAction(tx, {
+          adminId: actor.adminId,
+          action: "delete",
+          resource: "event",
+          resourceId: eventId,
+        });
+      }
+      return { ok: true };
+    });
   }
 
   async listEvents(
