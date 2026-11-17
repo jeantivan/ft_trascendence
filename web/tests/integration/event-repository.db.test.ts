@@ -21,11 +21,17 @@ async function createClub(): Promise<string> {
   return club.id;
 }
 
-// A real user who is a member of the club (created_by and memberships have foreign keys)
-async function addMember(orgId: string, role: "manager" | "athlete"): Promise<string> {
+// A real user who is a member of the club (created_by and memberships have foreign keys).
+// Without a nick, nick stays null in the database
+async function addMember(
+  orgId: string,
+  role: "manager" | "athlete",
+  nick?: string,
+): Promise<string> {
   const user = await prisma.user.create({
     data: {
       email: `${PREFIX}${count++}@example.com`,
+      nick,
       memberships: { create: { orgId, role } },
     },
   });
@@ -52,8 +58,10 @@ async function addSpotRequest(
   eventId: string,
   userId: string,
   status: SpotRequestStatus,
+  createdAt?: Date,
 ): Promise<void> {
-  await prisma.spotRequest.create({ data: { eventId, userId, status } });
+  // createdAt undefined: Prisma leaves it out and Postgres puts now() (@default)
+  await prisma.spotRequest.create({ data: { eventId, userId, status, createdAt } });
 }
 
 afterEach(async () => {
@@ -73,7 +81,7 @@ runEventRepositoryContract("Prisma", () => ({
   repo: repository,
   createClub,
   addManager: (orgId) => addMember(orgId, "manager"),
-  addAthlete: (orgId) => addMember(orgId, "athlete"),
+  addAthlete: (orgId, nick) => addMember(orgId, "athlete", nick),
   addSession,
   addSpotRequest,
 }));

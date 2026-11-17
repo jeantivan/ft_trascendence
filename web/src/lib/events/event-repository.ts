@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { EventMemberView } from "./contracts";
+import type { EventManagerView, EventMemberView } from "./contracts";
 
 // What the repository receives to create or edit an Event: already validated by
 // Zod and with startsAt already converted from the club's time zone (Fase 3)
@@ -42,6 +42,10 @@ export interface EventRepository {
     eventId: string,
     viewerId: string,
   ): Promise<EventMemberView | null>;
+
+  // The only read that says who asked: the Spot Requests with their nick, oldest
+  // first. The caller checks event.readAttendees. null: does not exist or another club
+  getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null>;
 }
 
 // The production EventRepository, on Postgres
@@ -120,6 +124,43 @@ export class PrismaEventRepository implements EventRepository {
       ...fields,
       approvedCount: _count.spotRequests,
       mySpotRequest: spotRequests[0]?.status ?? null,
+    };
+  }
+
+  async getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null> {
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: {
+        id: true,
+        orgId: true,
+        title: true,
+        location: true,
+        startsAt: true,
+        sessionId: true,
+        cancelledAt: true,
+        _count: { select: { spotRequests: { where: { status: "approved" } } } },
+        // Every Spot Request, oldest first, with the nick through the user relation
+        spotRequests: {
+          orderBy: { createdAt: "asc" },
+          select: { userId: true, status: true, createdAt: true, user: { select: { nick: true } } },
+        },
+      },
+    });
+    if (!event) {
+      return null;
+    }
+    const { _count, spotRequests, ...fields } = event;
+    return {
+      ...fields,
+      approvedCount: _count.spotRequests,
+      // map: a new array with one element per row, like a for loop that fills it
+      spotRequests: spotRequests.map((request) => ({
+        athleteId: request.userId,
+        // nick is optional in users: an empty one, as in the rest of the app
+        nick: request.user.nick ?? "",
+        status: request.status,
+        createdAt: request.createdAt,
+      })),
     };
   }
 }

@@ -15,15 +15,22 @@ export interface EventFixture {
   repo: EventRepository;
   // A new club, empty
   createClub(): Promise<string>;
-  // A new user who is a Manager or an Athlete of that club; returns their id
+  // A new user who is a Manager or an Athlete of that club; returns their id.
+  // Without a nick, the user has none (nick is optional in users)
   addManager(orgId: string): Promise<string>;
-  addAthlete(orgId: string): Promise<string>;
+  addAthlete(orgId: string, nick?: string): Promise<string>;
   // A new Session of that club; returns its id. A group Session copied from a
   // Training Template has origin "template" and no athleteId
   addSession(orgId: string, session: NewSession): Promise<string>;
   // A Spot Request of that user in that Event, already in that status. The
-  // interface cannot create one until #232
-  addSpotRequest(eventId: string, userId: string, status: SpotRequestStatus): Promise<void>;
+  // interface cannot create one until #232. createdAt fixes the order of the
+  // Manager's list; without it, the moment of the call
+  addSpotRequest(
+    eventId: string,
+    userId: string,
+    status: SpotRequestStatus,
+    createdAt?: Date,
+  ): Promise<void>;
 }
 
 export interface NewSession {
@@ -219,6 +226,76 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       const view = await repo.getEventForMember(orgId, eventA, athleteId);
 
       expect(view).toMatchObject({ approvedCount: 0, mySpotRequest: null });
+    });
+
+    it("the Manager's view lists every Spot Request with its nick, oldest first", async () => {
+      const { repo, createClub, addManager, addAthlete, addSpotRequest } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const ana = await addAthlete(orgId, "Ana");
+      const bruno = await addAthlete(orgId, "Bruno");
+      const carla = await addAthlete(orgId, "Carla");
+      const data = eventData();
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, data, NOW));
+      const first = new Date("2029-12-30T10:00:00.000Z");
+      const second = new Date("2029-12-30T11:00:00.000Z");
+      const third = new Date("2029-12-30T12:00:00.000Z");
+      // Added out of order on purpose: the order must come from createdAt
+      await addSpotRequest(eventId, bruno, "approved", second);
+      await addSpotRequest(eventId, carla, "rejected", third);
+      await addSpotRequest(eventId, ana, "pending", first);
+
+      // toEqual and not toMatchObject: no mySpotRequest, a Manager has none
+      await expect(repo.getEventForManager(orgId, eventId)).resolves.toEqual({
+        id: eventId,
+        orgId,
+        title: data.title,
+        location: data.location,
+        startsAt: data.startsAt,
+        sessionId: null,
+        cancelledAt: null,
+        approvedCount: 1,
+        spotRequests: [
+          { athleteId: ana, nick: "Ana", status: "pending", createdAt: first },
+          { athleteId: bruno, nick: "Bruno", status: "approved", createdAt: second },
+          { athleteId: carla, nick: "Carla", status: "rejected", createdAt: third },
+        ],
+      });
+    });
+
+    it("the Manager's view shows an empty nick for a user without one", async () => {
+      const { repo, createClub, addManager, addAthlete, addSpotRequest } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      // No nick: null in users, as in an OAuth account before #20 fills it
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await addSpotRequest(eventId, athleteId, "pending");
+
+      const view = await repo.getEventForManager(orgId, eventId);
+
+      expect(view?.spotRequests[0]?.nick).toBe("");
+    });
+
+    it("the Manager's view of an Event of another club is null", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+
+      await expect(repo.getEventForManager(orgB, eventId)).resolves.toBeNull();
+    });
+
+    it("the Manager's view of an Event without Spot Requests has an empty list", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const view = await repo.getEventForManager(orgId, eventId);
+
+      expect(view).toMatchObject({ approvedCount: 0, spotRequests: [] });
     });
   });
 }

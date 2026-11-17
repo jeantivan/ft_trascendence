@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SpotRequestStatus } from "@/generated/prisma/enums";
-import type { EventMemberView } from "@/lib/events/contracts";
+import type { EventManagerView, EventMemberView } from "@/lib/events/contracts";
 import type { CreateEventResult, EventData, EventRepository } from "@/lib/events/event-repository";
 import type { NewSession } from "./event-repository-contract";
 
@@ -23,8 +23,18 @@ export class InMemoryEventRepository implements EventRepository {
   // primary key (event_id, user_id) of spot_requests
   private spotRequests = new Map<
     string,
-    { eventId: string; userId: string; status: SpotRequestStatus }
+    { eventId: string; userId: string; status: SpotRequestStatus; createdAt: Date }
   >();
+  // Nicks by user id: the only thing of a user the Manager's list shows.
+  // null: a user without a nick, as nick is optional in users
+  private nicks = new Map<string, string | null>();
+
+  // For the tests only: in production the users come from sign-up
+  addUser(nick: string | null): string {
+    const id = randomUUID();
+    this.nicks.set(id, nick);
+    return id;
+  }
 
   // For the tests only, not part of EventRepository: in production the
   // Sessions come from the Training Templates
@@ -35,8 +45,13 @@ export class InMemoryEventRepository implements EventRepository {
   }
 
   // For the tests only, until #232 gives EventRepository its own operations
-  addSpotRequest(eventId: string, userId: string, status: SpotRequestStatus): void {
-    this.spotRequests.set(`${eventId}/${userId}`, { eventId, userId, status });
+  addSpotRequest(
+    eventId: string,
+    userId: string,
+    status: SpotRequestStatus,
+    createdAt: Date = new Date(),
+  ): void {
+    this.spotRequests.set(`${eventId}/${userId}`, { eventId, userId, status, createdAt });
   }
 
   async createEvent(
@@ -94,6 +109,45 @@ export class InMemoryEventRepository implements EventRepository {
       approvedCount,
       // null: no Spot Request of their own
       mySpotRequest: mine?.status ?? null,
+    };
+  }
+
+  async getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null> {
+    const event = this.events.get(eventId);
+    // Another club's Event is treated as one that does not exist
+    if (!event || event.orgId !== orgId) {
+      return null;
+    }
+    // The type of the spotRequests field of EventManagerView
+    const spotRequests: EventManagerView["spotRequests"] = [];
+    let approvedCount = 0;
+    for (const request of this.spotRequests.values()) {
+      if (request.eventId !== eventId) {
+        continue;
+      }
+      if (request.status === "approved") {
+        approvedCount++;
+      }
+      spotRequests.push({
+        athleteId: request.userId,
+        // nick is optional in users: an empty one, as in the rest of the app
+        nick: this.nicks.get(request.userId) ?? "",
+        status: request.status,
+        createdAt: request.createdAt,
+      });
+    }
+    // Oldest first, like qsort with a compare function
+    spotRequests.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    return {
+      id: event.id,
+      orgId: event.orgId,
+      title: event.title,
+      location: event.location,
+      startsAt: event.startsAt,
+      sessionId: event.sessionId,
+      cancelledAt: event.cancelledAt,
+      approvedCount,
+      spotRequests,
     };
   }
 }
