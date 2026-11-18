@@ -11,7 +11,9 @@ const MARGIN_MS = 10 * 60 * 1000;
 
 // Deletes the avatar files that no Avatar row points to and that are more than
 // MARGIN_MS old (#254). It never deletes a row, so it never leaves a broken photo.
-// Returns how many files it deleted
+// Returns how many files it deleted.
+// Known limit: one app process. Two processes sweeping at once do not coordinate
+// (one instance, #238), as in cleanupInterruptedExports
 export async function sweepOrphanAvatars(db: PrismaClient, uploadsDir: string, now: Date): Promise<number> {
   // Disk first, then the database: with no avatars/ the database is not even asked
   let entries: Dirent[];
