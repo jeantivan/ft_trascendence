@@ -750,5 +750,78 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       expect(result).toEqual({ ok: false, reason: "not-found" });
       await expect(repo.getEventForMember(orgA, eventId, managerA)).resolves.not.toBeNull();
     });
+
+    // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent
+    // in upper case must work as in lower case in both implementations (review of #241).
+    // The ids come from randomUUID or Postgres, so they always have hex letters to change
+    it("createEvent takes the club, the Manager and the Session in upper case and keeps them in lower case", async () => {
+      const { repo, createClub, addManager, addAthlete, addSession } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const sessionId = await addSession(orgId, { origin: "template", athleteId: null });
+
+      const eventId = eventIdOf(
+        await repo.createEvent(
+          orgId.toUpperCase(),
+          managerId.toUpperCase(),
+          eventData({ sessionId: sessionId.toUpperCase() }),
+          NOW,
+        ),
+      );
+
+      await expect(repo.getEventForMember(orgId, eventId, athleteId)).resolves.toMatchObject({
+        id: eventId,
+        orgId,
+        sessionId,
+      });
+    });
+
+    it("the reads take the club, the Event and the viewer in upper case", async () => {
+      const { repo, createClub, addManager, addAthlete, addSpotRequest } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId, "Ana");
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await addSpotRequest(eventId, athleteId, "pending");
+      const org = orgId.toUpperCase();
+      const event = eventId.toUpperCase();
+      const viewer = athleteId.toUpperCase();
+
+      await expect(repo.getEventForMember(org, event, viewer)).resolves.toMatchObject({
+        id: eventId,
+        orgId,
+        mySpotRequest: "pending",
+      });
+      await expect(repo.getEventForManager(org, event)).resolves.toMatchObject({
+        id: eventId,
+        orgId,
+        spotRequests: [{ athleteId, nick: "Ana", status: "pending" }],
+      });
+      await expect(repo.listEvents(org, viewer, { from: NOW, to: TOMORROW_END })).resolves.toMatchObject([
+        { id: eventId, orgId, mySpotRequest: "pending" },
+      ]);
+      await expect(repo.findEventOrg(event)).resolves.toEqual({ id: eventId, orgId });
+    });
+
+    it("updateEvent, cancelEvent and deleteEvent take the club and the Event in upper case", async () => {
+      const { repo, createClub, addManager } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      const org = orgId.toUpperCase();
+      const event = eventId.toUpperCase();
+
+      await expect(repo.updateEvent(org, event, eventData({ title: "Series en pista" }), NOW)).resolves.toEqual({
+        ok: true,
+      });
+      await expect(repo.cancelEvent(org, event, CANCEL_AT)).resolves.toEqual({ ok: true, changed: true });
+      await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toMatchObject({
+        title: "Series en pista",
+        cancelledAt: CANCEL_AT,
+      });
+      await expect(repo.deleteEvent(org, event, MANAGER)).resolves.toEqual({ ok: true });
+      await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toBeNull();
+    });
   });
 }

@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
+import { normalizeId } from "@/lib/org/schemas";
 import { prisma } from "@/lib/prisma";
 import type { EventManagerView, EventMemberView } from "./contracts";
 
@@ -296,7 +297,10 @@ export class PrismaEventRepository implements EventRepository {
           adminId: actor.adminId,
           action: "delete",
           resource: "event",
-          resourceId: eventId,
+          // resource_id is a text column: Postgres would keep an upper-case id as it came.
+          // The uuid columns need nothing: Postgres compares them by value and returns
+          // them in lower case
+          resourceId: normalizeId(eventId),
         });
       }
       return { ok: true };

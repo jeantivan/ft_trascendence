@@ -4,13 +4,20 @@ import type { EventManagerView, EventMemberView } from "@/lib/events/contracts";
 import type {
   CancelEventResult,
   CreateEventResult,
-  DeleteEventActor,
   DeleteEventResult,
   EventData,
   EventRepository,
   UpdateEventResult,
 } from "@/lib/events/event-repository";
+import { normalizeId } from "@/lib/org/schemas";
 import type { NewSession } from "./event-repository-contract";
+
+// Postgres compares uuids case-insensitively and returns them in lower case; a Map and
+// === do not. So every method lower-cases the ids it receives first, as the club's
+// in-memory repository does, and an id sent in upper case finds the same rows
+function withNormalizedSession(data: EventData): EventData {
+  return { ...data, sessionId: data.sessionId === null ? null : normalizeId(data.sessionId) };
+}
 
 // An Event as stored: like a row of the events table
 interface StoredEvent extends EventData {
@@ -68,6 +75,9 @@ export class InMemoryEventRepository implements EventRepository {
     data: EventData,
     now: Date,
   ): Promise<CreateEventResult> {
+    orgId = normalizeId(orgId);
+    createdBy = normalizeId(createdBy);
+    data = withNormalizedSession(data);
     // Starting at now already counts as started
     if (data.startsAt <= now) {
       return { ok: false, reason: "starts-in-the-past" };
@@ -86,6 +96,9 @@ export class InMemoryEventRepository implements EventRepository {
     data: EventData,
     now: Date,
   ): Promise<UpdateEventResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    data = withNormalizedSession(data);
     const event = this.findInClub(orgId, eventId);
     // The ifs follow the fixed order: not-found, cancelled, started
     if (!event) {
@@ -138,6 +151,8 @@ export class InMemoryEventRepository implements EventRepository {
   }
 
   async cancelEvent(orgId: string, eventId: string, now: Date): Promise<CancelEventResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
     const event = this.findInClub(orgId, eventId);
     // The ifs follow the fixed order: not-found, cancelled, started
     if (!event) {
@@ -155,12 +170,11 @@ export class InMemoryEventRepository implements EventRepository {
     return { ok: true, changed: true };
   }
 
-  // _actor: no audit rows here, so who deletes changes nothing
-  async deleteEvent(
-    orgId: string,
-    eventId: string,
-    _actor: DeleteEventActor,
-  ): Promise<DeleteEventResult> {
+  // Without the actor of the interface: no audit rows here, so who deletes changes
+  // nothing. An implementation may leave out the parameters it does not use at the end
+  async deleteEvent(orgId: string, eventId: string): Promise<DeleteEventResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
     const event = this.findInClub(orgId, eventId);
     if (!event) {
       return { ok: false, reason: "not-found" };
@@ -181,6 +195,8 @@ export class InMemoryEventRepository implements EventRepository {
     viewerId: string,
     range: { from: Date; to: Date },
   ): Promise<EventMemberView[]> {
+    orgId = normalizeId(orgId);
+    viewerId = normalizeId(viewerId);
     const list: EventMemberView[] = [];
     for (const event of this.events.values()) {
       // [from, to): from included, to left out. Cancelled ones too
@@ -197,6 +213,9 @@ export class InMemoryEventRepository implements EventRepository {
     eventId: string,
     viewerId: string,
   ): Promise<EventMemberView | null> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    viewerId = normalizeId(viewerId);
     const event = this.findInClub(orgId, eventId);
     if (!event) {
       return null;
@@ -229,6 +248,8 @@ export class InMemoryEventRepository implements EventRepository {
   }
 
   async getEventForManager(orgId: string, eventId: string): Promise<EventManagerView | null> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
     const event = this.findInClub(orgId, eventId);
     if (!event) {
       return null;
@@ -267,7 +288,7 @@ export class InMemoryEventRepository implements EventRepository {
   }
 
   async findEventOrg(eventId: string): Promise<{ id: string; orgId: string } | null> {
-    const event = this.events.get(eventId);
+    const event = this.events.get(normalizeId(eventId));
     if (!event) {
       return null;
     }

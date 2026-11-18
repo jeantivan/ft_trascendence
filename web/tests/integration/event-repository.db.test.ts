@@ -189,6 +189,24 @@ describe("PrismaEventRepository.deleteEvent", () => {
     ]);
   });
 
+  // resource_id is a text column, not a uuid one: Postgres keeps an upper-case id as it
+  // came, and the row would no longer match the Event's id (review of #241)
+  it("the Admin's deletion with the ids in upper case writes them in lower case", async () => {
+    const orgId = await createClub();
+    const managerId = await addMember(orgId, "manager");
+    const adminId = await addAdmin();
+    const eventId = eventIdOf(await repository.createEvent(orgId, managerId, DATA, NOW));
+
+    await repository.deleteEvent(orgId.toUpperCase(), eventId.toUpperCase(), {
+      kind: "admin",
+      adminId: adminId.toUpperCase(),
+    });
+
+    await expect(
+      prisma.auditLog.findMany({ where: { actorId: adminId }, select: { actorId: true, resourceId: true } }),
+    ).resolves.toEqual([{ actorId: adminId, resourceId: eventId }]);
+  });
+
   it("a Manager's deletion writes no audit row", async () => {
     const orgId = await createClub();
     const managerId = await addMember(orgId, "manager");
