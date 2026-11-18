@@ -1,6 +1,9 @@
 # Stage 1: install dependencies (including dev dependencies, needed to build)
 FROM node:24.21.0-alpine AS deps
 WORKDIR /app
+# No "Update available" box from the Prisma CLI in dev, migrate and make seed: it
+# reads like an error and fills the migrate lines make shows when the start fails
+ENV PRISMA_HIDE_UPDATE_MESSAGE=true
 # Install as node, not root: the dev and migrate stages run as node, and tools
 # write caches inside node_modules (Vitest uses node_modules/.vitest-cache, #64)
 RUN chown node:node /app
@@ -15,8 +18,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Owned by node so the app can write to the uploads volume: Docker copies this
 # owner into the volume the first time it is mounted (issue #23). Only in dev
 # and runner, the stages that mount it. root for mkdir in /data, then node.
+# avatars/ is created here too, not by the app: with rootless Docker make dev runs
+# as root (#236), and an avatars/ it created would not be writable for node in
+# make mode, which shares this volume
 USER root
-RUN mkdir -p /data/uploads && chown node:node /data/uploads
+RUN mkdir -p /data/uploads/avatars && chown -R node:node /data/uploads
 USER node
 EXPOSE 3000
 # Generate the Prisma client at start: ./web is bind-mounted over /app,
@@ -26,13 +32,15 @@ EXPOSE 3000
 CMD ["sh", "-c", "npx prisma generate && { npx prisma db seed || echo 'SEED FAILED: see the error above. The app starts without demo data.'; } && npm run dev -- --hostname 0.0.0.0"]
 
 # Migrate stage (migrate service, used by both make and make dev): applies the
-# pending migrations to the database and exits. Keeps the Prisma CLI out of
-# the final image.
+# pending migrations, creates the initial Admin if missing (#213) and exits.
+# make seed runs the demo data from here too. Both import app code (the sign-up
+# password hash, the Prisma client), so the whole source is copied, not only
+# prisma/. Keeps the Prisma CLI out of the final image.
 FROM deps AS migrate
-COPY prisma.config.ts ./
-COPY prisma ./prisma
+COPY --chown=node:node . .
+RUN npx prisma generate
 USER node
-CMD ["npx", "prisma", "migrate", "deploy"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/initial-admin.ts"]
 
 # Stage 2: build the app (generates .next/standalone)
 FROM node:24.21.0-alpine AS build
@@ -54,8 +62,8 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
-# Same as in dev: the uploads volume must be writable by node (issue #23)
-RUN mkdir -p /data/uploads && chown node:node /data/uploads
+# Same as in dev: the uploads volume and its avatars/ must be writable by node (#23, #236)
+RUN mkdir -p /data/uploads/avatars && chown -R node:node /data/uploads
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]

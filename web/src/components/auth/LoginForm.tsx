@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type AuthActionResult } from "@/lib/auth/actions";
 import { Alert } from "@/components/ui/Alert";
@@ -22,7 +21,7 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
-      <h1 className="text-2xl font-bold text-center">Iniciar Sesión</h1>
+      <h1 className="font-heading text-headline-lg-mobile md:text-headline-lg">Iniciar Sesión</h1>
 
       {callbackUrl && (
         <input type="hidden" name="callbackUrl" value={callbackUrl} />
@@ -56,12 +55,10 @@ export function LoginForm({ callbackUrl, notice }: LoginFormProps = {}) {
         {isPending ? "Iniciando sesión..." : "Entrar"}
       </Button>
 
-      <p className="text-sm text-center text-neutral-500 mt-2">
-        ¿No tienes cuenta?{" "}
-        <Link href="/register" className="text-blue-500 underline hover:text-blue-400">
-          Regístrate aquí
-        </Link>
-      </p>
+      <p className="mt-2 text-body-sm text-text-secondary">¿No tienes cuenta?</p>
+      <Button variant="ghost" href="/register">
+        Regístrate aquí
+      </Button>
     </form>
   );
 }
