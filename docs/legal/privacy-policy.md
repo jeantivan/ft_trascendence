@@ -1,14 +1,12 @@
 # Política de Privacidad
 
-> **Borrador para revisión del equipo (sub-issue #26, parte de #8).** Los datos del responsable, el nombre de la plataforma y el CIF son **ficticios, de ejercicio**. Los textos entre `[CORCHETES]` son datos que el equipo debe confirmar antes de publicar; no se han inventado.
-
 > **Proyecto académico de 42.** Los datos identificativos del responsable y de contacto son ficticios y se utilizan exclusivamente para este ejercicio; no identifican a una empresa real responsable de este servicio.
 
 **Última actualización:** 24 de octubre de 2026
 
 ## 1. Quiénes somos
 
-Esta política describe cómo trata tus datos personales **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Esta política describe cómo trata tus datos personales **StrideSync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
 - **Responsable del tratamiento:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242. Calle De La Trancendencia, 42. 28042 Madrid, España. Teléfono +34 642 42 42 42
 - **Contacto de privacidad:** legal@stridesync.fit
