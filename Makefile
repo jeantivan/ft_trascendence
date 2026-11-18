@@ -109,6 +109,7 @@ clean: down
 # Then the dangling images of this project (#236): old versions that lost their name
 # when an image was rebuilt (1.5 GB each on the campus). Only those with the compose
 # label of this project (name: in docker-compose.yml and docker-compose.test.yml).
+# That name is fixed, so it is the same in every clone: the old versions from every clone go too.
 # --rmi local skips images with a fixed name, so the make dev / make test image
 # (transcendence-app-dev) is removed by name (#65). It is checked first so a
 # missing image prints nothing, while real errors still show.
