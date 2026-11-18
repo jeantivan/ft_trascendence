@@ -8,6 +8,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import {
+  reauthenticateAction,
   updateEmailAction,
   updateNickAction,
   updatePasswordAction,
@@ -159,11 +160,11 @@ export function ProfileCredentialsSection({
             <Alert variant="info">
               Por seguridad, confirma tu sesión recientemente antes de definir tu primera contraseña.
             </Alert>
-            <div>
-              <Button variant="ghost" href="/login?callbackUrl=/settings">
+            <form action={reauthenticateAction}>
+              <Button type="submit" variant="ghost">
                 Confirmar sesión reciente
               </Button>
-            </div>
+            </form>
           </div>
         ) : (
           <form action={passwordAction} className="flex flex-col gap-4">

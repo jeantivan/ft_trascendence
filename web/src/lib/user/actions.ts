@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
-import { auth } from "@/auth";
+import { auth, signOut } from "@/auth";
+import { UserAlreadyExistsError } from "@/lib/auth/user-repository";
 import { requireAuth } from "@/lib/permissions/require-auth";
+import type { UpdatePrivacyInput } from "./schemas";
 import {
   EmailChangeNotAllowedForOAuthError,
   InvalidCurrentPasswordError,
@@ -11,7 +13,6 @@ import {
   UserNotFoundError,
   userSettingsService,
 } from "./user-settings-service";
-import type { UpdatePrivacyInput } from "./schemas";
 
 export type SettingsActionResult =
   | { success: true; message: string }
@@ -38,6 +39,9 @@ function mapSettingsError(error: unknown): string {
   if (error instanceof EmailChangeNotAllowedForOAuthError) {
     return "Las cuentas sin contraseña no pueden cambiar el correo directamente";
   }
+  if (error instanceof UserAlreadyExistsError) {
+    return "Ese correo electrónico ya está registrado";
+  }
   if (error instanceof UserNotFoundError) {
     return "Usuario no encontrado o cuenta bloqueada";
   }
@@ -49,66 +53,68 @@ function readFormString(formData: FormData, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+async function runSettingsAction(
+  fn: (userId: string) => Promise<SettingsActionResult>
+): Promise<SettingsActionResult> {
+  const user = await requireAuth();
+
+  try {
+    const result = await fn(user.id);
+    if (result.success) {
+      revalidatePath("/settings");
+    }
+    return result;
+  } catch (error) {
+    return { success: false, error: mapSettingsError(error) };
+  }
+}
+
+export async function reauthenticateAction(): Promise<void> {
+  await signOut({ redirectTo: "/login?callbackUrl=/settings" });
+}
+
 export async function updateNickAction(
   _prevState: unknown,
   formData: FormData
 ): Promise<SettingsActionResult> {
-  const user = await requireAuth();
   const nick = readFormString(formData, "nick");
 
-  try {
-    await userSettingsService.updateNick(user.id, { nick });
-    revalidatePath("/settings");
+  return runSettingsAction(async (userId) => {
+    await userSettingsService.updateNick(userId, { nick });
     return { success: true, message: "Nick actualizado correctamente" };
-  } catch (error) {
-    return { success: false, error: mapSettingsError(error) };
-  }
+  });
 }
 
 export async function updateEmailAction(
   _prevState: unknown,
   formData: FormData
 ): Promise<SettingsActionResult> {
-  const user = await requireAuth();
   const email = readFormString(formData, "email");
   const currentPassword = readFormString(formData, "currentPassword");
 
-  try {
-    const profile = await userSettingsService.getProfile(user.id);
-    if (!profile.hasPassword && !(await isRecentAuth())) {
-      return {
-        success: false,
-        error: "Por seguridad, confirma tu sesión antes de modificar el correo.",
-        requiresReauth: true,
-      };
-    }
-
-    await userSettingsService.updateEmail(user.id, {
+  return runSettingsAction(async (userId) => {
+    await userSettingsService.updateEmail(userId, {
       email,
       currentPassword: currentPassword || undefined,
     });
-    revalidatePath("/settings");
     return { success: true, message: "Correo electrónico actualizado" };
-  } catch (error) {
-    return { success: false, error: mapSettingsError(error) };
-  }
+  });
 }
 
 export async function updatePasswordAction(
   _prevState: unknown,
   formData: FormData
 ): Promise<SettingsActionResult> {
-  const user = await requireAuth();
   const currentPassword = readFormString(formData, "currentPassword");
   const newPassword = readFormString(formData, "newPassword");
   const confirmPassword = readFormString(formData, "confirmPassword");
 
-  if (newPassword !== confirmPassword) {
-    return { success: false, error: "Las contraseñas nuevas no coinciden" };
-  }
+  return runSettingsAction(async (userId) => {
+    if (newPassword !== confirmPassword) {
+      return { success: false, error: "Las contraseñas nuevas no coinciden" };
+    }
 
-  try {
-    const profile = await userSettingsService.getProfile(user.id);
+    const profile = await userSettingsService.getProfile(userId);
     if (!profile.hasPassword && !(await isRecentAuth())) {
       return {
         success: false,
@@ -117,71 +123,48 @@ export async function updatePasswordAction(
       };
     }
 
-    await userSettingsService.updatePassword(user.id, {
+    await userSettingsService.updatePassword(userId, {
       currentPassword: currentPassword || undefined,
       newPassword,
     });
-    revalidatePath("/settings");
     return {
       success: true,
       message: profile.hasPassword
         ? "Contraseña actualizada correctamente"
         : "Primera contraseña definida correctamente",
     };
-  } catch (error) {
-    return { success: false, error: mapSettingsError(error) };
-  }
+  });
 }
 
 export async function updatePrivacyAction(
   input: UpdatePrivacyInput
 ): Promise<SettingsActionResult> {
-  const user = await requireAuth();
-
-  try {
-    await userSettingsService.updatePrivacy(user.id, input);
-    revalidatePath("/settings");
+  return runSettingsAction(async (userId) => {
+    await userSettingsService.updatePrivacy(userId, input);
     return { success: true, message: "Preferencias de privacidad actualizadas" };
-  } catch (error) {
-    return { success: false, error: mapSettingsError(error) };
-  }
+  });
 }
 
 export async function giveHealthConsentAction(): Promise<SettingsActionResult> {
-  const user = await requireAuth();
-
-  try {
-    await userSettingsService.giveHealthConsent(user.id);
-    revalidatePath("/settings");
+  return runSettingsAction(async (userId) => {
+    await userSettingsService.giveHealthConsent(userId);
     return { success: true, message: "Consentimiento de datos de salud otorgado" };
-  } catch (error) {
-    return { success: false, error: mapSettingsError(error) };
-  }
+  });
 }
 
 export async function withdrawHealthConsentAction(): Promise<SettingsActionResult> {
-  const user = await requireAuth();
-
-  try {
-    await userSettingsService.withdrawHealthConsent(user.id);
-    revalidatePath("/settings");
+  return runSettingsAction(async (userId) => {
+    await userSettingsService.withdrawHealthConsent(userId);
     return { success: true, message: "Consentimiento de datos de salud retirado" };
-  } catch (error) {
-    return { success: false, error: mapSettingsError(error) };
-  }
+  });
 }
 
 export async function purgeHealthDataAction(): Promise<SettingsActionResult> {
-  const user = await requireAuth();
-
-  try {
-    await userSettingsService.purgeHealthData(user.id, { confirm: true });
-    revalidatePath("/settings");
+  return runSettingsAction(async (userId) => {
+    await userSettingsService.purgeHealthData(userId, { confirm: true });
     return {
       success: true,
       message: "Datos de salud históricos eliminados correctamente",
     };
-  } catch (error) {
-    return { success: false, error: mapSettingsError(error) };
-  }
+  });
 }

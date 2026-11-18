@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   requireAuthMock,
   authMock,
+  signOutMock,
   revalidatePathMock,
   getProfileMock,
   updateNickMock,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   requireAuthMock: vi.fn(),
   authMock: vi.fn(),
+  signOutMock: vi.fn(),
   revalidatePathMock: vi.fn(),
   getProfileMock: vi.fn(),
   updateNickMock: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock("@/lib/permissions/require-auth", () => ({
 
 vi.mock("@/auth", () => ({
   auth: authMock,
+  signOut: signOutMock,
 }));
 
 vi.mock("next/cache", () => ({
@@ -57,16 +60,21 @@ vi.mock("@/lib/user/user-settings-service", async () => {
   };
 });
 
+import { UserAlreadyExistsError } from "@/lib/auth/user-repository";
 import {
   giveHealthConsentAction,
   purgeHealthDataAction,
+  reauthenticateAction,
   updateEmailAction,
   updateNickAction,
   updatePasswordAction,
   updatePrivacyAction,
   withdrawHealthConsentAction,
 } from "@/lib/user/actions";
-import { InvalidCurrentPasswordError } from "@/lib/user/user-settings-service";
+import {
+  EmailChangeNotAllowedForOAuthError,
+  InvalidCurrentPasswordError,
+} from "@/lib/user/user-settings-service";
 
 function makeFormData(entries: Record<string, string>): FormData {
   const fd = new FormData();
@@ -128,23 +136,30 @@ describe("user settings server actions", () => {
     expect(updatePasswordMock).not.toHaveBeenCalled();
   });
 
-  it("updateEmailAction exige sesión reciente en cuentas solo-OAuth", async () => {
-    getProfileMock.mockResolvedValueOnce({ hasPassword: false });
-    authMock.mockResolvedValueOnce({ authTime: Math.floor(Date.now() / 1000) - 600 });
-
-    const res = await updateEmailAction(null, makeFormData({ email: "nuevo@b.com" }));
-    expect(res.success).toBe(false);
-    if (!res.success) expect(res.requiresReauth).toBe(true);
-    expect(updateEmailMock).not.toHaveBeenCalled();
+  it("reauthenticateAction cierra sesión y redirige a /login con callbackUrl=/settings", async () => {
+    await reauthenticateAction();
+    expect(signOutMock).toHaveBeenCalledWith({ redirectTo: "/login?callbackUrl=/settings" });
   });
 
-  it("updateEmailAction traduce InvalidCurrentPasswordError", async () => {
+  it("updateEmailAction traduce InvalidCurrentPasswordError, EmailChangeNotAllowedForOAuthError y UserAlreadyExistsError", async () => {
     updateEmailMock.mockRejectedValueOnce(new InvalidCurrentPasswordError("Contraseña incorrecta"));
-    const res = await updateEmailAction(
-      null,
-      makeFormData({ email: "nuevo@b.com", currentPassword: "wrong" })
-    );
-    expect(res).toEqual({ success: false, error: "Contraseña incorrecta" });
+    expect(
+      await updateEmailAction(null, makeFormData({ email: "nuevo@b.com", currentPassword: "wrong" }))
+    ).toEqual({ success: false, error: "Contraseña incorrecta" });
+
+    updateEmailMock.mockRejectedValueOnce(new EmailChangeNotAllowedForOAuthError());
+    expect(await updateEmailAction(null, makeFormData({ email: "nuevo@b.com" }))).toEqual({
+      success: false,
+      error: "Las cuentas sin contraseña no pueden cambiar el correo directamente",
+    });
+
+    updateEmailMock.mockRejectedValueOnce(new UserAlreadyExistsError());
+    expect(
+      await updateEmailAction(null, makeFormData({ email: "duplicado@b.com", currentPassword: "ok" }))
+    ).toEqual({
+      success: false,
+      error: "Ese correo electrónico ya está registrado",
+    });
   });
 
   it("updatePrivacyAction, consentimiento y purga llaman al servicio y revalidan", async () => {

@@ -22,8 +22,8 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [currentImage, setCurrentImage] = useState<string | null>(initialImage);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadingFileName, setUploadingFileName] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [feedback, setFeedback] = useState<AvatarFeedback | null>(null);
@@ -43,14 +43,24 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
     event.target.value = "";
     if (!file) return;
 
-    const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
-    setUploadingFileName(file.name);
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setFeedback(null);
+  }
+
+  function handleCancelPreview() {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+  }
+
+  function handleConfirmUpload() {
+    if (!selectedFile) return;
+
     setUploadProgress(0);
     setFeedback(null);
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", selectedFile);
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/upload");
@@ -63,7 +73,7 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
 
     xhr.onload = () => {
       setUploadProgress(null);
-      setUploadingFileName(null);
+      setSelectedFile(null);
       setPreviewUrl(null);
 
       try {
@@ -85,7 +95,7 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
 
     xhr.onerror = () => {
       setUploadProgress(null);
-      setUploadingFileName(null);
+      setSelectedFile(null);
       setPreviewUrl(null);
       setFeedback({ variant: "error", message: "Error de red al subir la imagen" });
     };
@@ -155,12 +165,31 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
             </Button>
             <Button
               variant="destructive"
-              disabled={busy || currentImage === null}
+              disabled={busy || currentImage === null || selectedFile !== null}
               onClick={handleRemoveAvatar}
             >
               {isRemoving ? "Eliminando…" : "Eliminar avatar"}
             </Button>
           </div>
+
+          {selectedFile && !isUploading && (
+            <div className="flex flex-col gap-3 rounded border border-border-subtle bg-surface-overlay p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2 text-body-sm">
+                <span className="rounded border border-volt bg-surface-base px-1.5 py-0.5 font-heading text-label-caps uppercase text-volt">
+                  Vista previa
+                </span>
+                <span className="truncate text-text-secondary">{selectedFile.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" onClick={handleConfirmUpload}>
+                  Subir imagen
+                </Button>
+                <Button variant="ghost" onClick={handleCancelPreview}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
 
           {isUploading && (
             <div
@@ -171,9 +200,9 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
               <div className="flex items-center justify-between text-body-sm">
                 <div className="flex items-center gap-2">
                   <span className="rounded border border-volt bg-surface-base px-1.5 py-0.5 font-heading text-label-caps uppercase text-volt">
-                    Vista previa
+                    Subiendo
                   </span>
-                  <span className="truncate text-text-secondary">{uploadingFileName}</span>
+                  <span className="truncate text-text-secondary">{selectedFile?.name}</span>
                 </div>
                 <span className="font-heading font-bold tabular-nums text-volt">
                   {uploadProgress}%

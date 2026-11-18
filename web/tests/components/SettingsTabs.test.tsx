@@ -1,18 +1,28 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
 import type { SettingsProfile } from "@/lib/user/user-settings-service";
 
 const {
   refreshMock,
+  updateNickActionMock,
+  updateEmailActionMock,
+  updatePasswordActionMock,
   updatePrivacyActionMock,
   giveHealthConsentActionMock,
+  withdrawHealthConsentActionMock,
   purgeHealthDataActionMock,
+  reauthenticateActionMock,
 } = vi.hoisted(() => ({
   refreshMock: vi.fn(),
+  updateNickActionMock: vi.fn(),
+  updateEmailActionMock: vi.fn(),
+  updatePasswordActionMock: vi.fn(),
   updatePrivacyActionMock: vi.fn(),
   giveHealthConsentActionMock: vi.fn(),
+  withdrawHealthConsentActionMock: vi.fn(),
   purgeHealthDataActionMock: vi.fn(),
+  reauthenticateActionMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -20,12 +30,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/user/actions", () => ({
-  updateNickAction: vi.fn(async () => ({ success: true, message: "OK" })),
-  updateEmailAction: vi.fn(async () => ({ success: true, message: "OK" })),
-  updatePasswordAction: vi.fn(async () => ({ success: true, message: "OK" })),
+  reauthenticateAction: reauthenticateActionMock,
+  updateNickAction: updateNickActionMock,
+  updateEmailAction: updateEmailActionMock,
+  updatePasswordAction: updatePasswordActionMock,
   updatePrivacyAction: updatePrivacyActionMock,
   giveHealthConsentAction: giveHealthConsentActionMock,
-  withdrawHealthConsentAction: vi.fn(async () => ({ success: true, message: "OK" })),
+  withdrawHealthConsentAction: withdrawHealthConsentActionMock,
   purgeHealthDataAction: purgeHealthDataActionMock,
 }));
 
@@ -50,6 +61,18 @@ const BASE_PROFILE: SettingsProfile = {
 describe("SettingsTabs (/settings)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    updateNickActionMock.mockResolvedValue({
+      success: true,
+      message: "Nick actualizado correctamente",
+    });
+    updateEmailActionMock.mockResolvedValue({
+      success: true,
+      message: "Correo electrónico actualizado",
+    });
+    updatePasswordActionMock.mockResolvedValue({
+      success: true,
+      message: "Contraseña actualizada correctamente",
+    });
     updatePrivacyActionMock.mockResolvedValue({
       success: true,
       message: "Preferencias de privacidad actualizadas",
@@ -57,6 +80,10 @@ describe("SettingsTabs (/settings)", () => {
     giveHealthConsentActionMock.mockResolvedValue({
       success: true,
       message: "Consentimiento de datos de salud otorgado",
+    });
+    withdrawHealthConsentActionMock.mockResolvedValue({
+      success: true,
+      message: "Consentimiento de datos de salud retirado",
     });
     purgeHealthDataActionMock.mockResolvedValue({
       success: true,
@@ -81,7 +108,7 @@ describe("SettingsTabs (/settings)", () => {
     expect(screen.getByRole("heading", { name: "Borrar cuenta" })).toBeInTheDocument();
   });
 
-  it("muestra vista previa y progreso real al subir avatar con XMLHttpRequest y permite eliminarlo", async () => {
+  it("muestra vista previa antes de subir, permite cancelar o confirmar con progreso real y eliminar avatar", async () => {
     const instances: MockXHR[] = [];
 
     class MockXHR {
@@ -104,8 +131,21 @@ describe("SettingsTabs (/settings)", () => {
     render(<SettingsTabs profile={BASE_PROFILE} recentAuth />);
 
     const input = screen.getByLabelText("Seleccionar imagen de avatar");
+    const firstFile = new File(["png"], "descartada.png", { type: "image/png" });
+    fireEvent.change(input, { target: { files: [firstFile] } });
+
+    expect(screen.getByText("Vista previa")).toBeInTheDocument();
+    expect(screen.getByText("descartada.png")).toBeInTheDocument();
+    expect(instances).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByText("descartada.png")).not.toBeInTheDocument();
+
     const file = new File(["png"], "avatar.png", { type: "image/png" });
     fireEvent.change(input, { target: { files: [file] } });
+    expect(instances).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Subir imagen" }));
 
     const capturedXhr = instances[0];
     expect(capturedXhr).toBeDefined();
@@ -136,7 +176,47 @@ describe("SettingsTabs (/settings)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("muestra aviso de confirmación de sesión en cuentas solo-OAuth sin sesión reciente", () => {
+  it("envía formularios de nick, email y contraseña mostrando su estado de resultado", async () => {
+    render(<SettingsTabs profile={BASE_PROFILE} recentAuth />);
+
+    fireEvent.change(screen.getByLabelText("Nick de atleta"), {
+      target: { value: "nuevo.nick" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar nick" }));
+    await waitFor(() => {
+      expect(updateNickActionMock).toHaveBeenCalledOnce();
+      expect(screen.getByText("Nick actualizado correctamente")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("Nuevo correo electrónico"), {
+      target: { value: "nuevo@retirovolt.es" },
+    });
+    fireEvent.change(screen.getAllByLabelText("Contraseña actual")[0], {
+      target: { value: "Secret123!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar email" }));
+    await waitFor(() => {
+      expect(updateEmailActionMock).toHaveBeenCalledOnce();
+      expect(screen.getByText("Correo electrónico actualizado")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getAllByLabelText("Contraseña actual")[1], {
+      target: { value: "Secret123!" },
+    });
+    fireEvent.change(screen.getByLabelText("Nueva contraseña"), {
+      target: { value: "NewSecret123!" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirmar nueva contraseña"), {
+      target: { value: "NewSecret123!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar contraseña" }));
+    await waitFor(() => {
+      expect(updatePasswordActionMock).toHaveBeenCalledOnce();
+      expect(screen.getByText("Contraseña actualizada correctamente")).toBeInTheDocument();
+    });
+  });
+
+  it("muestra botón de reautenticación por formulario en cuentas solo-OAuth sin sesión reciente", () => {
     render(
       <SettingsTabs
         profile={{ ...BASE_PROFILE, hasPassword: false }}
@@ -145,13 +225,12 @@ describe("SettingsTabs (/settings)", () => {
     );
 
     expect(screen.getByText("Cuenta solo-OAuth")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Confirmar sesión reciente" })).toHaveAttribute(
-      "href",
-      "/login?callbackUrl=/settings"
-    );
+    const button = screen.getByRole("button", { name: "Confirmar sesión reciente" });
+    expect(button).toHaveAttribute("type", "submit");
+    expect(button.closest("form")).not.toBeNull();
   });
 
-  it("permite alternar switches de privacidad y confirmar el borrado de datos de salud en el Modal", async () => {
+  it("permite alternar switches, gestionar consentimiento de salud y confirmar purga en el Modal", async () => {
     HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
       this.setAttribute("open", "");
     });
@@ -165,16 +244,30 @@ describe("SettingsTabs (/settings)", () => {
       name: /estadísticas públicas en club profile/i,
     });
     expect(statsSwitch).toHaveAttribute("aria-checked", "false");
-    fireEvent.click(statsSwitch);
+    await act(async () => {
+      fireEvent.click(statsSwitch);
+    });
 
     await waitFor(() => {
       expect(updatePrivacyActionMock).toHaveBeenCalledWith({ statsPublic: true });
+      expect(statsSwitch).toBeEnabled();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Retirar consentimiento" }));
+    });
+    await waitFor(() => {
+      expect(withdrawHealthConsentActionMock).toHaveBeenCalledOnce();
+      expect(screen.getByText("Consentimiento de datos de salud retirado")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Borrar datos de salud" })).toBeEnabled();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Borrar datos de salud" }));
     expect(screen.getByText("¿Borrar todos tus datos de salud?")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sí, borrar datos de salud" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Sí, borrar datos de salud" }));
+    });
     await waitFor(() => {
       expect(purgeHealthDataActionMock).toHaveBeenCalledOnce();
     });
