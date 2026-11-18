@@ -9,8 +9,10 @@ import type { SessionHistory } from "./session-logs";
 // history. One session with any of them means "this group already has history".
 // consent: the history stores RPE, and RPE is only stored with health consent
 // (Privacy Policy), so these Athletes get it, dated at, in the same transaction
-// that creates the history. Only then: given on every run, it would come back
-// after the Athlete withdraws it.
+// that creates the history. Only then, not on every run: a later run leaves a
+// withdrawal as it is. It comes back only if the group loses its whole history
+// (no session of the range left, e.g. the demo club deleted, #217): the history
+// is then created again from scratch, with its consent.
 // Returns true if it created the history, false if it was already there.
 export async function ensureSessionHistory(
   db: PrismaClient,

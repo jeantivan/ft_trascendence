@@ -150,8 +150,9 @@ async function main() {
     }
     // Created only if the group has no history yet (#226): a later run leaves
     // it as it is, with the logs typed by hand and the Events linked to it.
-    // Demo data only: it gives the health consent on the Athletes' behalf, once,
-    // with the history. In the app, only the user gives consent.
+    // Demo data only: it gives the health consent on the Athletes' behalf, with
+    // the history, each time it is created from scratch. In the app, only the
+    // user gives consent.
     await ensureSessionHistory(prisma, {
       rangeIds,
       history,
