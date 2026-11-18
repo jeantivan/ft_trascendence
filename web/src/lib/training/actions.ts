@@ -1,5 +1,6 @@
 "use server";
 
+import { notFound } from "next/navigation";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { trainingRepository } from "./prisma-training-repository";
@@ -14,18 +15,20 @@ export type ActionResult<T = void> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-const defaultService = new TrainingService(trainingRepository);
+const trainingService = new TrainingService(trainingRepository);
 
 export async function listTrainingTemplatesAction(
-  orgId: string,
-  service: TrainingService = defaultService
+  orgId: string
 ): Promise<ActionResult<TrainingTemplateData[]>> {
   const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.read"]);
 
   try {
-    const templates = await service.listTemplates(user.id, orgId);
+    const templates = await trainingService.listTemplates(user.id, orgId);
     return { success: true, data: templates };
   } catch (error) {
+    if (error instanceof TrainingNotFoundError) {
+      notFound();
+    }
     if (error instanceof TrainingValidationError) {
       return { success: false, error: error.message };
     }
@@ -35,17 +38,16 @@ export async function listTrainingTemplatesAction(
 
 export async function getTrainingTemplateAction(
   orgId: string,
-  templateId: string,
-  service: TrainingService = defaultService
+  templateId: string
 ): Promise<ActionResult<TrainingTemplateData>> {
   const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.read"]);
 
   try {
-    const template = await service.getTemplate(user.id, orgId, templateId);
+    const template = await trainingService.getTemplate(user.id, orgId, templateId);
     return { success: true, data: template };
   } catch (error) {
     if (error instanceof TrainingNotFoundError) {
-      return { success: false, error: error.message };
+      notFound();
     }
     throw error;
   }
@@ -53,15 +55,17 @@ export async function getTrainingTemplateAction(
 
 export async function createTrainingTemplateAction(
   orgId: string,
-  input: unknown,
-  service: TrainingService = defaultService
+  input: unknown
 ): Promise<ActionResult<TrainingTemplateData>> {
   const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.write"]);
 
   try {
-    const created = await service.createTemplate(user.id, orgId, input);
+    const created = await trainingService.createTemplate(user.id, orgId, input);
     return { success: true, data: created };
   } catch (error) {
+    if (error instanceof TrainingNotFoundError) {
+      notFound();
+    }
     if (error instanceof TrainingValidationError) {
       return { success: false, error: error.message };
     }
@@ -72,19 +76,18 @@ export async function createTrainingTemplateAction(
 export async function updateTrainingTemplateAction(
   orgId: string,
   templateId: string,
-  input: unknown,
-  service: TrainingService = defaultService
+  input: unknown
 ): Promise<ActionResult<TrainingTemplateData>> {
   const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.write"]);
 
   try {
-    const updated = await service.updateTemplate(user.id, orgId, templateId, input);
+    const updated = await trainingService.updateTemplate(user.id, orgId, templateId, input);
     return { success: true, data: updated };
   } catch (error) {
-    if (
-      error instanceof TrainingValidationError ||
-      error instanceof TrainingNotFoundError
-    ) {
+    if (error instanceof TrainingNotFoundError) {
+      notFound();
+    }
+    if (error instanceof TrainingValidationError) {
       return { success: false, error: error.message };
     }
     throw error;
@@ -93,17 +96,16 @@ export async function updateTrainingTemplateAction(
 
 export async function deleteTrainingTemplateAction(
   orgId: string,
-  templateId: string,
-  service: TrainingService = defaultService
+  templateId: string
 ): Promise<ActionResult<void>> {
   const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.write"]);
 
   try {
-    await service.deleteTemplate(user.id, orgId, templateId);
+    await trainingService.deleteTemplate(user.id, orgId, templateId);
     return { success: true, data: undefined };
   } catch (error) {
     if (error instanceof TrainingNotFoundError) {
-      return { success: false, error: error.message };
+      notFound();
     }
     throw error;
   }

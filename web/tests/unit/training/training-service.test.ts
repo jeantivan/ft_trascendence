@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { InMemoryTrainingRepository } from "../../support/in-memory-training-repository";
+import {
+  InMemoryTrainingRepository,
+  IN_MEMORY_TX_TOKEN,
+} from "../../support/in-memory-training-repository";
 import { TrainingService } from "@/lib/training/training-service";
 import {
   TrainingForbiddenError,
@@ -12,6 +15,7 @@ describe("TrainingService", () => {
   let repo: InMemoryTrainingRepository;
   let service: TrainingService;
   let notifiedPayloads: TrainingNotificationPayload[];
+  let notifiedTxTokens: unknown[];
 
   const ORG_A = "org-1111-1111-1111-111111111111";
   const ORG_OTHER = "org-9999-9999-9999-999999999999";
@@ -24,9 +28,13 @@ describe("TrainingService", () => {
   beforeEach(() => {
     repo = new InMemoryTrainingRepository();
     notifiedPayloads = [];
-    const mockNotifier = vi.fn(async (payload: TrainingNotificationPayload) => {
-      notifiedPayloads.push(payload);
-    });
+    notifiedTxTokens = [];
+    const mockNotifier = vi.fn(
+      async (payload: TrainingNotificationPayload, tx?: unknown) => {
+        notifiedPayloads.push(payload);
+        notifiedTxTokens.push(tx);
+      }
+    );
 
     service = new TrainingService(repo, mockNotifier);
 
@@ -128,6 +136,22 @@ describe("TrainingService", () => {
       // Verify payload contains NO health data or feedback
       expect(payload).not.toHaveProperty("rpe");
       expect(payload).not.toHaveProperty("feedback");
+      expect(notifiedTxTokens[0]).toBe(IN_MEMORY_TX_TOKEN);
+    });
+
+    it("rolls back template creation if transactional notifier throws", async () => {
+      const failingService = new TrainingService(repo, async () => {
+        throw new Error("Notification failure");
+      });
+
+      await expect(
+        failingService.createTemplate(MANAGER_1, ORG_A, {
+          name: "Rolled back plan",
+          sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+        })
+      ).rejects.toThrow("Notification failure");
+
+      expect(await repo.listForManager(ORG_A)).toHaveLength(0);
     });
 
     it("rejects athlete with 403 Forbidden", async () => {
@@ -197,6 +221,30 @@ describe("TrainingService", () => {
         actorId: MANAGER_1,
         recipientIds: [MANAGER_2],
       });
+      expect(notifiedTxTokens[0]).toBe(IN_MEMORY_TX_TOKEN);
+    });
+
+    it("allows a different manager of the same club to update a template created by another manager", async () => {
+      const template = await repo.create({
+        orgId: ORG_A,
+        name: "Created by Manager 1",
+        createdBy: MANAGER_1,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      const updated = await service.updateTemplate(MANAGER_2, ORG_A, template.id, {
+        name: "Edited by Manager 2",
+      });
+
+      expect(updated.name).toBe("Edited by Manager 2");
+      expect(notifiedPayloads).toHaveLength(1);
+      expect(notifiedPayloads[0]).toEqual({
+        orgId: ORG_A,
+        templateId: template.id,
+        action: "updated",
+        actorId: MANAGER_2,
+        recipientIds: [MANAGER_1],
+      });
     });
 
     it("rejects athlete with 403 Forbidden", async () => {
@@ -233,6 +281,28 @@ describe("TrainingService", () => {
         action: "deleted",
         actorId: MANAGER_1,
         recipientIds: [MANAGER_2],
+      });
+      expect(notifiedTxTokens[0]).toBe(IN_MEMORY_TX_TOKEN);
+    });
+
+    it("allows a different manager of the same club to delete a template created by another manager", async () => {
+      const template = await repo.create({
+        orgId: ORG_A,
+        name: "Created by Manager 1",
+        createdBy: MANAGER_1,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      await service.deleteTemplate(MANAGER_2, ORG_A, template.id);
+
+      expect(await repo.findById(template.id)).toBeNull();
+      expect(notifiedPayloads).toHaveLength(1);
+      expect(notifiedPayloads[0]).toEqual({
+        orgId: ORG_A,
+        templateId: template.id,
+        action: "deleted",
+        actorId: MANAGER_2,
+        recipientIds: [MANAGER_1],
       });
     });
 

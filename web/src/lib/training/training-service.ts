@@ -8,6 +8,7 @@ import type {
   TrainingRepository,
   TrainingTemplateData,
   TrainingNotificationPublisher,
+  TrainingNotificationPayload,
 } from "./types";
 import {
   TrainingForbiddenError,
@@ -40,6 +41,31 @@ export class TrainingService {
       throw new TrainingNotFoundError();
     }
     return role;
+  }
+
+  private async notifyOtherManagers(
+    orgId: string,
+    actorId: string,
+    templateId: string,
+    action: TrainingNotificationPayload["action"],
+    tx?: unknown
+  ): Promise<void> {
+    if (!this.notifier) {
+      return;
+    }
+    const otherManagers = await this.repo.findOtherManagerIds(orgId, actorId, tx);
+    if (otherManagers.length > 0) {
+      await this.notifier(
+        {
+          orgId,
+          templateId,
+          action,
+          actorId,
+          recipientIds: otherManagers,
+        },
+        tx
+      );
+    }
   }
 
   async listTemplates(actorId: string, orgId: string): Promise<TrainingTemplateData[]> {
@@ -88,27 +114,16 @@ export class TrainingService {
       throw new TrainingValidationError(message);
     }
 
-    const created = await this.repo.create({
-      orgId,
-      name: parseResult.data.name,
-      createdBy: actorId,
-      sessions: parseResult.data.sessions,
-    });
-
-    if (this.notifier) {
-      const otherManagers = await this.repo.findOtherManagerIds(orgId, actorId);
-      if (otherManagers.length > 0) {
-        await this.notifier({
-          orgId,
-          templateId: created.id,
-          action: "created",
-          actorId,
-          recipientIds: otherManagers,
-        });
-      }
-    }
-
-    return created;
+    return this.repo.create(
+      {
+        orgId,
+        name: parseResult.data.name,
+        createdBy: actorId,
+        sessions: parseResult.data.sessions,
+      },
+      (createdId, tx) =>
+        this.notifyOtherManagers(orgId, actorId, createdId, "created", tx)
+    );
   }
 
   async updateTemplate(
@@ -133,25 +148,15 @@ export class TrainingService {
       throw new TrainingValidationError(message);
     }
 
-    const updated = await this.repo.update(templateId, {
-      name: parseResult.data.name,
-      sessions: parseResult.data.sessions,
-    });
-
-    if (this.notifier) {
-      const otherManagers = await this.repo.findOtherManagerIds(orgId, actorId);
-      if (otherManagers.length > 0) {
-        await this.notifier({
-          orgId,
-          templateId: updated.id,
-          action: "updated",
-          actorId,
-          recipientIds: otherManagers,
-        });
-      }
-    }
-
-    return updated;
+    return this.repo.update(
+      templateId,
+      {
+        name: parseResult.data.name,
+        sessions: parseResult.data.sessions,
+      },
+      (updatedId, tx) =>
+        this.notifyOtherManagers(orgId, actorId, updatedId, "updated", tx)
+    );
   }
 
   async deleteTemplate(
@@ -169,19 +174,8 @@ export class TrainingService {
       throw new TrainingNotFoundError();
     }
 
-    await this.repo.delete(templateId);
-
-    if (this.notifier) {
-      const otherManagers = await this.repo.findOtherManagerIds(orgId, actorId);
-      if (otherManagers.length > 0) {
-        await this.notifier({
-          orgId,
-          templateId,
-          action: "deleted",
-          actorId,
-          recipientIds: otherManagers,
-        });
-      }
-    }
+    await this.repo.delete(templateId, (deletedId, tx) =>
+      this.notifyOtherManagers(orgId, actorId, deletedId, "deleted", tx)
+    );
   }
 }

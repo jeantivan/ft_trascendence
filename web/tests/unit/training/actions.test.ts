@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { notFound } from "next/navigation";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import {
@@ -9,7 +10,20 @@ import {
   deleteTrainingTemplateAction,
 } from "@/lib/training/actions";
 import { InMemoryTrainingRepository } from "../../support/in-memory-training-repository";
-import { TrainingService } from "@/lib/training/training-service";
+
+const repoHolder = vi.hoisted(() => ({
+  current: null as InMemoryTrainingRepository | null,
+}));
+
+vi.mock("@/lib/training/prisma-training-repository", () => ({
+  trainingRepository: new Proxy({} as InMemoryTrainingRepository, {
+    get(_target, prop) {
+      const instance = repoHolder.current!;
+      const value = Reflect.get(instance, prop, instance);
+      return typeof value === "function" ? value.bind(instance) : value;
+    },
+  }),
+}));
 
 vi.mock("@/lib/permissions/require-org-role", () => ({
   requireOrgRole: vi.fn(),
@@ -22,9 +36,14 @@ class NextNavigationSignal extends Error {
   }
 }
 
+vi.mock("next/navigation", () => ({
+  notFound: vi.fn(() => {
+    throw new NextNavigationSignal("NEXT_NOT_FOUND");
+  }),
+}));
+
 describe("Training Server Actions", () => {
   let repo: InMemoryTrainingRepository;
-  let service: TrainingService;
 
   const ORG_A = "org-1111-1111-1111-111111111111";
   const MANAGER_USER = {
@@ -41,9 +60,9 @@ describe("Training Server Actions", () => {
   };
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     repo = new InMemoryTrainingRepository();
-    service = new TrainingService(repo);
+    repoHolder.current = repo;
 
     repo.addMember(ORG_A, MANAGER_USER.id, "manager");
     repo.addMember(ORG_A, ATHLETE_USER.id, "athlete");
@@ -63,7 +82,7 @@ describe("Training Server Actions", () => {
         sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
       });
 
-      const result = await listTrainingTemplatesAction(ORG_A, service);
+      const result = await listTrainingTemplatesAction(ORG_A);
 
       expect(requireOrgRole).toHaveBeenCalledWith(
         ORG_A,
@@ -81,7 +100,7 @@ describe("Training Server Actions", () => {
         new NextNavigationSignal("NEXT_REDIRECT")
       );
 
-      await expect(listTrainingTemplatesAction(ORG_A, service)).rejects.toThrow(
+      await expect(listTrainingTemplatesAction(ORG_A)).rejects.toThrow(
         NextNavigationSignal
       );
     });
@@ -101,7 +120,7 @@ describe("Training Server Actions", () => {
         sessions: [{ sessionType: "intervalos", dayOffset: 1 }],
       });
 
-      const result = await getTrainingTemplateAction(ORG_A, created.id, service);
+      const result = await getTrainingTemplateAction(ORG_A, created.id);
 
       expect(requireOrgRole).toHaveBeenCalledWith(
         ORG_A,
@@ -113,18 +132,16 @@ describe("Training Server Actions", () => {
       }
     });
 
-    it("returns { success: false, error } when template is not found", async () => {
+    it("triggers notFound() (404) when template is not found or belongs to another club", async () => {
       vi.mocked(requireOrgRole).mockResolvedValueOnce({
         user: MANAGER_USER,
         role: "manager",
       });
 
-      const result = await getTrainingTemplateAction(ORG_A, "non-existent-id", service);
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain("no encontrado");
-      }
+      await expect(
+        getTrainingTemplateAction(ORG_A, "non-existent-id")
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFound).toHaveBeenCalledOnce();
     });
   });
 
@@ -142,7 +159,7 @@ describe("Training Server Actions", () => {
         ],
       };
 
-      const result = await createTrainingTemplateAction(ORG_A, input, service);
+      const result = await createTrainingTemplateAction(ORG_A, input);
 
       expect(requireOrgRole).toHaveBeenCalledWith(
         ORG_A,
@@ -163,7 +180,7 @@ describe("Training Server Actions", () => {
 
       const invalidInput = { name: "", sessions: [] };
 
-      const result = await createTrainingTemplateAction(ORG_A, invalidInput, service);
+      const result = await createTrainingTemplateAction(ORG_A, invalidInput);
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -189,8 +206,7 @@ describe("Training Server Actions", () => {
       const result = await updateTrainingTemplateAction(
         ORG_A,
         created.id,
-        { name: "New Title" },
-        service
+        { name: "New Title" }
       );
 
       expect(requireOrgRole).toHaveBeenCalledWith(
@@ -201,6 +217,27 @@ describe("Training Server Actions", () => {
       if (result.success) {
         expect(result.data.name).toBe("New Title");
       }
+    });
+
+    it("triggers notFound() (404) when updating template from another club", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+
+      const otherClubTemplate = await repo.create({
+        orgId: "org-9999-9999-9999-999999999999",
+        name: "Other Club Plan",
+        createdBy: "other-manager",
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      await expect(
+        updateTrainingTemplateAction(ORG_A, otherClubTemplate.id, {
+          name: "Hijack",
+        })
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFound).toHaveBeenCalledOnce();
     });
   });
 
@@ -218,7 +255,7 @@ describe("Training Server Actions", () => {
         sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
       });
 
-      const result = await deleteTrainingTemplateAction(ORG_A, created.id, service);
+      const result = await deleteTrainingTemplateAction(ORG_A, created.id);
 
       expect(requireOrgRole).toHaveBeenCalledWith(
         ORG_A,
@@ -226,6 +263,18 @@ describe("Training Server Actions", () => {
       );
       expect(result.success).toBe(true);
       expect(await repo.findById(created.id)).toBeNull();
+    });
+
+    it("triggers notFound() (404) when deleting template from another club", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+
+      await expect(
+        deleteTrainingTemplateAction(ORG_A, "missing-template-id")
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFound).toHaveBeenCalledOnce();
     });
   });
 });

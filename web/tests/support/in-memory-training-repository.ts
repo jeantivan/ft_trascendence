@@ -6,14 +6,24 @@ import type {
   TemplateSessionData,
   CreateTrainingTemplateInput,
   UpdateTrainingTemplateInput,
+  TrainingMutationCallback,
 } from "@/lib/training/types";
+
+export const IN_MEMORY_TX_TOKEN = Symbol("in-memory-tx");
 
 export class InMemoryTrainingRepository implements TrainingRepository {
   private templates: Map<string, TrainingTemplateData> = new Map();
   private memberships: Map<string, MembershipRole> = new Map();
   private athleteGroups: Map<string, Set<string>> = new Map();
   private groupTemplates: Map<string, Set<string>> = new Map();
-  public copiedSessions: Array<{ id: string; sourceTemplateId: string | null; groupId?: string }> = [];
+  public copiedSessions: Array<{
+    id: string;
+    sourceTemplateId: string | null;
+    groupId?: string;
+    sessionType?: TemplateSessionData["sessionType"];
+    dayOffset?: number;
+    targetDistanceM?: number | null;
+  }> = [];
 
   addMember(orgId: string, userId: string, role: MembershipRole): void {
     this.memberships.set(`${orgId}:${userId}`, role);
@@ -29,7 +39,21 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     const templates = this.groupTemplates.get(groupId) ?? new Set();
     templates.add(templateId);
     this.groupTemplates.set(groupId, templates);
-    this.copiedSessions.push({ id: randomUUID(), sourceTemplateId: templateId, groupId });
+    const template = this.templates.get(templateId);
+    if (template && template.sessions.length > 0) {
+      for (const s of template.sessions) {
+        this.copiedSessions.push({
+          id: randomUUID(),
+          sourceTemplateId: templateId,
+          groupId,
+          sessionType: s.sessionType,
+          dayOffset: s.dayOffset,
+          targetDistanceM: s.targetDistanceM ?? null,
+        });
+      }
+    } else {
+      this.copiedSessions.push({ id: randomUUID(), sourceTemplateId: templateId, groupId });
+    }
   }
 
   async findRole(orgId: string, userId: string): Promise<MembershipRole | null> {
@@ -95,7 +119,10 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     return list;
   }
 
-  async create(input: CreateTrainingTemplateInput): Promise<TrainingTemplateData> {
+  async create(
+    input: CreateTrainingTemplateInput,
+    afterWrite?: TrainingMutationCallback
+  ): Promise<TrainingTemplateData> {
     const id = randomUUID();
     const sessions: TemplateSessionData[] = input.sessions.map((s, index) => ({
       ...s,
@@ -109,10 +136,20 @@ export class InMemoryTrainingRepository implements TrainingRepository {
       sessions,
     };
     this.templates.set(id, record);
+    try {
+      await afterWrite?.(id, IN_MEMORY_TX_TOKEN);
+    } catch (error) {
+      this.templates.delete(id);
+      throw error;
+    }
     return { ...record };
   }
 
-  async update(id: string, input: UpdateTrainingTemplateInput): Promise<TrainingTemplateData> {
+  async update(
+    id: string,
+    input: UpdateTrainingTemplateInput,
+    afterWrite?: TrainingMutationCallback
+  ): Promise<TrainingTemplateData> {
     const existing = this.templates.get(id);
     if (!existing) {
       throw new Error(`Template not found: ${id}`);
@@ -128,15 +165,35 @@ export class InMemoryTrainingRepository implements TrainingRepository {
       sessions,
     };
     this.templates.set(id, updated);
+    try {
+      await afterWrite?.(id, IN_MEMORY_TX_TOKEN);
+    } catch (error) {
+      this.templates.set(id, existing);
+      throw error;
+    }
     return { ...updated };
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, afterWrite?: TrainingMutationCallback): Promise<void> {
+    const existing = this.templates.get(id);
+    const affectedSessionIndices: number[] = [];
     this.templates.delete(id);
-    for (const session of this.copiedSessions) {
+    this.copiedSessions.forEach((session, idx) => {
       if (session.sourceTemplateId === id) {
+        affectedSessionIndices.push(idx);
         session.sourceTemplateId = null;
       }
+    });
+    try {
+      await afterWrite?.(id, IN_MEMORY_TX_TOKEN);
+    } catch (error) {
+      if (existing) {
+        this.templates.set(id, existing);
+      }
+      for (const idx of affectedSessionIndices) {
+        this.copiedSessions[idx].sourceTemplateId = id;
+      }
+      throw error;
     }
   }
 }

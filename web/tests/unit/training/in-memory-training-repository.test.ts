@@ -101,6 +101,30 @@ describe("InMemoryTrainingRepository", () => {
     expect(updated.sessions[1].position).toBe(1);
   });
 
+  it("updates template without altering previously copied sessions", async () => {
+    const template = await repo.create({
+      orgId: ORG_A,
+      name: "Initial Name",
+      createdBy: MANAGER_1,
+      sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 5000 }],
+    });
+
+    repo.assignTemplateToGroup(GROUP_1, template.id);
+    expect(repo.copiedSessions).toHaveLength(1);
+    const copiedBefore = { ...repo.copiedSessions[0] };
+
+    await repo.update(template.id, {
+      name: "Updated Name",
+      sessions: [{ sessionType: "intervalos", dayOffset: 3, targetDistanceM: 12000 }],
+    });
+
+    expect(repo.copiedSessions).toHaveLength(1);
+    expect(repo.copiedSessions[0]).toEqual(copiedBefore);
+    expect(repo.copiedSessions[0].sessionType).toBe("rodaje");
+    expect(repo.copiedSessions[0].targetDistanceM).toBe(5000);
+    expect(repo.copiedSessions[0].sourceTemplateId).toBe(template.id);
+  });
+
   it("deletes template and preserves copied sessions with sourceTemplateId: null", async () => {
     const template = await repo.create({
       orgId: ORG_A,

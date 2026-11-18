@@ -145,18 +145,31 @@ describe("Integration: PrismaTrainingRepository", () => {
     expect(athleteListAfter[0].id).toBe(t1.id);
   });
 
-  it("updates template name and replaces sessions in database transaction", async () => {
+  it("updates template name and replaces sessions in database transaction without altering existing TrainingSession copies", async () => {
     const created = await repo.create({
       orgId,
       name: "Original Name",
       createdBy: manager1Id,
-      sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 6000 }],
+    });
+
+    const scheduledAt = new Date("2026-11-20T09:00:00.000Z");
+    const copySession = await prisma.trainingSession.create({
+      data: {
+        orgId,
+        groupId,
+        origin: "template",
+        scheduledAt,
+        sessionType: "rodaje",
+        targetDistanceM: 6000,
+        sourceTemplateId: created.id,
+      },
     });
 
     const updated = await repo.update(created.id, {
       name: "Updated Name",
       sessions: [
-        { sessionType: "cuestas", dayOffset: 3 },
+        { sessionType: "cuestas", dayOffset: 3, targetDistanceM: 10000 },
         { sessionType: "fartlek", dayOffset: 5 },
       ],
     });
@@ -167,6 +180,38 @@ describe("Integration: PrismaTrainingRepository", () => {
     expect(updated.sessions[0].position).toBe(0);
     expect(updated.sessions[1].sessionType).toBe("fartlek");
     expect(updated.sessions[1].position).toBe(1);
+
+    // Verify previously copied TrainingSession is completely intact
+    const copyAfterUpdate = await prisma.trainingSession.findUnique({
+      where: { id: copySession.id },
+    });
+    expect(copyAfterUpdate).not.toBeNull();
+    expect(copyAfterUpdate?.sessionType).toBe("rodaje");
+    expect(copyAfterUpdate?.targetDistanceM).toBe(6000);
+    expect(copyAfterUpdate?.sourceTemplateId).toBe(created.id);
+  });
+
+  it("returns null on malformed non-UUID templateId instead of throwing P2023", async () => {
+    expect(await repo.findById("not-a-valid-uuid")).toBeNull();
+  });
+
+  it("rolls back database transaction when afterWrite callback throws", async () => {
+    await expect(
+      repo.create(
+        {
+          orgId,
+          name: "Rolled Back Template",
+          createdBy: manager1Id,
+          sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+        },
+        async () => {
+          throw new Error("Simulated notification failure");
+        }
+      )
+    ).rejects.toThrow("Simulated notification failure");
+
+    const list = await repo.listForManager(orgId);
+    expect(list).toHaveLength(0);
   });
 
   it("deletes template and cascades sessions while setting sourceTemplateId to null on TrainingSession", async () => {

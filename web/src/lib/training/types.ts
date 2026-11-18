@@ -42,13 +42,29 @@ export type TrainingNotificationPublisher = (
   tx?: unknown
 ) => Promise<void>;
 
+export type TrainingMutationCallback = (
+  templateId: string,
+  tx?: unknown
+) => Promise<void>;
+
 export interface TrainingRepository {
   findRole(orgId: string, userId: string): Promise<MembershipRole | null>;
-  findOtherManagerIds(orgId: string, excludeUserId: string): Promise<string[]>;
+  findOtherManagerIds(
+    orgId: string,
+    excludeUserId: string,
+    tx?: unknown
+  ): Promise<string[]>;
   findById(id: string): Promise<TrainingTemplateData | null>;
   listForManager(orgId: string): Promise<TrainingTemplateData[]>;
   listForAthlete(orgId: string, athleteId: string): Promise<TrainingTemplateData[]>;
-  create(input: CreateTrainingTemplateInput): Promise<TrainingTemplateData>;
-  update(id: string, input: UpdateTrainingTemplateInput): Promise<TrainingTemplateData>;
-  delete(id: string): Promise<void>;
+  create(
+    input: CreateTrainingTemplateInput,
+    afterWrite?: TrainingMutationCallback
+  ): Promise<TrainingTemplateData>;
+  update(
+    id: string,
+    input: UpdateTrainingTemplateInput,
+    afterWrite?: TrainingMutationCallback
+  ): Promise<TrainingTemplateData>;
+  delete(id: string, afterWrite?: TrainingMutationCallback): Promise<void>;
 }
