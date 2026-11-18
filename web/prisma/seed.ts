@@ -4,13 +4,12 @@
 // only when someone runs make seed (#213).
 // Safe to run many times: every write is an upsert ("create it if it does not
 // exist; if it exists, leave it as it is") or an updateMany that only fills
-// fields that are still empty, except the session history: each run deletes
-// the sessions of each group's id range and creates them again, with dates
-// from today. So changing seed/session-logs.ts needs no new database, but
-// moving a firstSessionNumber or giving a group fewer Athletes (a shorter
-// range) does: the old ids outside the new range would stay. Whatever points
-// at those sessions goes too: logs typed by hand (Cascade), and Events lose
-// their link (SetNull).
+// fields that are still empty. The session history too (#226): a group gets
+// it, with its Athletes' health consent, only while none of its range's ids
+// exists; a later run leaves it as it is, with the logs typed by hand and the
+// Events linked to it. So its dates stay those of the first run, and a change
+// to seed/session-logs.ts, a moved firstSessionNumber or a different number
+// of Athletes only shows on a new database (make fclean + make dev).
 // A database seeded before users had fixed ids fails here with a duplicate
 // email: recreate it with make fclean + make dev (or make + make seed).
 // WARNING: make fclean DELETES ALL the local data stored in the project's

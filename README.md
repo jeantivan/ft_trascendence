@@ -38,7 +38,7 @@ To show the app with data, load the demo data **before the evaluation**:
 make seed
 ```
 
-It adds the demo users (`admin@demo.local`, `manager@demo.local`, `athlete1@demo.local`, `athlete2@demo.local`), the Club Demo and its training history. Their password is `SEED_USER_PASSWORD` in `.env`. All the demo data, users and their roles included, is defined in [web/prisma/seed.ts](web/prisma/seed.ts). It can run twice without duplicating anything, but each run recreates the demo training history: training logs added by hand to those sessions are lost (until #226). `make dev` loads the same data by itself on every start, and it stays afterwards in `make` too: only `make fclean` deletes the database.
+It adds the demo users (`admin@demo.local`, `manager@demo.local`, `athlete1@demo.local`, `athlete2@demo.local`), the Club Demo and its training history. Their password is `SEED_USER_PASSWORD` in `.env`. All the demo data, users and their roles included, is defined in [web/prisma/seed.ts](web/prisma/seed.ts). It can run twice without duplicating anything, and training logs added by hand to the demo sessions are kept: the training history is created only on the first run, so its dates are those of that day (new dates need a new database, with `make fclean`). `make dev` loads the same data by itself on every start, and it stays afterwards in `make` too: only `make fclean` deletes the database.
 
 The passwords in `.env` are generated randomly the first time and are never printed: open `.env` to read them.
 
