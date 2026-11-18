@@ -72,3 +72,11 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. T
 ## Commits
 
 Commit solo como el usuario: sin líneas `Co-Authored-By` ni firmas de Claude, ChatGPT/Codex, Gemini ni ninguna otra IA, y sin "Generated with Claude Code" ni equivalentes en commits ni PRs.
+
+## Alcance de la entrega
+
+- Lo que tiene que funcionar son los flujos de demo de #238. Antes de añadir tests, arreglos o hallazgos de revisión, comprobar que tocan uno de esos flujos, un requisito del subject, la seguridad o una pérdida de datos en un uso normal.
+- Las acciones simultáneas sobre lo mismo dentro de un flujo de demo (doble clic, dos Managers que deciden la misma solicitud) se protegen con las cuatro reglas de #238: botón desactivado mientras se envía, índice único con 409, update condicional de estado y comprobación del estado del padre en la misma transacción.
+- Las carreras entre sucesos independientes que coinciden en el mismo instante no llevan tests ni arreglos: se documentan con un comentario `Known limit` y se sigue.
+- No proponer funcionalidades fuera de los módulos del README.
+

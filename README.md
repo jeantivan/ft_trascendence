@@ -6,9 +6,9 @@
 Omnisport Hub is a B2B Sports Management SaaS built to centralize administrative, tactical, physical, and medical management for sports teams. It eliminates information fragmentation by providing a secure, real-time, and role-based environment.
 
 Key Features:
-- **Unified Calendar**: Manage all team events (matches, training, medical) seamlessly.
-- **Advanced Permissions**: Distinct roles for Managers (full access), Staff (segmented writing), and Athletes (read-only).
-- **Real-time Communication**: Staff chat using Server-Sent Events (SSE).
+- **Unified Calendar**: Manage all club events and training sessions seamlessly.
+- **Advanced Permissions**: Distinct roles for Admins (platform governance), Managers (club management), and Athletes (training and events).
+- **Real-time Communication**: Event and direct message (DM) chat using Server-Sent Events (SSE).
 - **Analytics Dashboard**: Multi-sport performance tracking via dynamic JSONB data models.
 - **File Management**: Tactical and medical document uploads via S3-compatible storage.
 
@@ -89,13 +89,16 @@ The port can be changed with `HTTPS_PORT` in `.env`.
 - **MinIO**: Used to mimic enterprise cloud architecture locally, providing a robust solution for the file upload module without relying on local volumes.
 - **SSE + Postgres LISTEN/NOTIFY**: Chosen for real-time features to maintain a strictly HTTP-based stack, avoiding the overhead of maintaining a separate WebSocket server.
 
-## Modules - Needs review.
+## Modules
 - **Web (Major - 2pts)**: Next.js used for both frontend and backend.
 - **User interaction (Major - 2pts)**: Real-time chat via SSE and contact network.
-- **Advanced permissions system (Major - 2pts)**: Role-based access control (Manager, Staff, Athlete).
+- **Advanced permissions system (Major - 2pts)**: Role-based access control (Admin, Manager, Athlete).
 - **Organization system (Major - 2pts)**: Creation and management of sports clubs.
 - **Analytics dashboard (Major - 2pts)**: Dynamic metric visualization.
 - **User Management (Major - 2pts)**: Standard user auth and profiles.
-- **File upload (Minor - 1pt)**: MinIO integration.
+- **File upload (Minor - 1pt)**: Avatar uploads stored in a private Docker volume.
 - **ORM (Minor - 1pt)**: Prisma.
-**Total Target**: 14 points
+- **SSR (Minor - 1pt)**: Server-Side Rendering with Next.js App Router.
+- **Custom Design System (Minor - 1pt)**: Reusable UI component library with design tokens.
+- **GDPR Compliance (Minor - 1pt)**: User data export and account deletion with OTP verification.
+**Total Target**: 17 points (14 points minimum required)
