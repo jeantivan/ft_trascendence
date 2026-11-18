@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, unlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,12 +8,24 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sweepOrphanAvatars } from "@/lib/uploads/sweep-orphan-avatars";
 
-// The real module, except unlink is a mock that calls the real one: a test can
-// still make it fail with mockImplementation (as in delete-avatar-files.test.ts)
+// The real module, except unlink and stat are mocks that call the real ones: a test
+// can still make them fail with mockImplementation (as in delete-avatar-files.test.ts)
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...actual, unlink: vi.fn(actual.unlink) };
+  return { ...actual, unlink: vi.fn(actual.unlink), stat: vi.fn(actual.stat) };
 });
+
+async function realFs(): Promise<typeof import("node:fs/promises")> {
+  return vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+}
+
+// The config does not restore mocks between tests, so a test that breaks unlink or
+// stat calls this to give them back their real behaviour
+async function useRealFs(): Promise<void> {
+  const actual = await realFs();
+  vi.mocked(unlink).mockImplementation(actual.unlink);
+  vi.mocked(stat).mockImplementation(actual.stat);
+}
 
 const OWNER_ID = "c0000000-0000-4000-8000-000000000254";
 const OWNER_EMAIL = "sweep-orphan-avatars@example.test";
@@ -21,6 +33,7 @@ const OWNER_EMAIL = "sweep-orphan-avatars@example.test";
 // milliseconds can come back 1 ms off, which would move the files at the exact limit
 const NOW = new Date("2099-01-01T12:00:00Z");
 const MINUTE = 60 * 1000;
+const MONTH = 30 * 24 * 60 * MINUTE;
 
 describe("Integration: sweepOrphanAvatars against real Postgres", () => {
   let uploadsDir: string;
@@ -52,10 +65,8 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
   });
 
   afterEach(async () => {
-    // The config does not restore mocks between tests: back to the real unlink, and
-    // console.warn back to printing
-    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
-    vi.mocked(unlink).mockImplementation(actual.unlink);
+    // Back to the real unlink and stat, and console.warn back to printing
+    await useRealFs();
     vi.restoreAllMocks();
     // Its Avatar rows go with it (onDelete: Cascade)
     await prisma.user.deleteMany({ where: { id: OWNER_ID } });
@@ -75,7 +86,7 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
   });
 
   it("keeps a file that has an Avatar row, however old, and keeps the row", async () => {
-    const inUse = await avatarFile("in-use.png", 30 * 24 * 60 * MINUTE);
+    const inUse = await avatarFile("in-use.png", MONTH);
     await pointerTo("in-use.png");
 
     await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(0);
@@ -108,8 +119,8 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
   // The export ZIPs with no row are #170's; the sweep only owns avatars/
   it("deletes nothing outside avatars/, however old", async () => {
     const orphan = await avatarFile("orphan.png", 11 * MINUTE);
-    const zip = await fileAt(path.join("exports", "old.zip"), 30 * 24 * 60 * MINUTE);
-    const atRoot = await fileAt("old.txt", 30 * 24 * 60 * MINUTE);
+    const zip = await fileAt(path.join("exports", "old.zip"), MONTH);
+    const atRoot = await fileAt("old.txt", MONTH);
 
     await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(1);
 
@@ -119,9 +130,9 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
   });
 
   it("leaves a folder inside avatars/ and what it holds, and does not count it", async () => {
-    const inside = await avatarFile(path.join("folder", "old.png"), 30 * 24 * 60 * MINUTE);
+    const inside = await avatarFile(path.join("folder", "old.png"), MONTH);
     const folder = path.dirname(inside);
-    const old = new Date(NOW.getTime() - 30 * 24 * 60 * MINUTE);
+    const old = new Date(NOW.getTime() - MONTH);
     await utimes(folder, old, old);
 
     await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(0);
@@ -158,7 +169,7 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
       await avatarFile("b.png", 11 * MINUTE),
       await avatarFile("c.png", 11 * MINUTE),
     ];
-    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    const actual = await realFs();
     vi.mocked(unlink).mockImplementation(async (target) => {
       if (String(target).endsWith("b.png")) {
         throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
@@ -190,11 +201,44 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
     expect(warn).toHaveBeenCalledWith("Orphan avatar sweep: 1 file(s) could not be removed");
 
     // Next run with the disk working again: b.png goes, and nothing to warn about
-    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
-    vi.mocked(unlink).mockImplementation(actual.unlink);
+    await useRealFs();
     warn.mockClear();
     await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(1);
 
     expect(warn).not.toHaveBeenCalled();
   });
+
+  // Between listing avatars/ and reading a file's date, the file can go (removeAvatar or an
+  // account deletion at that moment): skipped, not a failure. Any other error counts as one.
+  // The error carries the full path, so it must not reach the log (runJobs logs what throws)
+  it.each([
+    ["ENOENT", 0],
+    ["EACCES", 1],
+  ] as const)(
+    "keeps sweeping when reading b.png's date fails with %s, and counts %i failure(s)",
+    async (code, failures) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const a = await avatarFile("a.png", 11 * MINUTE);
+      const b = await avatarFile("b.png", 11 * MINUTE);
+      const c = await avatarFile("c.png", 11 * MINUTE);
+      const actual = await realFs();
+      vi.mocked(stat).mockImplementation(async (target) => {
+        if (String(target).endsWith("b.png")) {
+          throw Object.assign(new Error(`${code}: stat '${String(target)}'`), { code, path: String(target) });
+        }
+        return actual.stat(target);
+      });
+
+      await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(2);
+
+      expect(existsSync(a)).toBe(false);
+      expect(existsSync(b)).toBe(true);
+      expect(existsSync(c)).toBe(false);
+      if (failures === 0) {
+        expect(warn).not.toHaveBeenCalled();
+      } else {
+        expect(warn).toHaveBeenCalledWith("Orphan avatar sweep: 1 file(s) could not be removed");
+      }
+    },
+  );
 });

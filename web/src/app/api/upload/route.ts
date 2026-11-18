@@ -117,9 +117,9 @@ export async function POST(request: Request): Promise<Response> {
       // The new avatar is already in use: report the leftover, don't fail the upload.
       // With the path: the row is gone, so the id alone cannot find the file.
       // ENOENT is logged too: the row lock lets only one upload delete each old row,
-      // so a missing file here means the disk had lost a file the database still had.
-      // Known limit: the orphan sweep (#254) can delete the old file in the milliseconds
-      // between the commit and this unlink; that ENOENT is logged too.
+      // so a missing file here means the disk had lost a file the database still had,
+      // or (Known limit) the orphan sweep (#254) deleted it in the milliseconds between
+      // the commit and this unlink.
       console.error("Could not delete old avatar file", old.id, old.path, error);
     }
   }
