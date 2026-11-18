@@ -37,10 +37,18 @@ export async function sweepOrphanAvatars(db: PrismaClient, uploadsDir: string, n
   const pointed = new Set(avatars.map((avatar) => avatar.path));
 
   let removed = 0;
+  let failed = 0;
   for (const relativePath of oldFiles) {
     if (pointed.has(relativePath)) continue;
-    await deleteAvatarFile(relativePath, uploadsDir);
-    removed++;
+    // One file that cannot be deleted does not stop the others: it stays for the next run
+    try {
+      await deleteAvatarFile(relativePath, uploadsDir);
+      removed++;
+    } catch {
+      failed++;
+    }
   }
+  // Only the count: the error itself carries the path. runJobs logs the removed ones
+  if (failed > 0) console.warn(`Orphan avatar sweep: ${failed} file(s) could not be removed`);
   return removed;
 }
