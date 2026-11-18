@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { PrismaClient } from "@/generated/prisma/client";
@@ -12,8 +13,16 @@ const MARGIN_MS = 10 * 60 * 1000;
 // MARGIN_MS old (#254). It never deletes a row, so it never leaves a broken photo.
 // Returns how many files it deleted
 export async function sweepOrphanAvatars(db: PrismaClient, uploadsDir: string, now: Date): Promise<number> {
-  // Disk first, then the database
-  const entries = await readdir(path.join(uploadsDir, "avatars"), { withFileTypes: true });
+  // Disk first, then the database: with no avatars/ the database is not even asked
+  let entries: Dirent[];
+  try {
+    entries = await readdir(path.join(uploadsDir, "avatars"), { withFileTypes: true });
+  } catch (error) {
+    // saveAvatar creates avatars/ with the first upload: none yet, nothing to sweep.
+    // Any other error (EACCES...) is real: runJobs logs it
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0;
+    throw error;
+  }
   const oldFiles: string[] = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;

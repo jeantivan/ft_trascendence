@@ -17,14 +17,18 @@ const MINUTE = 60 * 1000;
 describe("Integration: sweepOrphanAvatars against real Postgres", () => {
   let uploadsDir: string;
 
-  // Writes avatars/<name> with its modification time ageMs before NOW
-  async function avatarFile(name: string, ageMs: number): Promise<string> {
-    const fullPath = path.join(uploadsDir, "avatars", name);
+  // Writes uploadsDir/<relativePath> with its modification time ageMs before NOW
+  async function fileAt(relativePath: string, ageMs: number): Promise<string> {
+    const fullPath = path.join(uploadsDir, relativePath);
     await mkdir(path.dirname(fullPath), { recursive: true });
     await writeFile(fullPath, "image-content");
     const modified = new Date(NOW.getTime() - ageMs);
     await utimes(fullPath, modified, modified);
     return fullPath;
+  }
+
+  async function avatarFile(name: string, ageMs: number): Promise<string> {
+    return fileAt(path.join("avatars", name), ageMs);
   }
 
   async function pointerTo(name: string): Promise<void> {
@@ -86,5 +90,35 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
 
     expect(existsSync(atLimit)).toBe(true);
     expect(existsSync(pastLimit)).toBe(false);
+  });
+
+  // The export ZIPs with no row are #170's; the sweep only owns avatars/
+  it("deletes nothing outside avatars/, however old", async () => {
+    const orphan = await avatarFile("orphan.png", 11 * MINUTE);
+    const zip = await fileAt(path.join("exports", "old.zip"), 30 * 24 * 60 * MINUTE);
+    const atRoot = await fileAt("old.txt", 30 * 24 * 60 * MINUTE);
+
+    await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(1);
+
+    expect(existsSync(orphan)).toBe(false);
+    expect(existsSync(zip)).toBe(true);
+    expect(existsSync(atRoot)).toBe(true);
+  });
+
+  it("leaves a folder inside avatars/ and what it holds, and does not count it", async () => {
+    const inside = await avatarFile(path.join("folder", "old.png"), 30 * 24 * 60 * MINUTE);
+    const folder = path.dirname(inside);
+    const old = new Date(NOW.getTime() - 30 * 24 * 60 * MINUTE);
+    await utimes(folder, old, old);
+
+    await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(0);
+
+    expect(existsSync(folder)).toBe(true);
+    expect(existsSync(inside)).toBe(true);
+  });
+
+  // saveAvatar creates avatars/ with the first upload: a new clone has none
+  it("returns 0 without throwing when avatars/ does not exist yet", async () => {
+    await expect(sweepOrphanAvatars(prisma, uploadsDir, NOW)).resolves.toBe(0);
   });
 });
