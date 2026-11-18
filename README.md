@@ -30,12 +30,23 @@ Then open **https://localhost:8443**. The certificate is self-signed, so the bro
 
 From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
 
-In a fresh clone or after `make fclean`, `make` starts with an empty database (all the tables, no users): register from the app. `make dev` loads demo users, and they stay afterwards in `make` too: only `make fclean` deletes the database.
+In a fresh clone or after `make fclean`, `make` starts with an empty database (all the tables) and one account: the **initial Admin**, `admin@stridesync.local`, with its password in `ADMIN_PASSWORD` in `.env`. It is created on every start if it does not exist yet, and never changed afterwards. Register any other user from the app.
+
+To show the app with data, load the demo data **before the evaluation**:
+
+```sh
+make seed
+```
+
+It adds the demo users (`admin@demo.local`, `manager@demo.local`, `athlete1@demo.local`, `athlete2@demo.local`), the Club Demo and its training history. Their password is `SEED_USER_PASSWORD` in `.env`. All the demo data, users and their roles included, is defined in [web/prisma/seed.ts](web/prisma/seed.ts). It can run twice without duplicating anything, but each run recreates the demo training history: training logs added by hand to those sessions are lost (until #226). `make dev` loads the same data by itself on every start, and it stays afterwards in `make` too: only `make fclean` deletes the database.
+
+The passwords in `.env` are generated randomly the first time and are never printed: open `.env` to read them.
 
 | Command | What it does |
 |---|---|
 | `make` | Production mode: builds the images and starts everything in the background |
 | `make dev` | Development mode: same, but `./web` is mounted and the app reloads on save; loads the demo data |
+| `make seed` | Loads the demo data with the app in `make` mode (demo users, Club Demo, sessions); safe to run twice |
 | `make test` | Runs every test in Docker against an empty test database ([docs/testing.md](docs/testing.md)) |
 | `make test-nginx` | Checks that NGINX is the only way in, over HTTPS (needs `make` or `make dev` running) |
 | `make migrate name=<name>` | Creates a Prisma migration from `web/prisma/schema.prisma` and applies it (needs `make dev` running) |

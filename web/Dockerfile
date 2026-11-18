@@ -1,6 +1,9 @@
 # Stage 1: install dependencies (including dev dependencies, needed to build)
 FROM node:24.21.0-alpine AS deps
 WORKDIR /app
+# No "Update available" box from the Prisma CLI in dev, migrate and make seed: it
+# reads like an error and fills the migrate lines make shows when the start fails
+ENV PRISMA_HIDE_UPDATE_MESSAGE=true
 # Install as node, not root: the dev and migrate stages run as node, and tools
 # write caches inside node_modules (Vitest uses node_modules/.vitest-cache, #64)
 RUN chown node:node /app
@@ -26,13 +29,15 @@ EXPOSE 3000
 CMD ["sh", "-c", "npx prisma generate && { npx prisma db seed || echo 'SEED FAILED: see the error above. The app starts without demo data.'; } && npm run dev -- --hostname 0.0.0.0"]
 
 # Migrate stage (migrate service, used by both make and make dev): applies the
-# pending migrations to the database and exits. Keeps the Prisma CLI out of
-# the final image.
+# pending migrations, creates the initial Admin if missing (#213) and exits.
+# make seed runs the demo data from here too. Both import app code (the sign-up
+# password hash, the Prisma client), so the whole source is copied, not only
+# prisma/. Keeps the Prisma CLI out of the final image.
 FROM deps AS migrate
-COPY prisma.config.ts ./
-COPY prisma ./prisma
+COPY --chown=node:node . .
+RUN npx prisma generate
 USER node
-CMD ["npx", "prisma", "migrate", "deploy"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/initial-admin.ts"]
 
 # Stage 2: build the app (generates .next/standalone)
 FROM node:24.21.0-alpine AS build

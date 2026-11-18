@@ -1,12 +1,21 @@
-import { userRepository, type UserRepository, type AuthUser } from "@/lib/auth/user-repository";
+import {
+  userRepository,
+  type UserRepository,
+  type AuthUser,
+  CURRENT_HEALTH_CONSENT_VERSION,
+} from "@/lib/auth/user-repository";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   updateNickSchema,
   updateEmailSchema,
   updatePasswordSchema,
+  updatePrivacySchema,
+  purgeHealthDataSchema,
   type UpdateNickInput,
   type UpdateEmailInput,
   type UpdatePasswordInput,
+  type UpdatePrivacyInput,
+  type PurgeHealthDataInput,
 } from "./schemas";
 
 export class UserNotFoundError extends Error {
@@ -149,6 +158,35 @@ export class UserSettingsService {
     const newHash = await this.hasher.hash(validated.newPassword);
     await this.repo.updatePassword(userId, newHash);
   }
+
+  async updatePrivacy(userId: string, input: UpdatePrivacyInput): Promise<SettingsProfile> {
+    const validated = updatePrivacySchema.parse(input);
+    await this.getActiveUser(userId);
+    const updated = await this.repo.updatePrivacy(userId, validated);
+    return this.toSettingsProfile(updated);
+  }
+
+  async giveHealthConsent(userId: string): Promise<SettingsProfile> {
+    await this.getActiveUser(userId);
+    const updated = await this.repo.giveHealthConsent(
+      userId,
+      CURRENT_HEALTH_CONSENT_VERSION
+    );
+    return this.toSettingsProfile(updated);
+  }
+
+  async withdrawHealthConsent(userId: string): Promise<SettingsProfile> {
+    await this.getActiveUser(userId);
+    const updated = await this.repo.withdrawHealthConsent(userId);
+    return this.toSettingsProfile(updated);
+  }
+
+  async purgeHealthData(userId: string, input: PurgeHealthDataInput): Promise<void> {
+    purgeHealthDataSchema.parse(input);
+    await this.getActiveUser(userId);
+    await this.repo.purgeHealthData(userId);
+  }
 }
 
+export { CURRENT_HEALTH_CONSENT_VERSION };
 export const userSettingsService = new UserSettingsService();

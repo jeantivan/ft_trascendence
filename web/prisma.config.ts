@@ -7,7 +7,7 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
-    // Demo data for development (npx prisma db seed)
+    // Demo data: make dev at start, make seed in make mode (#213)
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
