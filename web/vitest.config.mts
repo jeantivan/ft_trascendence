@@ -20,6 +20,9 @@ export default defineConfig({
   plugins: [tsconfigPaths(), react()],
   test: {
     setupFiles: ["./vitest.setup.ts"],
+    // One test database shared by every file (#83): files in parallel deadlock (#243). Their
+    // cleanup deletes users, Admins included, while lockAccountAndAdmins locks every Admin row
+    fileParallelism: false,
     env: testDatabaseUrl === null ? {} : { DATABASE_URL: testDatabaseUrl },
     exclude: baseExclude,
     // Slow machines (Docker on a busy Mac) hit the 5 s / 10 s defaults on the lint-rule and OTP tests
