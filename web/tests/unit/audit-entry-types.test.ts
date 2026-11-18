@@ -11,6 +11,7 @@ describe("AuditEntry: only role and action pairs that make sense (#183)", () => 
       { ...BASE, actorRole: null, action: "consent_given" },
       { ...BASE, actorRole: null, action: "consent_withdrawn" },
       { ...BASE, actorRole: null, action: "account_deleted" },
+      { ...BASE, actorRole: null, action: "delete", resource: "health_data" },
       { ...BASE, actorRole: "manager", action: "read", resource: "feedback" },
       { ...BASE, actorRole: "manager", action: "update", resource: "feedback" },
       { ...BASE, actorRole: "manager", action: "create", resource: "feedback" },
@@ -19,7 +20,7 @@ describe("AuditEntry: only role and action pairs that make sense (#183)", () => 
       { ...BASE, actorRole: "admin", action: "role_change" },
     ];
 
-    expect(entries).toHaveLength(9);
+    expect(entries).toHaveLength(10);
   });
 
   it("rejects the pairs that make no sense at compile time", () => {

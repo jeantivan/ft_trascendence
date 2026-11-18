@@ -1,22 +1,43 @@
+import { z } from "zod";
 import {
   addCalendarDays,
   clubMidnightToUtc,
   type CalendarDay,
 } from "@/lib/time/club-time";
-import { POSTGRES_INT_MAX } from "./schemas";
+import {
+  MAX_DAY_OFFSET,
+  MAX_DURATION_SECONDS,
+  MAX_PACE_SECONDS,
+  POSTGRES_INT_MAX,
+} from "./schemas";
 
-function assertPositiveInt32(value: number, label: string): void {
-  if (
-    !Number.isInteger(value) ||
-    value <= 0 ||
-    value > POSTGRES_INT_MAX
-  ) {
-    throw new Error(`${label} debe ser un entero positivo (máx. ${POSTGRES_INT_MAX})`);
+function assertIntRange(
+  value: number,
+  min: number,
+  max: number,
+  message: string,
+): void {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(message);
   }
 }
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
+}
+
+function stringParserSchema<T>(parser: (input: string) => T) {
+  return z.string().transform((value, ctx) => {
+    try {
+      return parser(value);
+    } catch (error) {
+      ctx.addIssue({
+        code: "custom",
+        message: error instanceof Error ? error.message : "Valor inválido",
+      });
+      return z.NEVER;
+    }
+  });
 }
 
 const KM_PATTERN = /^(\d+)(?:[.,](\d{1,3}))?$/;
@@ -33,12 +54,27 @@ export function parseKmToMeters(input: string): number {
   const fracMeters = Number.parseInt(fracStr, 10);
   const meters = wholeKm * 1000 + fracMeters;
 
-  assertPositiveInt32(meters, "La distancia en metros");
+  if (meters <= 0) {
+    throw new Error("La distancia debe ser mayor que 0 km");
+  }
+  assertIntRange(
+    meters,
+    1,
+    POSTGRES_INT_MAX,
+    "La distancia supera el máximo permitido",
+  );
   return meters;
 }
 
+export const kmToMetersSchema = stringParserSchema(parseKmToMeters);
+
 export function formatMetersToKm(meters: number): string {
-  assertPositiveInt32(meters, "Los metros");
+  assertIntRange(
+    meters,
+    1,
+    POSTGRES_INT_MAX,
+    `Los metros deben ser un entero positivo (máx. ${POSTGRES_INT_MAX})`,
+  );
 
   const whole = Math.floor(meters / 1000);
   const rem = meters % 1000;
@@ -46,12 +82,11 @@ export function formatMetersToKm(meters: number): string {
     return String(whole);
   }
 
-  const frac = pad2(rem).padStart(3, "0").replace(/0+$/, "");
+  const frac = String(rem).padStart(3, "0").replace(/0+$/, "");
   return `${whole}.${frac}`;
 }
 
 const PACE_PATTERN = /^(\d{1,2}):([0-5]\d)$/;
-const MAX_PACE_SECONDS = 99 * 60 + 59; // 99:59 = 5999s
 
 export function parsePaceToSecondsPerKm(input: string): number {
   const match = PACE_PATTERN.exec(input.trim());
@@ -67,23 +102,23 @@ export function parsePaceToSecondsPerKm(input: string): number {
   return total;
 }
 
+export const paceToSecondsSchema = stringParserSchema(parsePaceToSecondsPerKm);
+
 export function formatSecondsPerKmToPace(secondsPerKm: number): string {
-  if (
-    !Number.isInteger(secondsPerKm) ||
-    secondsPerKm <= 0 ||
-    secondsPerKm > MAX_PACE_SECONDS
-  ) {
-    throw new Error(
-      `El ritmo en segundos debe ser un entero positivo menor o igual a ${MAX_PACE_SECONDS}`,
-    );
-  }
+  assertIntRange(
+    secondsPerKm,
+    1,
+    MAX_PACE_SECONDS,
+    `El ritmo en segundos debe ser un entero positivo menor o igual a ${MAX_PACE_SECONDS}`,
+  );
   const minutes = Math.floor(secondsPerKm / 60);
   const seconds = secondsPerKm % 60;
   return `${minutes}:${pad2(seconds)}`;
 }
 
 const DURATION_HMS_PATTERN = /^(\d{1,2}):([0-5]\d):([0-5]\d)$/;
-const DURATION_MS_PATTERN = /^(\d{1,2}):([0-5]\d)$/;
+// Restrict mm:ss minutes to 00-59 so values like "75:00" are not confused with hh:mm
+const DURATION_MS_PATTERN = /^([0-5]?\d):([0-5]\d)$/;
 const DURATION_MIN_PATTERN = /^(\d+)$/;
 
 export function parseDurationToSeconds(input: string): number {
@@ -104,15 +139,32 @@ export function parseDurationToSeconds(input: string): number {
   } else if (mins) {
     total = Number.parseInt(mins[1], 10) * 60;
   } else {
-    throw new Error("Duración inválida (usa mm:ss, hh:mm:ss o minutos)");
+    throw new Error(
+      "Duración inválida (usa mm:ss, hh:mm:ss o minutos, p. ej. 75 o 1:15:00)",
+    );
   }
 
-  assertPositiveInt32(total, "La duración en segundos");
+  if (total <= 0) {
+    throw new Error("La duración debe ser mayor que 0");
+  }
+  assertIntRange(
+    total,
+    1,
+    MAX_DURATION_SECONDS,
+    "La duración máxima es de 99:59:59",
+  );
   return total;
 }
 
+export const durationToSecondsSchema = stringParserSchema(parseDurationToSeconds);
+
 export function formatSecondsToDuration(totalSeconds: number): string {
-  assertPositiveInt32(totalSeconds, "La duración en segundos");
+  assertIntRange(
+    totalSeconds,
+    1,
+    MAX_DURATION_SECONDS,
+    `La duración en segundos debe ser un entero entre 1 y ${MAX_DURATION_SECONDS}`,
+  );
 
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -124,49 +176,37 @@ export function formatSecondsToDuration(totalSeconds: number): string {
   return `${pad2(minutes)}:${pad2(seconds)}`;
 }
 
-const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+// Unix epoch start: avoids pre-1970 edge cases and Date.UTC's 0..99 -> 1900..1999 quirk
+const MIN_CALENDAR_YEAR = 1970;
+const isoDateSchema = z.iso.date();
 
 export function parseIsoCalendarDay(dateStr: string): CalendarDay {
-  const match = ISO_DATE_PATTERN.exec(dateStr.trim());
-  if (!match) {
-    throw new Error("Fecha inválida (usa YYYY-MM-DD)");
+  const result = isoDateSchema.safeParse(dateStr.trim());
+  if (!result.success) {
+    throw new Error("Fecha inválida (usa YYYY-MM-DD válido)");
   }
-  const parsed: CalendarDay = {
-    year: Number.parseInt(match[1], 10),
-    month: Number.parseInt(match[2], 10),
-    day: Number.parseInt(match[3], 10),
-  };
-
-  if (parsed.year < 1) {
-    throw new Error("Año inválido");
+  const [year, month, day] = result.data.split("-").map(Number);
+  if (year < MIN_CALENDAR_YEAR) {
+    throw new Error(
+      `El año debe ser igual o posterior a ${MIN_CALENDAR_YEAR}`,
+    );
   }
-
-  const normalized = addCalendarDays(parsed, 0);
-  if (
-    normalized.year !== parsed.year ||
-    normalized.month !== parsed.month ||
-    normalized.day !== parsed.day
-  ) {
-    throw new Error("Fecha inválida (día inexistente en el calendario)");
-  }
-
-  return parsed;
+  return { year, month, day };
 }
+
+export const isoCalendarDaySchema = stringParserSchema(parseIsoCalendarDay);
 
 export function computeScheduledAtUtc(
   startDate: string,
   dayOffset: number,
   timezone: string,
 ): Date {
-  if (
-    !Number.isInteger(dayOffset) ||
-    dayOffset < 0 ||
-    dayOffset > POSTGRES_INT_MAX
-  ) {
-    throw new Error(
-      `dayOffset debe ser un entero entre 0 y ${POSTGRES_INT_MAX}`,
-    );
-  }
+  assertIntRange(
+    dayOffset,
+    0,
+    MAX_DAY_OFFSET,
+    `dayOffset debe ser un entero entre 0 y ${MAX_DAY_OFFSET}`,
+  );
   const start = parseIsoCalendarDay(startDate);
   const targetDay = addCalendarDays(start, dayOffset);
   return clubMidnightToUtc(targetDay, timezone);

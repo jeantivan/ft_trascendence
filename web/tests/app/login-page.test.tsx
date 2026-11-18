@@ -28,4 +28,17 @@ describe("LoginPage & RegisterPage", () => {
     expect(container.querySelector('footer a[href="/privacy"]')).toBeInTheDocument();
     expect(container.querySelector('footer a[href="/terms"]')).toBeInTheDocument();
   });
+
+  // #79: the logo sits above the form. It is an image named "StrideSync" (Logo.tsx)
+  it("shows the StrideSync logo on the login page", async () => {
+    render(await LoginPage({}));
+
+    expect(screen.getByRole("img", { name: "StrideSync" })).toBeInTheDocument();
+  });
+
+  it("shows the StrideSync logo on the register page", () => {
+    render(<RegisterPage />);
+
+    expect(screen.getByRole("img", { name: "StrideSync" })).toBeInTheDocument();
+  });
 });
