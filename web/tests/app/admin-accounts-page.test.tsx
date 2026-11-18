@@ -31,4 +31,17 @@ describe("/admin/accounts", () => {
     expect(screen.getByRole("link", { name: "ana@demo.local" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Siguiente" })).toHaveAttribute("href", "/admin/accounts?page=3");
   });
+
+  // The account page's delete action comes back here with ?deleted=1 (#104)
+  it("says the account was deleted when the delete action brought the Admin back", async () => {
+    render(await AdminAccountsPage({ searchParams: Promise.resolve({ deleted: "1" }) }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("Cuenta borrada.");
+  });
+
+  it("says nothing about a deletion otherwise", async () => {
+    render(await AdminAccountsPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.queryByText("Cuenta borrada.")).not.toBeInTheDocument();
+  });
 });

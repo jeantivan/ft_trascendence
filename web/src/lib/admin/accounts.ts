@@ -1,5 +1,7 @@
 import type { GlobalRole, MembershipRole, Prisma, PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction, type AdminActionEntry } from "@/lib/gdpr/record-admin-action";
+import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
+import { deleteAccountAsAdmin } from "@/lib/gdpr/delete-account";
 import { nickSchema } from "@/lib/auth/schemas";
 import { isDbId } from "@/lib/permissions/is-db-id";
 
@@ -80,7 +82,7 @@ export async function getAccount(db: PrismaClient, accountId: string): Promise<A
 // changed: false when the account was already like that (see changeAccount)
 export type AccountActionResult =
   | { ok: true; changed: boolean }
-  | { ok: false; reason: "not-found" | "self" | "admin" };
+  | { ok: false; reason: "not-found" | "self" | "last-admin" };
 
 // The audit actions on an account, as record-admin-action.ts lists them
 type AccountAuditAction = Extract<AdminActionEntry, { resource: "account" }>["action"];
@@ -103,73 +105,88 @@ export async function unblockAccount(db: PrismaClient, action: AccountAction): P
   return setBlocked(db, action, false);
 }
 
-// Blocking is refused for an Admin account that is not blocked yet, until the last-Admin
-// rule arrives (#102, with lockAccountAndAdmins from #158): two Admins blocking each
-// other at once would leave the app with none. An Admin that is already blocked is not
-// refused: it is already as the Admin wanted. The one place for this rule: setBlocked
-// refuses with it and the account page hides the block button with it (its where
-// below says the same in Prisma terms)
-export function isBlockRefusedForAdmin(account: { roleGlobal: GlobalRole; blockedAt: Date | null }): boolean {
-  return account.roleGlobal === "admin" && account.blockedAt === null;
-}
-
 async function setBlocked(
   db: PrismaClient,
   action: AccountAction,
   blocked: boolean,
 ): Promise<AccountActionResult> {
   if (!blocked) {
-    // Unblocking an Admin is still allowed: one blocked before the rule below must get back in
+    // Unblocking needs no rule: it never leaves the app without an unblocked Admin
     return changeAccount(db, action, "unblock", {
       where: { blockedAt: { not: null } },
       data: { blockedAt: null },
     });
   }
   // Blocking an account that is already blocked keeps its first date: since when.
-  // Admins: see isBlockRefusedForAdmin. The role is also part of where (keep the two in
-  // step), so an account made Admin in the meantime is refused too
+  // The last-Admin rule goes first (docs/adr/0004): there is always one unblocked Admin
   return changeAccount(
     db,
     action,
     "block",
-    { where: { blockedAt: null, roleGlobal: { not: "admin" } }, data: { blockedAt: new Date() } },
-    { refuse: (account) => (isBlockRefusedForAdmin(account) ? "admin" : null) },
+    { where: { blockedAt: null }, data: { blockedAt: new Date() } },
+    { guard: refuseLastAdmin },
   );
 }
 
-// The account as it is when nothing changed, for refuse to tell why
-type UnchangedAccount = { roleGlobal: GlobalRole; blockedAt: Date | null };
+// Locks the account with every Admin (lockAccountAndAdmins, one ordered statement) and
+// refuses when it is the last unblocked Admin. Read after the lock: two Admins blocking
+// each other at once run one after the other, and the second one sees the first one's
+// block. A missing account is left to changeAccount, which says not-found.
+// It also locks for an account that is not an Admin: reading the role without the lock
+// first would race with a role change (#103) between the read and the block
+async function refuseLastAdmin(tx: Prisma.TransactionClient, accountId: string): Promise<"last-admin" | null> {
+  const { target, anotherAdminLeft } = await lockAccountAndAdmins(tx, accountId);
+  const lastAdmin = target?.roleGlobal === "admin" && target.blockedAt === null && !anotherAdminLeft;
+  return lastAdmin ? "last-admin" : null;
+}
 
 // The common part of every change the panel makes to an account: change it only
 // if it is not like that already, and write the audit row in the same transaction.
-// where narrows the account to the rows that would change; when none does, the
-// account does not exist (not-found), is refused for a reason refuse gives (an
-// Admin, for blocking), or is already like that (changed: false, and no audit row,
-// since nothing happened). So two Admins doing the same thing at once write one
-// audit row, not two
+// guard runs first, in that transaction, and refuses with its reason (the last-Admin
+// rule, for blocking). where narrows the account to the rows that would change; when
+// none does, the account does not exist (not-found) or is already like that
+// (changed: false, and no audit row, since nothing happened). So two Admins doing
+// the same thing at once write one audit row, not two
 async function changeAccount(
   db: PrismaClient,
   { adminId, accountId }: AccountAction,
   auditAction: AccountAuditAction,
   { where, data }: { where: Prisma.UserWhereInput; data: Prisma.UserUpdateManyMutationInput },
-  { refuse }: { refuse?: (account: UnchangedAccount) => "admin" | null } = {},
+  { guard }: { guard?: (tx: Prisma.TransactionClient, accountId: string) => Promise<"last-admin" | null> } = {},
 ): Promise<AccountActionResult> {
   if (!isDbId(accountId)) return { ok: false, reason: "not-found" };
   return db.$transaction(async (tx) => {
+    const refused = await guard?.(tx, accountId);
+    if (refused) return { ok: false, reason: refused };
     const { count } = await tx.user.updateMany({ where: { ...where, id: accountId }, data });
     if (count === 0) {
-      const account = await tx.user.findUnique({
-        where: { id: accountId },
-        select: { roleGlobal: true, blockedAt: true },
-      });
-      if (!account) return { ok: false, reason: "not-found" };
-      const reason = refuse?.(account);
-      return reason ? { ok: false, reason } : { ok: true, changed: false };
+      const exists = await tx.user.findUnique({ where: { id: accountId }, select: { id: true } });
+      return exists ? { ok: true, changed: false } : { ok: false, reason: "not-found" };
     }
     // Ids only: what changed (a nick, say) never goes to audit_log
     await recordAdminAction(tx, { adminId, action: auditAction, resource: "account", subjectId: accountId });
     return { ok: true, changed: true };
   });
+}
+
+// Deletes another person's account (#104) with the same deletion as their own, without
+// the email code (deleteAccountAsAdmin, #158): its rows, its avatar files and the notices.
+// The delete row goes in beforeDelete, in the same transaction: if the deletion fails, it
+// rolls back with it. So its order does not matter: beforeDelete writes it before the lock
+// and the last-Admin rule, but a refused deletion leaves no row, and audit_log has no
+// foreign key to users, so the write takes no lock on any account (docs/adr/0004)
+export async function deleteAccount(db: PrismaClient, { adminId, accountId }: AccountAction): Promise<AccountActionResult> {
+  // Compared in lowercase, like blockAccount: Postgres compares uuids by value
+  if (accountId.toLowerCase() === adminId.toLowerCase()) return { ok: false, reason: "self" };
+  // Before the database: a malformed id would make Postgres throw (22P02, a 500)
+  if (!isDbId(accountId)) return { ok: false, reason: "not-found" };
+  const result = await deleteAccountAsAdmin(
+    accountId,
+    (tx) => recordAdminAction(tx, { adminId, action: "delete", resource: "account", subjectId: accountId }),
+    db,
+  );
+  if (result.deleted) return { ok: true, changed: true };
+  return { ok: false, reason: result.reason === "last_admin" ? "last-admin" : "not-found" };
 }
 
 export type UpdateNickResult =
