@@ -18,6 +18,13 @@ export class PrismaOtpRepository implements OtpRepository {
     });
   }
 
+  findCreatedSince(userId: string, purpose: OtpPurpose, since: Date): Promise<OtpRecord[]> {
+    return this.db.emailOtpCode.findMany({
+      where: { userId, purpose, createdAt: { gt: since } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+  }
+
   // One UPDATE with all the conditions in its WHERE: the database decides, so
   // two concurrent calls cannot both take the last attempt
   async reserveAttempt(recordId: string, now: Date): Promise<boolean> {

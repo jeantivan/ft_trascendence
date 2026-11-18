@@ -27,6 +27,13 @@ export class InMemoryOtpRepository implements OtpRepository {
     return latest ? { ...latest } : null;
   }
 
+  async findCreatedSince(userId: string, purpose: OtpPurpose, since: Date): Promise<OtpRecord[]> {
+    return this.records
+      .filter((r) => r.userId === userId && r.purpose === purpose && r.createdAt > since)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((r) => ({ ...r }));
+  }
+
   async reserveAttempt(recordId: string, now: Date): Promise<boolean> {
     const record = this.records.find((r) => r.id === recordId);
     if (!record || record.consumedAt || now >= record.expiresAt) return false;
