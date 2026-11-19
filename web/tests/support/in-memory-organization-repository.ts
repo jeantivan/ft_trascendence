@@ -21,8 +21,8 @@ import {
   MEMBERSHIP_ACCEPTED,
   MEMBERSHIP_INVITATION_CREATED,
   MEMBERSHIP_REQUEST_CREATED,
-  type NotifyInput,
 } from "@/lib/org/membership-notifier";
+import type { NotifyInput } from "@/lib/notifications/notify";
 import { normalizeId, type CreateOrganizationInput } from "@/lib/org/schemas";
 import type { NewClub } from "./organization-repository-contract";
 
@@ -52,7 +52,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   // The registered users that are blocked
   private blocked: Set<string> = new Set();
   private requests: Map<string, MembershipRequestDetail> = new Map();
-  // What the notifier received, like the fake of #153 until it is merged
+  // What the notifier received, like the fake notify() of the Prisma tests
   readonly sent: NotifyInput[] = [];
 
   addUser(userId: string): void {

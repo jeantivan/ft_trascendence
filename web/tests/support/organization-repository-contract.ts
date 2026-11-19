@@ -17,8 +17,8 @@ import {
   MEMBERSHIP_ACCEPTED,
   MEMBERSHIP_INVITATION_CREATED,
   MEMBERSHIP_REQUEST_CREATED,
-  type NotifyInput,
 } from "@/lib/org/membership-notifier";
+import type { NotifyInput } from "@/lib/notifications/notify";
 
 // A valid id that no club and no user has
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
@@ -44,7 +44,7 @@ export interface OrganizationFixture {
   addAthlete(orgId: string, userId: string): Promise<void>;
   // Blocks an existing user
   blockUser(userId: string): Promise<void>;
-  // The notifications the repository has sent so far (the fake of #153 until it is merged)
+  // The notifications the repository has sent so far (read from a fake notify())
   sent(): NotifyInput[];
 }
 

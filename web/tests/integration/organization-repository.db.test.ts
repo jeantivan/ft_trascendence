@@ -18,7 +18,7 @@ import {
   RequestAlreadyPendingError,
   UserNotFoundError,
 } from "@/lib/org/organization-repository";
-import type { NotifyInput } from "@/lib/org/membership-notifier";
+import type { NotifyInput } from "@/lib/notifications/notify";
 import {
   runOrganizationRepositoryContract,
   type NewClub,
@@ -31,7 +31,7 @@ vi.mock("@/lib/gdpr/record-admin-action", async (importOriginal) => {
 });
 
 const PREFIX = "organization-repository-";
-// Stands in for the notifications of #153 until it is merged: it keeps what the repository sends
+// Fake notify(): keeps what the repository sends, so the tests read it back
 const sentNotifications: NotifyInput[] = [];
 const repository = new PrismaOrganizationRepository(prisma, async (_tx, input) => {
   sentNotifications.push(input);

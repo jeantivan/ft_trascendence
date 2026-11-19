@@ -11,9 +11,9 @@ import {
   MEMBERSHIP_ACCEPTED,
   MEMBERSHIP_INVITATION_CREATED,
   MEMBERSHIP_REQUEST_CREATED,
-  notifyNothing,
   type Notify,
 } from "./membership-notifier";
+import { notify as realNotify } from "@/lib/notifications/notify";
 
 // Two clubs cannot have the same name (exact match, case included)
 export class OrganizationNameTakenError extends Error {
@@ -265,7 +265,7 @@ async function assertUserCanJoin(tx: Prisma.TransactionClient, userId: string): 
 export class PrismaOrganizationRepository implements OrganizationRepository {
   constructor(
     private readonly db: PrismaClient = prisma,
-    private readonly notify: Notify = notifyNothing,
+    private readonly notify: Notify = realNotify,
   ) {}
 
   async listCatalog(): Promise<OrganizationSummary[]> {
