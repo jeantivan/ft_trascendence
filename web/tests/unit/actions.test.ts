@@ -80,8 +80,20 @@ describe("Server Actions - Auth", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "Email o contraseña incorrectos",
+        error: "Email o contraseña incorrectos o cuenta bloqueada",
       });
+    });
+
+    // A form sent by hand without the fields gets the same message: no way to tell
+    // a wrong email, a wrong password and a blocked account apart (account enumeration)
+    it("returns the same message when the form has no email or password", async () => {
+      const result = await loginAction(null, new FormData());
+
+      expect(result).toEqual({
+        success: false,
+        error: "Email o contraseña incorrectos o cuenta bloqueada",
+      });
+      expect(signIn).not.toHaveBeenCalled();
     });
   });
 

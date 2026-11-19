@@ -18,6 +18,46 @@ Key Features:
 - Make
 
 ### Setup
+From a fresh clone, one command starts everything:
+
+```sh
+make
+```
+
+It creates `.env` with random secrets if it is missing, builds the images and starts the database, the app, the test mail inbox and NGINX. The first run downloads and installs everything, so it takes a few minutes.
+
+Then open **https://localhost:8443**. The certificate is self-signed, so the browser shows a warning the first time: accept it to continue. NGINX only listens on this HTTPS port; there is no plain HTTP access.
+
+From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
+
+In a fresh clone or after `make fclean`, `make` starts with an empty database (all the tables) and one account: the **initial Admin**, `admin@stridesync.local`, with its password in `ADMIN_PASSWORD` in `.env`. It is created on every start if it does not exist yet, and never changed afterwards. Register any other user from the app.
+
+To show the app with data, load the demo data **before the evaluation**:
+
+```sh
+make seed
+```
+
+It adds the demo users (`admin@demo.local`, `manager@demo.local`, `athlete1@demo.local`, `athlete2@demo.local`), the Club Demo and its training history. Their password is `SEED_USER_PASSWORD` in `.env`. All the demo data, users and their roles included, is defined in [web/prisma/seed.ts](web/prisma/seed.ts). It can run twice without duplicating anything, but each run recreates the demo training history: training logs added by hand to those sessions are lost (until #226). `make dev` loads the same data by itself on every start, and it stays afterwards in `make` too: only `make fclean` deletes the database.
+
+The passwords in `.env` are generated randomly the first time and are never printed: open `.env` to read them.
+
+| Command | What it does |
+|---|---|
+| `make` | Production mode: builds the images and starts everything in the background |
+| `make dev` | Development mode: same, but `./web` is mounted and the app reloads on save; loads the demo data |
+| `make seed` | Loads the demo data with the app in `make` mode (demo users, Club Demo, sessions); safe to run twice |
+| `make test` | Runs every test in Docker against an empty test database ([docs/testing.md](docs/testing.md)) |
+| `make test-nginx` | Checks that NGINX is the only way in, over HTTPS (needs `make` or `make dev` running) |
+| `make migrate name=<name>` | Creates a Prisma migration from `web/prisma/schema.prisma` and applies it (needs `make dev` running) |
+| `make logs` / `make ps` | Follows the logs / lists the containers |
+| `make down` / `make clean` | Stops and removes the containers; the data is kept |
+| `make fclean` | Removes everything the project created: the containers and the network; the volumes, that is **the database, the uploaded files** and the HTTPS certificate (the next start makes a new one); and the images it built (`app`, `migrate`, `nginx` and `transcendence-app-dev`), plus the old untagged versions of those images that rebuilding left behind (about 1.5 GB each). Those untagged versions are found by the project names `transcendence` and `transcendence-test`, which every clone on the computer shares, so the ones from other clones are removed too. `transcendence-app-dev` is the `make dev` / `make test` image, shared by every clone on the computer, so it is removed for all of them (the next `make dev` or `make test` rebuilds it). Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them |
+| `make re` | `make clean` followed by `make` |
+
+The port can be changed with `HTTPS_PORT` in `.env`.
+
+With rootless Docker (as on the 42 campus computers), `make dev` and `make test` run their container as `root`, which there is your own user: the default `node` user cannot enter the mounted `web` folder. The Makefile detects it by itself (`scripts/container-user.sh`); nothing changes with normal Docker. If your `uploads` volume was created before #236 and has no `avatars/` folder yet, the first avatar uploaded under `make dev` creates that folder as `root`, and then `make` cannot save avatars there: run `make fclean` once, which **deletes the database and the uploaded avatars**.
 
 ### Conventions
 - **Frontend tests**: automated frontend tests live in `web/tests/`, grouped by component or feature. Component tests go in `web/tests/components/` and import the code through the `@/` alias.

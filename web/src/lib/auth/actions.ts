@@ -56,6 +56,11 @@ export async function registerAction(
   );
 }
 
+// One message for a wrong email, a wrong password and a blocked account
+// (credentials.ts refuses the three alike): naming only "blocked" would tell an
+// attacker which emails exist
+const LOGIN_ERROR = "Email o contraseña incorrectos o cuenta bloqueada";
+
 export async function loginAction(
   _prevState: unknown,
   formData: FormData
@@ -67,7 +72,7 @@ export async function loginAction(
   if (typeof email !== "string" || typeof password !== "string") {
     return {
       success: false,
-      error: "Email o contraseña incorrectos",
+      error: LOGIN_ERROR,
     };
   }
 
@@ -79,7 +84,7 @@ export async function loginAction(
   return authenticateWithCredentials(
     email,
     password,
-    "Email o contraseña incorrectos",
+    LOGIN_ERROR,
     redirectTo
   );
 }

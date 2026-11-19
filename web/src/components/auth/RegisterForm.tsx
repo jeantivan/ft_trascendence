@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 import { registerAction, type AuthActionResult } from "@/lib/auth/actions";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
-import { AuthErrorBanner } from "./AuthErrorBanner";
 
 const initialState: AuthActionResult = { success: true };
 
@@ -15,9 +14,9 @@ export function RegisterForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4 w-full max-w-sm">
-      <h1 className="text-2xl font-bold text-center">Crear Cuenta</h1>
+      <h1 className="font-heading text-headline-lg-mobile md:text-headline-lg">Crear Cuenta</h1>
 
-      {!state.success && <AuthErrorBanner error={state.error} />}
+      {!state.success && <Alert variant="error">{state.error}</Alert>}
 
       <FormField label="Nick" htmlFor="nick">
         <Input
@@ -57,12 +56,10 @@ export function RegisterForm() {
         {isPending ? "Registrando..." : "Crear cuenta"}
       </Button>
 
-      <p className="text-sm text-center text-neutral-500 mt-2">
-        ¿Ya tienes cuenta?{" "}
-        <Link href="/login" className="text-blue-500 underline hover:text-blue-400">
-          Inicia sesión aquí
-        </Link>
-      </p>
+      <p className="mt-2 text-body-sm text-text-secondary">¿Ya tienes cuenta?</p>
+      <Button variant="ghost" href="/login">
+        Inicia sesión aquí
+      </Button>
     </form>
   );
 }

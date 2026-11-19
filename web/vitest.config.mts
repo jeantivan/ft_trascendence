@@ -12,12 +12,33 @@ if (testDatabaseUrl === null) {
   console.warn("Skipping *.db.test.ts: DATABASE_URL_TEST is not set. Run make test to include them.");
 }
 
+// Files that need the real Node realm (undici FormData parsing fails inside a vm context)
+const vmIncompatible = ["tests/unit/uploads/upload-route.test.ts"];
+const baseExclude = testDatabaseUrl === null ? [...configDefaults.exclude, "**/*.db.test.ts"] : configDefaults.exclude;
+
 export default defineConfig({
   plugins: [tsconfigPaths(), react()],
   test: {
-    environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
+    // One test database shared by every file (#83): files in parallel deadlock (#243). Their
+    // cleanup deletes users, Admins included, while lockAccountAndAdmins locks every Admin row
+    fileParallelism: false,
     env: testDatabaseUrl === null ? {} : { DATABASE_URL: testDatabaseUrl },
-    exclude: testDatabaseUrl === null ? [...configDefaults.exclude, "**/*.db.test.ts"] : configDefaults.exclude,
+    exclude: baseExclude,
+    // Slow machines (Docker on a busy Mac) hit the 5 s / 10 s defaults on the lint-rule and OTP tests
+    testTimeout: 15_000,
+    hookTimeout: 60_000,
+    // jsdom costs about 0.5 s per file: only the component tests (*.test.tsx) get it
+    projects: [
+      {
+        extends: true,
+        test: { name: "node", environment: "node", pool: "vmThreads", include: ["tests/**/*.test.ts"], exclude: [...vmIncompatible, ...baseExclude] },
+      },
+      {
+        extends: true,
+        test: { name: "node-threads", environment: "node", pool: "threads", include: vmIncompatible, exclude: baseExclude },
+      },
+      { extends: true, test: { name: "dom", environment: "jsdom", pool: "vmThreads", include: ["tests/**/*.test.tsx"], exclude: baseExclude } },
+    ],
   },
 });
