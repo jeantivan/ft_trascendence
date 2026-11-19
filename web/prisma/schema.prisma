@@ -607,7 +607,8 @@ model AuditLog {
 model Avatar {
   id        String   @id @default(uuid()) @db.Uuid
   ownerId   String   @map("owner_id") @db.Uuid
-  // image/jpeg, image/png or image/webp, checked by the server on upload
+  // image/webp: the server re-encodes every upload (#223). Rows saved before #223
+  // can still be image/jpeg or image/png; GET /api/files/[id] serves whichever it says.
   mimeType  String   @map("mime_type")
   sizeBytes Int      @map("size_bytes")
   // Relative to /data/uploads, e.g. avatars/<uuid>.webp

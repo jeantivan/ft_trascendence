@@ -3,6 +3,7 @@ import path from "node:path";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
 import { prisma } from "@/lib/prisma";
 import { checkImage, MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
+import { reencodeAvatar } from "@/lib/uploads/reencode-avatar";
 import { removeAvatar } from "@/lib/uploads/remove-avatar";
 import { saveAvatar } from "@/lib/uploads/save-avatar";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
@@ -69,17 +70,29 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Unsupported image type" }, { status: 415 });
   }
 
+  // Never the bytes that arrived: a new image, without EXIF, XMP or GPS (#223).
+  // checkImage runs first, so sharp only ever sees PNG, JPEG or WebP.
+  const avatar = await reencodeAvatar(bytes);
+  if (!avatar.ok) {
+    if (avatar.reason === "too_many_pixels") {
+      // Not "File too large": the file can be tiny and still claim too many pixels
+      return Response.json({ error: "Image too large" }, { status: 413 });
+    }
+    // Starts like an image but cannot be decoded: the same answer as checkImage's
+    return Response.json({ error: "Unsupported image type" }, { status: 415 });
+  }
+
   // Disk first, database second: if the database fails we only have a file nobody
   // points at, and we remove it. The other order could leave User.image pointing
   // at a file that does not exist.
-  const relativePath = await saveAvatar(bytes, check.extension, UPLOADS_DIR);
+  const relativePath = await saveAvatar(avatar.bytes, avatar.extension, UPLOADS_DIR);
   let saved: { avatarId: string; oldAvatars: { id: string; path: string }[] };
   try {
     // Pinned to READ COMMITTED (Postgres' default; the option at the end): each query
     // sees what was committed when it starts, which is how a waiting upload sees this one
     saved = await prisma.$transaction(async (tx) => {
       const record = await tx.avatar.create({
-        data: { ownerId: user.id, mimeType: check.mimeType, sizeBytes: bytes.length, path: relativePath },
+        data: { ownerId: user.id, mimeType: avatar.mimeType, sizeBytes: avatar.bytes.length, path: relativePath },
       });
       await tx.user.update({ where: { id: user.id }, data: { image: `/api/files/${record.id}` } });
       // One avatar per user (#23): every other one goes, not only older ones. The update
