@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/events/route";
 import { prisma } from "@/lib/prisma";
 import { publish } from "@/lib/realtime/publish";
+import { notify } from "@/lib/notifications/notify";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
 import { closeListener } from "@/lib/realtime/listener";
 // The real requireApiAuth needs NextAuth and the users table: fake it, so this test
@@ -117,6 +118,34 @@ describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
     expect(received).not.toContain('"notificationId":"1"');
 
     await reader.cancel();
+  });
+  it("delivers what notify() publishes to the stream of its user", async () => {
+    // notify() reads the user from the database, so the mock alone is not enough
+    const user = await prisma.user.create({
+      data: { email: "realtime-notify-test@example.com", notificationsEnabled: true },
+    });
+    vi.mocked(requireApiAuth).mockResolvedValue({ ...testUser, id: user.id });
+    try {
+      const response = await GET(new Request("http://localhost/api/events"));
+      const body = response.body;
+      if (!body) {
+        throw new Error("the SSE response has no body");
+      }
+      const reader = body.getReader();
+      await readUntil(reader, ": connected");
+
+      const id = await prisma.$transaction((tx) =>
+        notify(tx, { userId: user.id, type: "contact_request", payload: { contactId: OTHER_USER_ID } }),
+      );
+      expect(id).not.toBe(null);
+      const received = await readUntil(reader, `"notificationId":"${id}"`);
+
+      expect(received).toContain(`event: notification\ndata: {"notificationId":"${id}","userId":"${user.id}"}`);
+      await reader.cancel();
+    } finally {
+      // Its notifications go too (onDelete Cascade)
+      await prisma.user.delete({ where: { id: user.id } });
+    }
   });
   it("answers 401 without opening a stream when requireApiAuth rejects", async () => {
     vi.mocked(requireApiAuth).mockResolvedValue(
