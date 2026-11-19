@@ -1,16 +1,16 @@
 *This project has been created as part of the 42 curriculum by jeanpaul, <login2>.*
 
-# Omnisport Hub
+# StrideSync
 
 ## Description
-Omnisport Hub is a B2B Sports Management SaaS built to centralize administrative, tactical, physical, and medical management for sports teams. It eliminates information fragmentation by providing a secure, real-time, and role-based environment.
+StrideSync is a B2B Sports Management SaaS built to centralize administrative, tactical, and physical management for sports teams. It eliminates information fragmentation by providing a secure, real-time, and role-based environment.
 
 Key Features:
 - **Unified Calendar**: Manage all club events and training sessions seamlessly.
 - **Advanced Permissions**: Distinct roles for Admins (platform governance), Managers (club management), and Athletes (training and events).
 - **Real-time Communication**: Event and direct message (DM) chat using Server-Sent Events (SSE).
-- **Analytics Dashboard**: Multi-sport performance tracking via dynamic JSONB data models.
-- **File Management**: Tactical and medical document uploads via S3-compatible storage.
+- **Analytics Dashboard**: Performance tracking via dynamic JSONB data models.
+- **File Management**: Avatar uploads stored in a private Docker volume.
 
 ## Instructions
 ### Prerequisites
@@ -65,7 +65,6 @@ The port can be changed with `HTTPS_PORT` in `.env`.
 ## Resources
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Prisma ORM](https://www.prisma.io/)
-- [MinIO](https://min.io/)
 - [Server-Sent Events (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
 
 *AI Usage: AI tools were used during the initial system design phase to help architecture planning (e.g., structuring the Docker topology, deciding on SSE vs WebSockets) and domain modeling.*
@@ -80,13 +79,12 @@ The port can be changed with `HTTPS_PORT` in `.env`.
 ## Technical Stack
 - **Frontend/Backend Framework**: Next.js (App Router)
 - **Database**: PostgreSQL (using JSONB for flexible metrics)
-- **Storage**: MinIO (AWS S3 Compatible)
+- **Storage**: Private Docker volume
 - **Proxy/Security**: NGINX with OpenSSL self-signed certificates
 - **Authentication**: NextAuth.js (Auth.js)
 
 ### Justification for Major Choices
 - **Next.js Full-Stack**: Selected to unify the codebase, reducing context switching and deployment complexity while fulfilling both frontend and backend requirements.
-- **MinIO**: Used to mimic enterprise cloud architecture locally, providing a robust solution for the file upload module without relying on local volumes.
 - **SSE + Postgres LISTEN/NOTIFY**: Chosen for real-time features to maintain a strictly HTTP-based stack, avoiding the overhead of maintaining a separate WebSocket server.
 
 ## Modules
@@ -99,6 +97,6 @@ The port can be changed with `HTTPS_PORT` in `.env`.
 - **File upload (Minor - 1pt)**: Avatar uploads stored in a private Docker volume.
 - **ORM (Minor - 1pt)**: Prisma.
 - **SSR (Minor - 1pt)**: Server-Side Rendering with Next.js App Router.
-- **Custom Design System (Minor - 1pt)**: Reusable UI component library with design tokens.
+- **Custom Design System (Minor - 1pt)**: Reusable UI component library built on the Kinetic Obsidian design tokens, with no third-party UI libraries. It has 12 components (`Alert`, `Avatar`, `Badge`, `Button`, `Card`, `FormField`, `Icon`, `Input`, `LegalLinks`, `Logo`, `Modal`, `RpeBadge`), documented in `web/src/components/ui/docs/`.
 - **GDPR Compliance (Minor - 1pt)**: User data export and account deletion with OTP verification.
 **Total Target**: 17 points (14 points minimum required)
