@@ -56,4 +56,15 @@ export class PrismaOtpRepository implements OtpRepository {
     });
     return count === 1;
   }
+
+  async withUserLock<T>(userId: string, fn: (repo: OtpRepository) => Promise<T>): Promise<T> {
+    const runLocked = async (tx: Prisma.TransactionClient): Promise<T> => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      return fn(new PrismaOtpRepository(tx));
+    };
+    if ("$transaction" in this.db) {
+      return this.db.$transaction(runLocked);
+    }
+    return runLocked(this.db);
+  }
 }

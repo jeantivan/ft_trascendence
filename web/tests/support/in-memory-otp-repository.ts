@@ -4,6 +4,7 @@ import { OTP_MAX_ATTEMPTS, type OtpRecord, type OtpRepository } from "@/lib/gdpr
 
 export class InMemoryOtpRepository implements OtpRepository {
   private records: OtpRecord[] = [];
+  private locks = new Map<string, Promise<void>>();
 
   async create(data: Omit<OtpRecord, "id" | "attempts">): Promise<OtpRecord> {
     const record = { ...data, id: randomUUID(), attempts: 0 };
@@ -54,5 +55,23 @@ export class InMemoryOtpRepository implements OtpRepository {
     const record = this.records.find((r) => r.id === recordId);
     if (!record || record.userId !== userId || record.purpose !== purpose) return false;
     return this.consumeIfUnused(recordId, now);
+  }
+
+  async withUserLock<T>(userId: string, fn: (repo: OtpRepository) => Promise<T>): Promise<T> {
+    const previous = this.locks.get(userId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.locks.set(userId, current);
+    await previous;
+    try {
+      return await fn(this);
+    } finally {
+      release();
+      if (this.locks.get(userId) === current) {
+        this.locks.delete(userId);
+      }
+    }
   }
 }

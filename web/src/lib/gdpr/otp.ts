@@ -47,6 +47,9 @@ export interface OtpRepository {
   // Expiry is checked here against the given now: callers inside a transaction
   // pass a fresh new Date(), not the time of the earlier verification.
   consumeIfUnusedFor(recordId: string, userId: string, purpose: OtpPurpose, now: Date): Promise<boolean>;
+  // Serializes operations for userId (in Postgres: a transaction with
+  // SELECT ... FOR UPDATE on the user row, passing a repo bound to that tx).
+  withUserLock<T>(userId: string, fn: (repo: OtpRepository) => Promise<T>): Promise<T>;
 }
 
 export type VerifyOtpResult = { success: true } | { success: false; reason: "invalid" };
@@ -85,25 +88,27 @@ export async function issueOtp(
   repo: OtpRepository,
   now: Date = new Date(),
 ): Promise<IssueOtpResult> {
-  const latest = await repo.findLatest(userId, purpose);
-  if (latest) {
-    const elapsedMs = now.getTime() - latest.createdAt.getTime();
-    if (elapsedMs < OTP_COOLDOWN_MS) {
-      return { issued: false, retryAfterSeconds: Math.ceil((OTP_COOLDOWN_MS - elapsedMs) / 1000) };
+  return repo.withUserLock(userId, async (lockedRepo) => {
+    const latest = await lockedRepo.findLatest(userId, purpose);
+    if (latest) {
+      const elapsedMs = now.getTime() - latest.createdAt.getTime();
+      if (elapsedMs < OTP_COOLDOWN_MS) {
+        return { issued: false, retryAfterSeconds: Math.ceil((OTP_COOLDOWN_MS - elapsedMs) / 1000) };
+      }
+      const windowStart = new Date(now.getTime() - OTP_WINDOW_MS);
+      const recent = await lockedRepo.findCreatedSince(userId, purpose, windowStart);
+      if (recent.length >= OTP_MAX_PER_HOUR) {
+        const oldestInWindow = recent[recent.length - OTP_MAX_PER_HOUR];
+        const retryAfterMs = oldestInWindow.createdAt.getTime() + OTP_WINDOW_MS - now.getTime();
+        return { issued: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) };
+      }
     }
-    const windowStart = new Date(now.getTime() - OTP_WINDOW_MS);
-    const recent = await repo.findCreatedSince(userId, purpose, windowStart);
-    if (recent.length >= OTP_MAX_PER_HOUR) {
-      const oldestInWindow = recent[recent.length - OTP_MAX_PER_HOUR];
-      const retryAfterMs = oldestInWindow.createdAt.getTime() + OTP_WINDOW_MS - now.getTime();
-      return { issued: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) };
-    }
-  }
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
-  const codeHash = await hashPassword(code);
-  await repo.create({ userId, purpose, codeHash, createdAt: now, expiresAt, consumedAt: null });
-  return { issued: true, code };
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
+    const codeHash = await hashPassword(code);
+    await lockedRepo.create({ userId, purpose, codeHash, createdAt: now, expiresAt, consumedAt: null });
+    return { issued: true, code };
+  });
 }
 
 // Checks the code and reserves an attempt, but does not consume it: the caller
