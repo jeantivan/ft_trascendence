@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AdminCannotBeManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   OrganizationNotFoundError,
   OrganizationService,
 } from "@/lib/org/organization-service";
 import { LastManagerError, UserNotFoundError } from "@/lib/org/organization-repository";
+import type { MailMessage, MailSender } from "@/lib/mail/mail-sender";
 import { InMemoryOrganizationRepository } from "../support/in-memory-organization-repository";
 
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
@@ -25,9 +28,9 @@ const NEW_CLUB = {
   managerIds: [MANAGER_ID],
 };
 
-function createService() {
+function createService(mailSender?: MailSender) {
   const repo = new InMemoryOrganizationRepository();
-  return { service: new OrganizationService(repo), repo };
+  return { service: new OrganizationService(repo, mailSender), repo };
 }
 
 describe("OrganizationService", () => {
@@ -36,7 +39,7 @@ describe("OrganizationService", () => {
     const id = repo.add(CLUB);
 
     await expect(service.listCatalog()).resolves.toEqual([
-      { id, name: CLUB.name, description: CLUB.description, memberCount: 3 },
+      { id, name: CLUB.name, description: CLUB.description, deleteAt: null, memberCount: 3 },
     ]);
   });
 
@@ -49,6 +52,7 @@ describe("OrganizationService", () => {
       name: CLUB.name,
       description: CLUB.description,
       timezone: CLUB.timezone,
+      deleteAt: null,
     });
   });
 
@@ -74,6 +78,7 @@ describe("OrganizationService", () => {
       name: CLUB.name,
       description: "Ahora salimos los jueves",
       timezone: "Europe/London",
+      deleteAt: null,
     });
     await expect(service.getOrganization(id)).resolves.toEqual(updated);
   });
@@ -113,6 +118,7 @@ describe("OrganizationService", () => {
       name: NEW_CLUB.name,
       description: NEW_CLUB.description,
       timezone: NEW_CLUB.timezone,
+      deleteAt: null,
     });
     await expect(service.getOrganization(created.id)).resolves.toEqual(created);
   });
@@ -226,5 +232,73 @@ describe("OrganizationService", () => {
       service.createOrganization(ADMIN_ID, { ...NEW_CLUB, managerIds: [] }),
     ).rejects.toThrow();
     await expect(service.listCatalog()).resolves.toEqual([]);
+  });
+
+  it("scheduleDeletion sets deleteAt, sends notice emails and rejects a second schedule", async () => {
+    const sent: MailMessage[] = [];
+    const mailSender: MailSender = {
+      send: async (message) => {
+        sent.push(message);
+      },
+    };
+    const { service, repo } = createService(mailSender);
+    const orgId = repo.add(CLUB);
+    vi.spyOn(repo, "scheduleDeletion").mockResolvedValueOnce({
+      orgId,
+      orgName: CLUB.name,
+      deleteAt: new Date("2026-12-19T00:00:00.000Z"),
+      memberEmails: ["a@example.com", "b@example.com"],
+    });
+
+    const result = await service.scheduleDeletion(ADMIN_ID, orgId);
+
+    expect(result.deleteAt).toEqual(new Date("2026-12-19T00:00:00.000Z"));
+    expect(sent).toHaveLength(2);
+    expect(sent.map((m) => m.to)).toEqual(["a@example.com", "b@example.com"]);
+    expect(sent[0].subject).toContain(CLUB.name);
+    expect(sent[0].text).toContain("30 días");
+
+    await service.scheduleDeletion(ADMIN_ID, orgId);
+    await expect(service.scheduleDeletion(ADMIN_ID, orgId)).rejects.toBeInstanceOf(
+      OrganizationDeletionAlreadyScheduledError,
+    );
+  });
+
+  it("scheduleDeletion still succeeds if sending a notice email fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mailSender: MailSender = {
+      send: async (message) => {
+        if (message.to === "fail@example.com") throw new Error("smtp down");
+      },
+    };
+    const { service, repo } = createService(mailSender);
+    const orgId = repo.add(CLUB);
+    vi.spyOn(repo, "scheduleDeletion").mockResolvedValueOnce({
+      orgId,
+      orgName: CLUB.name,
+      deleteAt: new Date("2026-12-19T00:00:00.000Z"),
+      memberEmails: ["ok@example.com", "fail@example.com"],
+    });
+
+    await expect(service.scheduleDeletion(ADMIN_ID, orgId)).resolves.toMatchObject({ orgId });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("1 notice email(s) failed"));
+    warn.mockRestore();
+  });
+
+  it("cancelDeletion clears deleteAt and rejects when no deletion is scheduled", async () => {
+    const { service, repo } = createService();
+    const orgId = repo.add(CLUB);
+
+    await expect(service.cancelDeletion(ADMIN_ID, orgId)).rejects.toBeInstanceOf(
+      OrganizationDeletionNotScheduledError,
+    );
+
+    await service.scheduleDeletion(ADMIN_ID, orgId);
+    await expect(service.getOrganization(orgId)).resolves.toMatchObject({
+      deleteAt: expect.any(Date),
+    });
+
+    await service.cancelDeletion(ADMIN_ID, orgId);
+    await expect(service.getOrganization(orgId)).resolves.toMatchObject({ deleteAt: null });
   });
 });

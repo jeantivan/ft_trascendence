@@ -65,6 +65,7 @@ export function runOrganizationRepositoryContract(
         id,
         name: data.name,
         description: data.description,
+        deleteAt: null,
         memberCount: 3,
       });
     });
@@ -87,7 +88,7 @@ export function runOrganizationRepositoryContract(
 
       const club = (await repo.listCatalog()).find((c) => c.id === id);
 
-      expect(Object.keys(club ?? {}).sort()).toEqual(["description", "id", "memberCount", "name"]);
+      expect(Object.keys(club ?? {}).sort()).toEqual(["deleteAt", "description", "id", "memberCount", "name"]);
     });
 
     it("findById returns the club's record with its time zone", async () => {
@@ -100,6 +101,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: data.description,
         timezone: data.timezone,
+        deleteAt: null,
       });
     });
 
@@ -121,6 +123,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: null,
         timezone: "Europe/London",
+        deleteAt: null,
       });
       await expect(repo.findById(id)).resolves.toEqual(updated);
     });
@@ -150,6 +153,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: data.description,
         timezone: data.timezone,
+        deleteAt: null,
       });
       await expect(repo.findById(created.id)).resolves.toEqual(created);
     });

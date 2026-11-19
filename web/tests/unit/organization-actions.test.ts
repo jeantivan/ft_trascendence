@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assignManagerAction,
+  cancelOrganizationDeletionAction,
   createOrganizationAction,
   removeManagerAction,
+  scheduleOrganizationDeletionAction,
   updateOrganizationAction,
 } from "@/lib/org/actions";
 import {
@@ -12,7 +14,12 @@ import {
   OrganizationNameTakenError,
   UserNotFoundError,
 } from "@/lib/org/organization-repository";
-import { AdminCannotBeManagerError, OrganizationNotFoundError } from "@/lib/org/organization-service";
+import {
+  AdminCannotBeManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
+  OrganizationNotFoundError,
+} from "@/lib/org/organization-service";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { requireAdmin } from "@/lib/permissions/require-admin";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
@@ -22,6 +29,8 @@ const updateOrganization = vi.hoisted(() => vi.fn());
 const createOrganization = vi.hoisted(() => vi.fn());
 const assignManager = vi.hoisted(() => vi.fn());
 const removeManager = vi.hoisted(() => vi.fn());
+const scheduleDeletion = vi.hoisted(() => vi.fn());
+const cancelDeletion = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/permissions/require-org-role", () => ({ requireOrgRole: vi.fn() }));
 vi.mock("@/lib/permissions/require-admin", () => ({ requireAdmin: vi.fn() }));
@@ -34,6 +43,8 @@ vi.mock("@/lib/org/organization-service", async (importOriginal) => ({
     createOrganization = createOrganization;
     assignManager = assignManager;
     removeManager = removeManager;
+    scheduleDeletion = scheduleDeletion;
+    cancelDeletion = cancelDeletion;
   },
 }));
 
@@ -342,5 +353,80 @@ describe.each([
     serviceMethod.mockRejectedValue(unexpected);
 
     await expect(action(ORG_ID, null, formWith({ userId: USER_ID }))).rejects.toBe(unexpected);
+  });
+});
+
+describe("scheduleOrganizationDeletionAction", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(requireAdmin).mockResolvedValue(ADMIN);
+  });
+
+  it("lets the Admin schedule deletion and returns deleteAt", async () => {
+    const deleteAt = new Date("2026-12-19T00:00:00.000Z");
+    scheduleDeletion.mockResolvedValue({ orgId: ORG_ID, orgName: "Club", deleteAt, memberEmails: [] });
+
+    const result = await scheduleOrganizationDeletionAction(ORG_ID.toUpperCase());
+
+    expect(result).toEqual({ success: true, deleteAt });
+    expect(scheduleDeletion).toHaveBeenCalledWith("admin-from-session", ORG_ID);
+  });
+
+  it("propagates authorization rejection for non-Admin", async () => {
+    vi.mocked(requireAdmin).mockRejectedValue(new ForbiddenSignal());
+
+    await expect(scheduleOrganizationDeletionAction(ORG_ID)).rejects.toBeInstanceOf(ForbiddenSignal);
+    expect(scheduleDeletion).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed orgId", async () => {
+    const result = await scheduleOrganizationDeletionAction("not-a-uuid");
+    expect(result).toEqual({ success: false, error: "Club no válido" });
+    expect(scheduleDeletion).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [new OrganizationNotFoundError(), "El club ya no existe"],
+    [new OrganizationDeletionAlreadyScheduledError(), "El borrado del club ya está programado"],
+  ])("translates domain errors", async (error, message) => {
+    scheduleDeletion.mockRejectedValue(error);
+    await expect(scheduleOrganizationDeletionAction(ORG_ID)).resolves.toEqual({ success: false, error: message });
+  });
+});
+
+describe("cancelOrganizationDeletionAction", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(requireAdmin).mockResolvedValue(ADMIN);
+  });
+
+  it("lets the Admin cancel deletion", async () => {
+    cancelDeletion.mockResolvedValue(undefined);
+
+    const result = await cancelOrganizationDeletionAction(ORG_ID.toUpperCase());
+
+    expect(result).toEqual({ success: true });
+    expect(cancelDeletion).toHaveBeenCalledWith("admin-from-session", ORG_ID);
+  });
+
+  it("propagates authorization rejection for non-Admin", async () => {
+    vi.mocked(requireAdmin).mockRejectedValue(new ForbiddenSignal());
+
+    await expect(cancelOrganizationDeletionAction(ORG_ID)).rejects.toBeInstanceOf(ForbiddenSignal);
+    expect(cancelDeletion).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed orgId", async () => {
+    const result = await cancelOrganizationDeletionAction("not-a-uuid");
+    expect(result).toEqual({ success: false, error: "Club no válido" });
+    expect(cancelDeletion).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [new OrganizationNotFoundError(), "El club ya no existe"],
+    [new OrganizationDeletionNotScheduledError(), "El club no tiene un borrado programado activo"],
+  ])("translates domain errors", async (error, message) => {
+    cancelDeletion.mockRejectedValue(error);
+    await expect(cancelOrganizationDeletionAction(ORG_ID)).resolves.toEqual({ success: false, error: message });
   });
 });

@@ -14,6 +14,8 @@ import {
 } from "./organization-repository";
 import {
   AdminCannotBeManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   OrganizationNotFoundError,
   OrganizationService,
 } from "./organization-service";
@@ -28,6 +30,10 @@ export type CreateOrganizationActionResult =
 
 export type ManagerActionResult =
   | { success: true }
+  | { success: false; error: string };
+
+export type OrganizationDeletionActionResult =
+  | { success: true; deleteAt?: Date }
   | { success: false; error: string };
 
 const organizationService = new OrganizationService();
@@ -197,4 +203,56 @@ function managerErrorResult(error: unknown): ManagerActionResult {
     return { success: false, error: "El club ya no existe" };
   }
   throw error;
+}
+
+// Admin only: schedules club deletion in 30 days.
+export async function scheduleOrganizationDeletionAction(
+  orgId: string,
+): Promise<OrganizationDeletionActionResult> {
+  // Outside try/catch: it checks the session and throws to redirect or reject a non-Admin
+  const admin = await requireAdmin();
+
+  const parsedOrgId = idSchema.safeParse(orgId);
+  if (!parsedOrgId.success) {
+    return { success: false, error: "Club no válido" };
+  }
+
+  try {
+    const result = await organizationService.scheduleDeletion(admin.id, parsedOrgId.data);
+    return { success: true, deleteAt: result.deleteAt };
+  } catch (error) {
+    if (error instanceof OrganizationNotFoundError) {
+      return { success: false, error: "El club ya no existe" };
+    }
+    if (error instanceof OrganizationDeletionAlreadyScheduledError) {
+      return { success: false, error: "El borrado del club ya está programado" };
+    }
+    throw error;
+  }
+}
+
+// Admin only: cancels an active scheduled club deletion.
+export async function cancelOrganizationDeletionAction(
+  orgId: string,
+): Promise<OrganizationDeletionActionResult> {
+  // Outside try/catch: it checks the session and throws to redirect or reject a non-Admin
+  const admin = await requireAdmin();
+
+  const parsedOrgId = idSchema.safeParse(orgId);
+  if (!parsedOrgId.success) {
+    return { success: false, error: "Club no válido" };
+  }
+
+  try {
+    await organizationService.cancelDeletion(admin.id, parsedOrgId.data);
+    return { success: true };
+  } catch (error) {
+    if (error instanceof OrganizationNotFoundError) {
+      return { success: false, error: "El club ya no existe" };
+    }
+    if (error instanceof OrganizationDeletionNotScheduledError) {
+      return { success: false, error: "El club no tiene un borrado programado activo" };
+    }
+    throw error;
+  }
 }
