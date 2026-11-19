@@ -108,7 +108,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Files only after the commit: a rollback brings the rows back, but the disk has no
-  // rollback. Rows first, files second: a failure here only leaves a file nobody points at.
+  // rollback. Rows first, files second: a failure here only leaves a file nobody points
+  // at, which the orphan avatar sweep (#254) deletes later.
   for (const old of saved.oldAvatars) {
     try {
       await unlink(path.join(UPLOADS_DIR, old.path));
@@ -116,7 +117,9 @@ export async function POST(request: Request): Promise<Response> {
       // The new avatar is already in use: report the leftover, don't fail the upload.
       // With the path: the row is gone, so the id alone cannot find the file.
       // ENOENT is logged too: the row lock lets only one upload delete each old row,
-      // so a missing file here means the disk had lost a file the database still had.
+      // so a missing file here means the disk had lost a file the database still had,
+      // or (Known limit) the orphan sweep (#254) deleted it in the milliseconds between
+      // the commit and this unlink.
       console.error("Could not delete old avatar file", old.id, old.path, error);
     }
   }
