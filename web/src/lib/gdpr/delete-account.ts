@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
+import { recordAudit } from "@/lib/gdpr/audit";
 import { verifyOtpWithoutConsuming } from "@/lib/gdpr/otp";
 import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
 import { deleteAvatarFiles } from "@/lib/uploads/delete-avatar-files";
@@ -74,8 +75,13 @@ export async function deleteAccountWithOtp(
         if (!consumed) throw new OtpNotConsumedError();
         // Written before the rest on purpose: if anything below fails, this row rolls back too.
         // Ids only, no email, nick or code. No foreign key: the row outlives the user (12 months)
-        await tx.auditLog.create({
-          data: { actorId: userId, subjectId: userId, actorRole: null, action: "account_deleted", resource: "account" },
+        await recordAudit(tx, {
+          actorId: userId,
+          subjectId: userId,
+          actorRole: null,
+          action: "account_deleted",
+          resource: "account",
+          resourceId: null,
         });
         filePaths = await deleteLockedAccount(userId, tx);
       },
@@ -215,9 +221,9 @@ async function deleteAccountRows(userId: string, tx: Prisma.TransactionClient): 
 // account in it is deleted, the conversation and its messages go too
 // (docs/gdpr/account-deletion-table.md). Event chats are never touched here.
 //
-// PROVISIONAL, pending Jacobo's answer in #34: every participant row still linked to
-// an existing account counts as "the other person is still here", including rows
-// with removed_at. Do not read this as the decision on what removed_at means.
+// Every participant row still linked to an existing account counts as "the other
+// person still keeps the conversation", including rows with removed_at (removed_at
+// revokes writing when the Contact ends, not reading the history; #34).
 //
 // Two people deleting the same DM at the same time: without a lock each one still
 // sees the other one's row, so nobody deletes the conversation and it is left empty.

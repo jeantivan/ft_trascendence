@@ -11,7 +11,6 @@ const USER_A = "77777777-7777-4777-8777-777777777771";
 const USER_B = "77777777-7777-4777-8777-777777777772";
 
 // Conversations and messages after an account is deleted (docs/gdpr/account-deletion-table.md).
-// Plain participants only: what removed_at means for a deletion is still an open question.
 describe("borrado de cuenta: conversaciones y mensajes", { timeout: 30_000 }, () => {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
@@ -126,7 +125,7 @@ describe("borrado de cuenta: conversaciones y mensajes", { timeout: 30_000 }, ()
     }
   });
 
-  it("DM: un participante con removed_at cuenta como presente (decisión provisional, pendiente de Jacobo)", async () => {
+  it("DM: un participante con removed_at conserva el historial en solo lectura y la conversación no se borra", async () => {
     await seedConversation("dm");
     await db.conversationParticipant.update({
       where: { conversationId_userId: { conversationId, userId: USER_B } },
