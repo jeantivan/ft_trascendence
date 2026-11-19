@@ -1,6 +1,6 @@
 // Works as the hub between Postgres listener and the SSE streams (ADR 0001)
 // In-memory only: it does not talk to Postgres or HTTP, and it does not
-// filter recipients yet (every open stream gets every event)
+// filter recipients (route.ts does, with isRecipient)
 
 
 import {EventEmitter} from "node:events";

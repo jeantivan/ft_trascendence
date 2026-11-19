@@ -318,4 +318,44 @@ describe("Events Zod schemas", () => {
       expect(deleteFeedbackSchema.safeParse({ feedbackId: "abc" }).success).toBe(false);
     });
   });
+
+  // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent in
+  // upper case comes out in lower case, as with org/schemas.ts (normalizeId), so the
+  // in-memory EventRepository finds it too (review of #241)
+  describe("ids", () => {
+    const UPPER = "ABCDEF00-0000-4000-8000-0000000000AB";
+    const LOWER = "abcdef00-0000-4000-8000-0000000000ab";
+
+    it.each([
+      ["createEventSchema sessionId", () => createEventSchema.parse({ ...validEvent, sessionId: UPPER }).sessionId],
+      ["updateEventSchema eventId", () => updateEventSchema.parse({ ...validEvent, eventId: UPPER }).eventId],
+      [
+        "updateEventSchema sessionId",
+        () => updateEventSchema.parse({ ...validEvent, eventId: EVENT_ID, sessionId: UPPER }).sessionId,
+      ],
+      ["cancelEventSchema eventId", () => cancelEventSchema.parse({ eventId: UPPER }).eventId],
+      ["requestSpotSchema eventId", () => requestSpotSchema.parse({ eventId: UPPER }).eventId],
+      ["withdrawSpotSchema eventId", () => withdrawSpotSchema.parse({ eventId: UPPER }).eventId],
+      [
+        "reviewSpotSchema eventId",
+        () => reviewSpotSchema.parse({ eventId: UPPER, athleteId: EVENT_ID, decision: "approved" }).eventId,
+      ],
+      [
+        "reviewSpotSchema athleteId",
+        () => reviewSpotSchema.parse({ eventId: EVENT_ID, athleteId: UPPER, decision: "approved" }).athleteId,
+      ],
+      [
+        "createFeedbackSchema eventId",
+        () => createFeedbackSchema.parse({ eventId: UPPER, athleteId: EVENT_ID, body: "Bien" }).eventId,
+      ],
+      [
+        "createFeedbackSchema athleteId",
+        () => createFeedbackSchema.parse({ eventId: EVENT_ID, athleteId: UPPER, body: "Bien" }).athleteId,
+      ],
+      ["updateFeedbackSchema feedbackId", () => updateFeedbackSchema.parse({ feedbackId: UPPER, body: "Bien" }).feedbackId],
+      ["deleteFeedbackSchema feedbackId", () => deleteFeedbackSchema.parse({ feedbackId: UPPER }).feedbackId],
+    ] as const)("%s comes out in lower case", (_field, read) => {
+      expect(read()).toBe(LOWER);
+    });
+  });
 });

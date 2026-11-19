@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { verifyPassword } from "@/lib/auth/password";
-import { issueOtp, OTP_MAX_ATTEMPTS, verifyOtp } from "@/lib/gdpr/otp";
+import { issueOtp, OTP_MAX_ATTEMPTS, OTP_MAX_PER_HOUR, verifyOtp } from "@/lib/gdpr/otp";
 import { InMemoryOtpRepository } from "../support/in-memory-otp-repository";
 
 // Same behaviour as the real module, but now we can count the hash checks
@@ -303,6 +303,41 @@ describe("issueOtp: enfriamiento entre emisiones", () => {
 
     const otherPurpose = await issueOtp(USER_ID, "export_data", repo, after(1));
     const otherUser = await issueOtp("22222222-2222-4222-8222-222222222222", "delete_account", repo, after(1));
+
+    expect(otherPurpose).toMatchObject({ issued: true });
+    expect(otherUser).toMatchObject({ issued: true });
+  });
+
+  it("rechaza el undécimo código dentro de la misma hora e indica cuánto falta para que salga el primero", async () => {
+    for (let i = 0; i < OTP_MAX_PER_HOUR; i++) {
+      expect(await issueOtp(USER_ID, "delete_account", repo, after(i * 60))).toMatchObject({ issued: true });
+    }
+
+    // 10 minutos tras el primero (60 s tras el décimo): el cooldown de 60 s ya pasó, pero quedan 50 min de ventana
+    const eleventh = await issueOtp(USER_ID, "delete_account", repo, after(10 * 60));
+
+    expect(eleventh).toEqual({ issued: false, retryAfterSeconds: 50 * 60 });
+  });
+
+  it("vuelve a emitir exactamente al cumplirse una hora desde el primero de los diez", async () => {
+    for (let i = 0; i < OTP_MAX_PER_HOUR; i++) {
+      await issueOtp(USER_ID, "delete_account", repo, after(i * 60));
+    }
+
+    expect(await issueOtp(USER_ID, "delete_account", repo, after(3599))).toEqual({
+      issued: false,
+      retryAfterSeconds: 1,
+    });
+    expect(await issueOtp(USER_ID, "delete_account", repo, after(3600))).toMatchObject({ issued: true });
+  });
+
+  it("el tope por hora no mezcla propósitos ni usuarios", async () => {
+    for (let i = 0; i < OTP_MAX_PER_HOUR; i++) {
+      await issueOtp(USER_ID, "delete_account", repo, after(i * 60));
+    }
+
+    const otherPurpose = await issueOtp(USER_ID, "export_data", repo, after(10 * 60));
+    const otherUser = await issueOtp("22222222-2222-4222-8222-222222222222", "delete_account", repo, after(10 * 60));
 
     expect(otherPurpose).toMatchObject({ issued: true });
     expect(otherUser).toMatchObject({ issued: true });
