@@ -8,7 +8,7 @@
 2. **Reautenticación:** el servidor envía un código OTP por email, el mismo mecanismo que el borrado de cuenta (caduca en 10 minutos, 5 intentos).
 3. Con el OTP correcto se crea la exportación. **Solo puede haber una activa por usuario**: si ya existe una no caducada, se rechaza la petición con ese motivo.
 4. El ZIP se genera en el servidor y se guarda con un nombre no adivinable en un **volumen local privado de Docker** (sin almacenamiento externo, según la decisión de infraestructura del ticket #06). NGINX **no** expone esa carpeta: el ZIP solo sale por el endpoint autenticado de descarga (sección 2).
-5. El servidor envía un email con el enlace de descarga. El email **no contiene datos**, solo el enlace y la fecha de caducidad.
+5. El servidor envía un email con el enlace de descarga. El email **no contiene datos**, solo el enlace y la fecha de caducidad. Si el email no se puede enviar, la exportación pasa a `failed` y se borra el ZIP (nadie tendría el token). Si el proceso muere entre `ready` y el email, al arrancar la exportación también pasa a `failed`.
 6. El enlace caduca a los **7 días**. Al caducar se borra el ZIP del disco y el registro de la exportación.
 7. Si el usuario borra su cuenta, se borran de inmediato el ZIP pendiente y el registro de la exportación.
 
@@ -45,6 +45,15 @@ Comprueba que el `export_id` pertenece al usuario de la sesión (`404` si no).
 ### `GET /api/gdpr/export/{export_id}/download`
 
 Requiere sesión iniciada del **mismo usuario** además del token del enlace. El servidor comprueba sesión, pertenencia y fecha de caducidad antes de leer el fichero del volumen. Devuelve el ZIP (`application/zip`). Responde `404` si caducó o no es suyo.
+
+Enlace: `<origen público>/api/gdpr/export/{export_id}/download?token=<token>`. El origen sale de las cabeceras `x-forwarded-host` y `x-forwarded-proto` que pone NGINX.
+
+Contrato del token:
+
+- 32 bytes aleatorios en base64url (43 caracteres). Se genera al pasar a `ready` y solo existe en memoria y en el email: la base de datos guarda únicamente su SHA-256 (hex, `token_hash`).
+- Se compara con `timingSafeEqual`. No sirve solo: sin sesión del mismo usuario responde `401`.
+- Respuestas uniformes: `404` si el id no es un UUID, no existe, no es suyo, no está `ready`, caducó, falta el token o este no coincide, o el fichero no está.
+- Cabeceras: `Content-Type: application/zip`, `Content-Disposition: attachment; filename="my-data.zip"`, `Content-Length`, `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`. El ZIP se sirve en streaming.
 
 Los logs y errores de estas rutas llevan solo `export_id`, nunca el contenido del ZIP.
 

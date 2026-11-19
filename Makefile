@@ -2,6 +2,15 @@ COMPOSE      = docker compose
 COMPOSE_DEV  = $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_TEST = $(COMPOSE) -f docker-compose.test.yml
 
+# User of the make dev and make test containers (#236): root with rootless Docker
+# (the campus), where node cannot enter the mounted ./web; empty otherwise, so the
+# compose files keep node. Set it by hand to override: DEV_CONTAINER_USER=root make dev
+# Asked once per make run (:=); a value already in the environment is kept
+ifndef DEV_CONTAINER_USER
+DEV_CONTAINER_USER := $(shell sh scripts/container-user.sh)
+endif
+export DEV_CONTAINER_USER
+
 # Run when the start fails: shows the last lines of migrate, where the reason is
 # (it never prints a password), and explains it if Postgres rejected the password
 START_FAILED_HINT = echo "--- Last lines of migrate:"; $(COMPOSE) logs --no-log-prefix --tail 15 migrate 2>/dev/null; \
@@ -97,11 +106,18 @@ down:
 clean: down
 
 # Also remove the volumes and the images: DELETES THE DATABASE DATA
+# Then the dangling images of this project (#236): old versions that lost their name
+# when an image was rebuilt (1.5 GB each on the campus). Only those with the compose
+# label of this project (name: in docker-compose.yml and docker-compose.test.yml).
+# That name is fixed, so it is the same in every clone: the old versions from every clone go too.
 # --rmi local skips images with a fixed name, so the make dev / make test image
 # (transcendence-app-dev) is removed by name (#65). It is checked first so a
 # missing image prints nothing, while real errors still show.
 fclean:
 	$(COMPOSE) down --volumes --rmi local
+	@for project in transcendence transcendence-test; do \
+		docker image prune --force --filter "label=com.docker.compose.project=$$project" >/dev/null; \
+	done
 	@if docker image inspect transcendence-app-dev >/dev/null 2>&1; then \
 		docker image rm --force transcendence-app-dev; \
 	fi

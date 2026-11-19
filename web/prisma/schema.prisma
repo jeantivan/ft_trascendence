@@ -85,7 +85,8 @@ model User {
   messages                 Message[]
   notifications            Notification[]
 
-  avatars Avatar[]
+  avatars     Avatar[]
+  dataExports DataExport[]
 
   @@map("users")
 }
@@ -617,4 +618,35 @@ model Avatar {
 
   @@index([ownerId])
   @@map("avatars")
+}
+
+enum DataExportStatus {
+  pending
+  ready
+  failed
+}
+
+// GDPR data export (issue #165, docs/gdpr/export-spec.md). The ZIP lives in
+// the private uploads volume, never in NGINX or in the avatars table.
+// tokenHash, path and expiresAt stay null until the ZIP is fully written
+// (status ready); the token itself is never stored, only its SHA-256.
+// Deleting the User deletes these rows (Cascade), but not the files on disk:
+// the server must delete them first, like the avatars.
+model DataExport {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  status      DataExportStatus @default(pending)
+  // SHA-256 (hex) of the download token
+  tokenHash   String?          @map("token_hash")
+  // Relative to /data/uploads, e.g. exports/<uuid>.zip
+  path        String?
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt   DateTime?        @map("expires_at") @db.Timestamptz(3)
+  // When the email with the link was sent. A ready export without it never reached the user
+  deliveredAt DateTime?        @map("delivered_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("data_exports")
 }
