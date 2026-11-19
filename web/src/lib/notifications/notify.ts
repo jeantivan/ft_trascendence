@@ -21,12 +21,15 @@ export type NotifyInput = z.infer<typeof notifyInputSchema>;
 
 export async function notify(tx: Prisma.TransactionClient, input: NotifyInput) {
   const data = notifyInputSchema.parse(input);
+  const user = await tx.user.findUnique({
+    where: { id: data.userId },
+    select: { notificationsEnabled: true },
+  });
+  if (user === null) {
+    return null;
+  }
   if (!MANDATORY_TYPES.includes(data.type)) {
-    const user = await tx.user.findUnique({
-      where: { id: data.userId },
-      select: { notificationsEnabled: true },
-    });
-    if (user === null || !user.notificationsEnabled) {
+    if (!user.notificationsEnabled) {
       return null;
     }
   }

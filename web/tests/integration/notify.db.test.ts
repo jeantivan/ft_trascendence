@@ -62,6 +62,17 @@ describe("Integration: notify", () => {
     expect(rows[0]).toMatchObject({ id, type: "club_without_manager", payload, readAt: null });
   });
 
+  it("returns null for a mandatory notification when the user does not exist", async () => {
+    const missingUserId = crypto.randomUUID();
+    const payload = { orgId: "a0000000-0000-4000-8000-000000000201" };
+
+    const id = await prisma.$transaction((tx) =>
+      notify(tx, { userId: missingUserId, type: "club_without_manager", payload }),
+    );
+
+    expect(id).toBe(null);
+  });
+
   it("throws and saves nothing when the payload is not only ids", async () => {
     const user = await createUser("badId", true);
 
