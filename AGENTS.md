@@ -53,7 +53,7 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. T
 ## Datos de ejemplo (seed)
 
 - Los datos de ejemplo de cada parte van en `web/prisma/seed/<su-parte>.ts` y se llaman desde `web/prisma/seed.ts`. Se añaden en el mismo PR que la funcionalidad que los usa, no antes (#213).
-- El seed se puede lanzar dos veces sin duplicar nada: `make seed` en modo `make` y cada arranque de `make dev`. Usar `upsert` y los ids fijos de `web/prisma/seed/ids.ts`. Hoy la excepción es el historial de sesiones, que se regenera en cada ejecución (cabecera de `web/prisma/seed.ts`, #226).
+- El seed se puede lanzar dos veces sin duplicar nada: `make seed` en modo `make` y cada arranque de `make dev`. Usar `upsert` y los ids fijos de `web/prisma/seed/ids.ts`. El historial de sesiones no usa `upsert`: se crea solo si el grupo aún no lo tiene (cabecera de `web/prisma/seed.ts`, #226).
 - Cuando termina bien, el seed solo imprime recuentos: nunca contraseñas ni datos de salud.
 
 ## Operaciones destructivas

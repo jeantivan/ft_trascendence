@@ -46,6 +46,6 @@ It does not check:
 - Migrations on a database **with data**: `db-test` always starts empty.
 - The real configuration of each machine (`.env`), NGINX or HTTPS.
 - Speed with large amounts of data.
-- The demo data (seed).
+- The demo data (seed): `seed.ts` itself never runs in the tests. Only the step that saves the session history is tested (`seed-session-history.db.test.ts`).
 
 Check these by hand before the evaluation.
