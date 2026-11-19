@@ -489,9 +489,10 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
   // a user blocked after the request was created must not get in.
   // Known limit: the user and the club are not locked (lockUserThenClub), so a concurrent account
   // deletion can end in a deadlock or an unmapped foreign key error (500); chained race (#238).
-  // Known limit: two writes at once for the same user can still end in an unhandled P2002 here.
+  // Known limit: the find-then-create below is not atomic: if assignManager adds the same user to
+  // the club in between, create fails with an unhandled P2002 (500).
   // Known limit: if the Admin makes the user Manager while a request is pending, approving it
-  // throws AlreadyMemberError; it stays pending (blocking new ones) until rejected or revoked.
+  // throws AlreadyMemberError and it stays pending until a Manager rejects or revokes it.
   private async join(tx: Prisma.TransactionClient, request: MembershipRequestDetail): Promise<void> {
     const { userId, orgId } = request;
     await assertUserCanJoin(tx, userId);

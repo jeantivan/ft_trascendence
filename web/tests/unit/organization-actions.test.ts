@@ -455,7 +455,15 @@ describe("invitation and request actions", () => {
     vi.mocked(requireAuth).mockRejectedValue(new NotFoundSignal());
 
     await expect(requestToJoinAction(ORG_ID)).rejects.toBeInstanceOf(NotFoundSignal);
+    await expect(
+      withdrawRequestAction(undefined, formWith({ requestId: REQUEST_ID })),
+    ).rejects.toBeInstanceOf(NotFoundSignal);
+    await expect(
+      answerInvitationAction(undefined, formWith({ requestId: REQUEST_ID, decision: "accept" })),
+    ).rejects.toBeInstanceOf(NotFoundSignal);
     expect(requestToJoin).not.toHaveBeenCalled();
+    expect(withdrawRequest).not.toHaveBeenCalled();
+    expect(answerInvitation).not.toHaveBeenCalled();
   });
 
   it.each([
