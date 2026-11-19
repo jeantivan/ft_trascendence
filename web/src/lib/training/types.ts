@@ -29,22 +29,33 @@ export interface UpdateTrainingTemplateInput {
   sessions?: Omit<TemplateSessionData, "position">[];
 }
 
-export interface TrainingNotificationPayload {
-  orgId: string;
-  templateId: string;
-  action: "created" | "updated" | "deleted";
-  actorId: string;
-  recipientIds: string[];
+export const TRAINING_TEMPLATE_CREATED = "training_template_created";
+export const TRAINING_TEMPLATE_UPDATED = "training_template_updated";
+export const TRAINING_TEMPLATE_DELETED = "training_template_deleted";
+
+export type TrainingNotificationType =
+  | typeof TRAINING_TEMPLATE_CREATED
+  | typeof TRAINING_TEMPLATE_UPDATED
+  | typeof TRAINING_TEMPLATE_DELETED;
+
+export interface TrainingNotifyInput {
+  userId: string;
+  type: TrainingNotificationType;
+  payload: {
+    orgId: string;
+    templateId: string;
+    actorId: string;
+  };
 }
 
-export type TrainingNotificationPublisher = (
-  payload: TrainingNotificationPayload,
-  tx?: unknown
-) => Promise<void>;
+export type TrainingNotify = (
+  tx: unknown,
+  input: TrainingNotifyInput
+) => Promise<bigint | null>;
 
 export type TrainingMutationCallback = (
   templateId: string,
-  tx?: unknown
+  tx: unknown
 ) => Promise<void>;
 
 export interface TrainingRepository {

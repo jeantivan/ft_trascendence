@@ -9,30 +9,34 @@ import {
   TrainingNotFoundError,
   TrainingValidationError,
 } from "@/lib/training/errors";
-import type { TrainingNotificationPayload } from "@/lib/training/types";
+import {
+  TRAINING_TEMPLATE_CREATED,
+  TRAINING_TEMPLATE_DELETED,
+  TRAINING_TEMPLATE_UPDATED,
+  type TrainingNotifyInput,
+} from "@/lib/training/types";
 
 describe("TrainingService", () => {
   let repo: InMemoryTrainingRepository;
   let service: TrainingService;
-  let notifiedPayloads: TrainingNotificationPayload[];
-  let notifiedTxTokens: unknown[];
+  let notifiedCalls: Array<{ tx: unknown; input: TrainingNotifyInput }>;
 
-  const ORG_A = "org-1111-1111-1111-111111111111";
-  const ORG_OTHER = "org-9999-9999-9999-999999999999";
-  const MANAGER_1 = "usr-mgr1-1111-1111-111111111111";
-  const MANAGER_2 = "usr-mgr2-2222-2222-222222222222";
-  const ATHLETE_1 = "usr-ath1-3333-3333-333333333333";
-  const STRANGER = "usr-stranger-0000-000000000000";
-  const GROUP_1 = "grp-1111-1111-1111-111111111111";
+  const ORG_A = "13400000-0000-4000-8000-000000000001";
+  const ORG_OTHER = "13400000-0000-4000-8000-000000000099";
+  const MANAGER_1 = "13400000-0000-4000-8000-000000000011";
+  const MANAGER_2 = "13400000-0000-4000-8000-000000000012";
+  const MANAGER_3 = "13400000-0000-4000-8000-000000000013";
+  const ATHLETE_1 = "13400000-0000-4000-8000-000000000021";
+  const STRANGER = "13400000-0000-4000-8000-000000000031";
+  const GROUP_1 = "13400000-0000-4000-8000-000000000041";
 
   beforeEach(() => {
     repo = new InMemoryTrainingRepository();
-    notifiedPayloads = [];
-    notifiedTxTokens = [];
+    notifiedCalls = [];
     const mockNotifier = vi.fn(
-      async (payload: TrainingNotificationPayload, tx?: unknown) => {
-        notifiedPayloads.push(payload);
-        notifiedTxTokens.push(tx);
+      async (tx: unknown, input: TrainingNotifyInput): Promise<bigint | null> => {
+        notifiedCalls.push({ tx, input });
+        return BigInt(notifiedCalls.length);
       }
     );
 
@@ -124,19 +128,61 @@ describe("TrainingService", () => {
       expect(created.sessions[1].position).toBe(1);
 
       // Notification check
-      expect(notifiedPayloads).toHaveLength(1);
-      const payload = notifiedPayloads[0];
-      expect(payload).toEqual({
-        orgId: ORG_A,
-        templateId: created.id,
-        action: "created",
-        actorId: MANAGER_1,
-        recipientIds: [MANAGER_2],
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].tx).toBe(IN_MEMORY_TX_TOKEN);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: MANAGER_2,
+        type: TRAINING_TEMPLATE_CREATED,
+        payload: {
+          orgId: ORG_A,
+          templateId: created.id,
+          actorId: MANAGER_1,
+        },
       });
-      // Verify payload contains NO health data or feedback
-      expect(payload).not.toHaveProperty("rpe");
-      expect(payload).not.toHaveProperty("feedback");
-      expect(notifiedTxTokens[0]).toBe(IN_MEMORY_TX_TOKEN);
+      // Verify payload contains only *Id keys and NO health data or feedback
+      expect(
+        Object.keys(notifiedCalls[0].input.payload).every((key) =>
+          key.endsWith("Id")
+        )
+      ).toBe(true);
+    });
+
+    it("notifies each other manager once and skips when actor is the only manager", async () => {
+      repo.addMember(ORG_A, MANAGER_3, "manager");
+
+      const created = await service.createTemplate(MANAGER_1, ORG_A, {
+        name: "Multi-Manager Plan",
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      expect(notifiedCalls).toHaveLength(2);
+      expect(notifiedCalls.map((call) => call.input.userId)).toEqual(
+        expect.arrayContaining([MANAGER_2, MANAGER_3])
+      );
+      for (const call of notifiedCalls) {
+        expect(call.tx).toBe(IN_MEMORY_TX_TOKEN);
+        expect(call.input.type).toBe(TRAINING_TEMPLATE_CREATED);
+        expect(call.input.payload).toEqual({
+          orgId: ORG_A,
+          templateId: created.id,
+          actorId: MANAGER_1,
+        });
+      }
+
+      notifiedCalls.length = 0;
+      const soloRepo = new InMemoryTrainingRepository();
+      soloRepo.addMember(ORG_A, MANAGER_1, "manager");
+      const soloService = new TrainingService(soloRepo, async (tx, input) => {
+        notifiedCalls.push({ tx, input });
+        return BigInt(1);
+      });
+
+      await soloService.createTemplate(MANAGER_1, ORG_A, {
+        name: "Solo Manager Plan",
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      expect(notifiedCalls).toHaveLength(0);
     });
 
     it("rolls back template creation if transactional notifier throws", async () => {
@@ -213,15 +259,17 @@ describe("TrainingService", () => {
       expect(updated.sessions[1].sessionType).toBe("fartlek");
       expect(updated.sessions[1].position).toBe(1);
 
-      expect(notifiedPayloads).toHaveLength(1);
-      expect(notifiedPayloads[0]).toEqual({
-        orgId: ORG_A,
-        templateId: template.id,
-        action: "updated",
-        actorId: MANAGER_1,
-        recipientIds: [MANAGER_2],
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].tx).toBe(IN_MEMORY_TX_TOKEN);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: MANAGER_2,
+        type: TRAINING_TEMPLATE_UPDATED,
+        payload: {
+          orgId: ORG_A,
+          templateId: template.id,
+          actorId: MANAGER_1,
+        },
       });
-      expect(notifiedTxTokens[0]).toBe(IN_MEMORY_TX_TOKEN);
     });
 
     it("allows a different manager of the same club to update a template created by another manager", async () => {
@@ -237,13 +285,15 @@ describe("TrainingService", () => {
       });
 
       expect(updated.name).toBe("Edited by Manager 2");
-      expect(notifiedPayloads).toHaveLength(1);
-      expect(notifiedPayloads[0]).toEqual({
-        orgId: ORG_A,
-        templateId: template.id,
-        action: "updated",
-        actorId: MANAGER_2,
-        recipientIds: [MANAGER_1],
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: MANAGER_1,
+        type: TRAINING_TEMPLATE_UPDATED,
+        payload: {
+          orgId: ORG_A,
+          templateId: template.id,
+          actorId: MANAGER_2,
+        },
       });
     });
 
@@ -274,15 +324,17 @@ describe("TrainingService", () => {
 
       expect(await repo.findById(template.id)).toBeNull();
 
-      expect(notifiedPayloads).toHaveLength(1);
-      expect(notifiedPayloads[0]).toEqual({
-        orgId: ORG_A,
-        templateId: template.id,
-        action: "deleted",
-        actorId: MANAGER_1,
-        recipientIds: [MANAGER_2],
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].tx).toBe(IN_MEMORY_TX_TOKEN);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: MANAGER_2,
+        type: TRAINING_TEMPLATE_DELETED,
+        payload: {
+          orgId: ORG_A,
+          templateId: template.id,
+          actorId: MANAGER_1,
+        },
       });
-      expect(notifiedTxTokens[0]).toBe(IN_MEMORY_TX_TOKEN);
     });
 
     it("allows a different manager of the same club to delete a template created by another manager", async () => {
@@ -296,13 +348,15 @@ describe("TrainingService", () => {
       await service.deleteTemplate(MANAGER_2, ORG_A, template.id);
 
       expect(await repo.findById(template.id)).toBeNull();
-      expect(notifiedPayloads).toHaveLength(1);
-      expect(notifiedPayloads[0]).toEqual({
-        orgId: ORG_A,
-        templateId: template.id,
-        action: "deleted",
-        actorId: MANAGER_2,
-        recipientIds: [MANAGER_1],
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: MANAGER_1,
+        type: TRAINING_TEMPLATE_DELETED,
+        payload: {
+          orgId: ORG_A,
+          templateId: template.id,
+          actorId: MANAGER_2,
+        },
       });
     });
 

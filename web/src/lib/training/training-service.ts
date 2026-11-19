@@ -4,11 +4,14 @@ import {
   templateSessionSchema,
   trainingTemplateNameSchema,
 } from "./schemas";
-import type {
-  TrainingRepository,
-  TrainingTemplateData,
-  TrainingNotificationPublisher,
-  TrainingNotificationPayload,
+import {
+  TRAINING_TEMPLATE_CREATED,
+  TRAINING_TEMPLATE_DELETED,
+  TRAINING_TEMPLATE_UPDATED,
+  type TrainingNotificationType,
+  type TrainingNotify,
+  type TrainingRepository,
+  type TrainingTemplateData,
 } from "./types";
 import {
   TrainingForbiddenError,
@@ -32,7 +35,7 @@ const updateTrainingTemplateSchema = z
 export class TrainingService {
   constructor(
     private readonly repo: TrainingRepository,
-    private readonly notifier?: TrainingNotificationPublisher
+    private readonly notifier?: TrainingNotify
   ) {}
 
   private async assertRole(orgId: string, actorId: string): Promise<"manager" | "athlete"> {
@@ -47,24 +50,23 @@ export class TrainingService {
     orgId: string,
     actorId: string,
     templateId: string,
-    action: TrainingNotificationPayload["action"],
-    tx?: unknown
+    type: TrainingNotificationType,
+    tx: unknown
   ): Promise<void> {
     if (!this.notifier) {
       return;
     }
     const otherManagers = await this.repo.findOtherManagerIds(orgId, actorId, tx);
-    if (otherManagers.length > 0) {
-      await this.notifier(
-        {
+    for (const userId of otherManagers) {
+      await this.notifier(tx, {
+        userId,
+        type,
+        payload: {
           orgId,
           templateId,
-          action,
           actorId,
-          recipientIds: otherManagers,
         },
-        tx
-      );
+      });
     }
   }
 
@@ -122,7 +124,13 @@ export class TrainingService {
         sessions: parseResult.data.sessions,
       },
       (createdId, tx) =>
-        this.notifyOtherManagers(orgId, actorId, createdId, "created", tx)
+        this.notifyOtherManagers(
+          orgId,
+          actorId,
+          createdId,
+          TRAINING_TEMPLATE_CREATED,
+          tx
+        )
     );
   }
 
@@ -155,7 +163,13 @@ export class TrainingService {
         sessions: parseResult.data.sessions,
       },
       (updatedId, tx) =>
-        this.notifyOtherManagers(orgId, actorId, updatedId, "updated", tx)
+        this.notifyOtherManagers(
+          orgId,
+          actorId,
+          updatedId,
+          TRAINING_TEMPLATE_UPDATED,
+          tx
+        )
     );
   }
 
@@ -175,7 +189,13 @@ export class TrainingService {
     }
 
     await this.repo.delete(templateId, (deletedId, tx) =>
-      this.notifyOtherManagers(orgId, actorId, deletedId, "deleted", tx)
+      this.notifyOtherManagers(
+        orgId,
+        actorId,
+        deletedId,
+        TRAINING_TEMPLATE_DELETED,
+        tx
+      )
     );
   }
 }
