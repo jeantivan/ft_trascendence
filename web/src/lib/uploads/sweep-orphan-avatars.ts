@@ -22,7 +22,10 @@ export async function sweepOrphanAvatars(db: PrismaClient, uploadsDir: string, n
     entries = await readdir(path.join(uploadsDir, "avatars"), { withFileTypes: true });
   } catch (error) {
     // saveAvatar creates avatars/ with the first upload: none yet, nothing to sweep.
-    // Any other error (EACCES...) is real: runJobs logs it
+    // Any other error (EACCES...) is real: runJobs logs it as it is, like the audit_log
+    // purge's. Its message carries the path of the avatars/ folder: it comes from
+    // UPLOADS_DIR (configuration, the same for everyone), not from any user's file, and it
+    // is what tells whoever reads the log which folder lacks permissions
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0;
     throw error;
   }
@@ -54,7 +57,8 @@ export async function sweepOrphanAvatars(db: PrismaClient, uploadsDir: string, n
   // Keeps going when one fails and returns how many it could not delete
   const notDeleted = await deleteAvatarFiles(orphans, uploadsDir);
   failed += notDeleted;
-  // Only the count. runJobs logs the deleted ones
-  if (failed > 0) console.warn(`Orphan avatar sweep: ${failed} file(s) could not be removed`);
+  // Only the count. runJobs logs the deleted ones. A failed stat counts too, even for a
+  // file with a row (its date is read before the rows): hence "checked or removed"
+  if (failed > 0) console.warn(`Orphan avatar sweep: ${failed} file(s) could not be checked or removed`);
   return orphans.length - notDeleted;
 }

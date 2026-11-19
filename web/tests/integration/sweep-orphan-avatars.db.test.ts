@@ -191,14 +191,14 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
   });
 
   // The whole text: so it carries no path or id, only the count (#254)
-  it("warns once with only the number of files it could not delete, and not at all when none fails", async () => {
+  it("warns once with only the number of files it could not check or delete, and not at all when none fails", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await threeOrphansWithBFailing();
 
     await sweepOrphanAvatars(prisma, uploadsDir, NOW);
 
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith("Orphan avatar sweep: 1 file(s) could not be removed");
+    expect(warn).toHaveBeenCalledWith("Orphan avatar sweep: 1 file(s) could not be checked or removed");
 
     // Next run with the disk working again: b.png goes, and nothing to warn about
     await useRealFs();
@@ -237,7 +237,7 @@ describe("Integration: sweepOrphanAvatars against real Postgres", () => {
       if (failures === 0) {
         expect(warn).not.toHaveBeenCalled();
       } else {
-        expect(warn).toHaveBeenCalledWith("Orphan avatar sweep: 1 file(s) could not be removed");
+        expect(warn).toHaveBeenCalledWith("Orphan avatar sweep: 1 file(s) could not be checked or removed");
       }
     },
   );
