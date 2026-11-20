@@ -49,6 +49,10 @@ export interface EventFixture {
     status: SpotRequestStatus,
     createdAt?: Date,
   ): Promise<void>;
+  // That user's row in the Event's chat, or null if they have none. The
+  // interface has no read for the chat: that is #126. removedAt set: they can
+  // read the history but no longer write
+  chatParticipant(eventId: string, userId: string): Promise<{ removedAt: Date | null } | null>;
 }
 
 export interface NewSession {
@@ -92,6 +96,10 @@ const SPOT_OPERATIONS: SpotOperation[] = [
   {
     name: "withdrawSpot",
     run: (repo, orgId, eventId, athleteId, now) => repo.withdrawSpot(orgId, eventId, athleteId, now),
+  },
+  {
+    name: "approveSpot",
+    run: (repo, orgId, eventId, athleteId, now) => repo.approveSpot(orgId, eventId, athleteId, now),
   },
 ];
 
@@ -969,14 +977,29 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
     // The start of the table tests: an Athlete with a pending request in an
     // Event of tomorrow. The same for every row, so the Event decides the result
     async function withPendingRequest() {
-      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const fixture = createFixture();
+      const { repo, createClub, addManager, addAthlete } = fixture;
       const orgId = await createClub();
       const managerId = await addManager(orgId);
       const athleteId = await addAthlete(orgId);
       const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
       await repo.requestSpot(orgId, eventId, athleteId, NOW);
-      return { repo, orgId, eventId, athleteId };
+      // ...fixture copies every field of the fixture (repo, createClub,
+      // chatParticipant...) into the object returned
+      return { ...fixture, orgId, eventId, athleteId };
     }
+
+    it.each(SPOT_OPERATIONS)("$name on an Event of another club is not-found and changes nothing", async ({ run }) => {
+      const { repo, createClub, orgId, eventId, athleteId } = await withPendingRequest();
+      const otherClub = await createClub();
+
+      const result = await run(repo, otherClub, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      // Read with the real club: still pending
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
 
     // R4: with the Event cancelled or started, nothing changes, not even a repetition
     it.each(SPOT_OPERATIONS)("$name on a cancelled Event is cancelled and changes nothing", async ({ run }) => {
@@ -1008,6 +1031,19 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
         ok: false,
         reason: "cancelled",
       });
+    });
+
+    it("approveSpot on a pending request approves it and lets the Athlete into the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("approved");
+      expect(view?.approvedCount).toBe(1);
+      // An active row: they can write in the Event's chat
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
     });
 
     // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent

@@ -8,6 +8,7 @@ import type {
   EventData,
   EventRepository,
   RequestSpotResult,
+  ReviewSpotResult,
   UpdateEventResult,
   WithdrawSpotResult,
 } from "@/lib/events/event-repository";
@@ -45,6 +46,9 @@ export class InMemoryEventRepository implements EventRepository {
   // Nicks by user id: the only thing of a user the Manager's list shows.
   // null: a user without a nick, as nick is optional in users
   private nicks = new Map<string, string | null>();
+  // Rows of each Event's chat by "eventId/userId", like conversation_participants
+  // (one chat per Event). removedAt set: can read the history, no longer write
+  private chatParticipants = new Map<string, { removedAt: Date | null }>();
 
   // For the tests only: in production the users come from sign-up
   addUser(nick: string | null): string {
@@ -69,6 +73,13 @@ export class InMemoryEventRepository implements EventRepository {
     createdAt: Date = new Date(),
   ): void {
     this.spotRequests.set(`${eventId}/${userId}`, { eventId, userId, status, createdAt });
+  }
+
+  // For the tests only: EventRepository has no read for the chat (#126).
+  // A copy, so a test cannot change the stored row by accident
+  chatParticipant(eventId: string, userId: string): { removedAt: Date | null } | null {
+    const row = this.chatParticipants.get(`${eventId}/${userId}`);
+    return row === undefined ? null : { removedAt: row.removedAt };
   }
 
   async createEvent(
@@ -255,6 +266,35 @@ export class InMemoryEventRepository implements EventRepository {
     }
     // get gives a reference to the object in the Map: this changes the stored one
     request.status = "withdrawn";
+    return { ok: true, changed: true };
+  }
+
+  async approveSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    const key = `${eventId}/${athleteId}`;
+    const request = this.spotRequests.get(key);
+    // No request yet is no-request, with its own test
+    if (request !== undefined) {
+      request.status = "approved";
+    }
+    // set and not get: a new row, or the old one made active again
+    this.chatParticipants.set(key, { removedAt: null });
     return { ok: true, changed: true };
   }
 

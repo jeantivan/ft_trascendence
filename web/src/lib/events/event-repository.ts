@@ -74,6 +74,16 @@ export type WithdrawSpotResult =
   // Action can be called directly
   | { ok: false; reason: "no-request" };
 
+// The Manager's three decisions (#232): approveSpot, rejectSpot and
+// expelFromEvent share it, as they have the same reasons
+export type ReviewSpotResult =
+  | { ok: true; changed: boolean }
+  // Does not exist or is from another club
+  | { ok: false; reason: "not-found" }
+  // With the Event cancelled or started, no spot is reviewed
+  | { ok: false; reason: "cancelled" }
+  | { ok: false; reason: "started" };
+
 // Who deletes: only the Admin's deletion is audited (Marta, question e of #147:
 // the Privacy Policy, section 7, promises nothing more), so only the Admin carries an id
 export type DeleteEventActor = { kind: "manager" } | { kind: "admin"; adminId: string };
@@ -129,6 +139,16 @@ export interface EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<WithdrawSpotResult>;
+
+  // A pending Spot Request becomes approved, and the Athlete becomes an active
+  // participant of the Event's chat. athleteId is the one the Manager chose
+  // from EventManagerView.spotRequests
+  approveSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult>;
 
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
@@ -434,6 +454,50 @@ export class PrismaEventRepository implements EventRepository {
     await this.db.spotRequest.update({
       where: { eventId_userId: { eventId, userId: athleteId } },
       data: { status: "withdrawn" },
+    });
+    return { ok: true, changed: true };
+  }
+
+  async approveSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    // The Event first, in the fixed order
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: { cancelledAt: true, startsAt: true },
+    });
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // findUnique: event_id is unique in conversations, one chat per Event
+    const chat = await this.db.conversation.findUnique({
+      where: { eventId },
+      select: { id: true },
+    });
+    // createEvent creates the Event and its chat together: it should never happen
+    if (chat === null) {
+      throw new Error(`Event ${eventId} has no chat`);
+    }
+    await this.db.spotRequest.update({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      data: { status: "approved" },
+    });
+    // upsert: the row may exist from an earlier approval (they withdrew and came
+    // back). Then it is made active again, keeping the chat history
+    await this.db.conversationParticipant.upsert({
+      where: { conversationId_userId: { conversationId: chat.id, userId: athleteId } },
+      create: { conversationId: chat.id, userId: athleteId, removedAt: null },
+      update: { removedAt: null },
     });
     return { ok: true, changed: true };
   }

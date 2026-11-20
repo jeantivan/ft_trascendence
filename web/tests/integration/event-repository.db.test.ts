@@ -89,6 +89,18 @@ async function addSpotRequest(
   await prisma.spotRequest.create({ data: { eventId, userId, status, createdAt } });
 }
 
+// The user's row in the Event's chat, through the relation: conversations has
+// event_id, so no need to know the chat's id
+async function chatParticipant(
+  eventId: string,
+  userId: string,
+): Promise<{ removedAt: Date | null } | null> {
+  return prisma.conversationParticipant.findFirst({
+    where: { userId, conversation: { eventId } },
+    select: { removedAt: true },
+  });
+}
+
 afterEach(async () => {
   // A mockImplementationOnce that no call used must not reach the next test:
   // mockReset drops it and goes back to the real recordAdminAction
@@ -118,6 +130,7 @@ runEventRepositoryContract("Prisma", () => ({
   addAthlete: (orgId, nick) => addMember(orgId, "athlete", nick),
   addSession,
   addSpotRequest,
+  chatParticipant,
 }));
 
 // What the contract cannot see: the interface has no read for an Event's chat
