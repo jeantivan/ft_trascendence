@@ -91,15 +91,15 @@ export function eventIdOf(result: CreateEventResult): string {
 // row (it.each). run is a function kept in a field, like a function pointer in
 // a C struct. unknown: the test only hands the result to expect. from is the
 // state the request is in before the operation: the one it would change. to is
-// the state the operation leads to
-interface SpotOperation {
+// the state the operation leads to. Exported for the lock tests, which only run on Postgres
+export interface SpotOperation {
   name: string;
   from: "pending" | "approved" | "withdrawn";
   to: SpotRequestStatus;
   run(repo: EventRepository, orgId: string, eventId: string, athleteId: string, now: Date): Promise<unknown>;
 }
 
-const SPOT_OPERATIONS: SpotOperation[] = [
+export const SPOT_OPERATIONS: SpotOperation[] = [
   {
     // From withdrawn: on a pending one, asking again would change nothing
     name: "requestSpot",

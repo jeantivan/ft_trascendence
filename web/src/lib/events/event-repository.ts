@@ -398,56 +398,74 @@ export class PrismaEventRepository implements EventRepository {
     });
   }
 
+  // The first step of every Spot Request operation, inside its transaction. It locks
+  // the Event row until the commit, so the operations on one Event go one at a time,
+  // and it reads the row after the lock, so it sees what the one before saved (Q3).
+  // FOR NO KEY UPDATE and not FOR UPDATE: a Feedback pointing at the Event can still
+  // be inserted. null: no such Event in this club
+  private async lockEvent(
+    tx: Prisma.TransactionClient,
+    orgId: string,
+    eventId: string,
+  ): Promise<{ cancelledAt: Date | null; startsAt: Date } | null> {
+    // $queryRaw keeps the column names of Postgres: AS gives them the camelCase ones
+    const rows = await tx.$queryRaw<{ cancelledAt: Date | null; startsAt: Date }[]>`
+      SELECT cancelled_at AS "cancelledAt", starts_at AS "startsAt"
+      FROM events
+      WHERE id = ${eventId}::uuid AND org_id = ${orgId}::uuid
+      FOR NO KEY UPDATE`;
+    return rows[0] ?? null;
+  }
+
   async requestSpot(
     orgId: string,
     eventId: string,
     athleteId: string,
     now: Date,
   ): Promise<RequestSpotResult> {
-    // The Event first, in the fixed order. An INSERT has no WHERE: the foreign
-    // key only checks the Event exists, not that it is of this club
-    const event = await this.db.event.findFirst({
-      where: { id: eventId, orgId },
-      select: { cancelledAt: true, startsAt: true },
-    });
-    if (!event) {
-      return { ok: false, reason: "not-found" };
-    }
-    if (event.cancelledAt !== null) {
-      return { ok: false, reason: "cancelled" };
-    }
-    // Starting at now already counts as started
-    if (event.startsAt <= now) {
-      return { ok: false, reason: "started" };
-    }
-    // eventId_userId: the name Prisma gives the primary key @@id([eventId, userId])
-    const existing = await this.db.spotRequest.findUnique({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      select: { status: true },
-    });
-    if (existing?.status === "rejected") {
-      return { ok: false, reason: "rejected" };
-    }
-    // Already pending or approved: a double click, nothing is written. An
-    // approved Athlete keeps their spot
-    if (existing?.status === "pending" || existing?.status === "approved") {
-      return { ok: true, changed: false };
-    }
-    // createdAt is now and not the default now() of Postgres: the caller
-    // chooses the moment, and the Manager's list orders by it
-    if (existing === null) {
-      await this.db.spotRequest.create({
-        data: { eventId, userId: athleteId, status: "pending", createdAt: now },
-      });
-    } else {
-      // Asking again after withdrawing: the same row (the key is (event_id, user_id)),
-      // as a new request that goes to the end of the Manager's list
-      await this.db.spotRequest.update({
+    return this.db.$transaction(async (tx): Promise<RequestSpotResult> => {
+      // The Event first, in the fixed order. An INSERT has no WHERE: the foreign
+      // key only checks the Event exists, not that it is of this club
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // eventId_userId: the name Prisma gives the primary key @@id([eventId, userId])
+      const existing = await tx.spotRequest.findUnique({
         where: { eventId_userId: { eventId, userId: athleteId } },
-        data: { status: "pending", createdAt: now },
+        select: { status: true },
       });
-    }
-    return { ok: true, changed: true };
+      if (existing?.status === "rejected") {
+        return { ok: false, reason: "rejected" };
+      }
+      // Already pending or approved: a double click, nothing is written. An
+      // approved Athlete keeps their spot
+      if (existing?.status === "pending" || existing?.status === "approved") {
+        return { ok: true, changed: false };
+      }
+      // createdAt is now and not the default now() of Postgres: the caller
+      // chooses the moment, and the Manager's list orders by it
+      if (existing === null) {
+        await tx.spotRequest.create({
+          data: { eventId, userId: athleteId, status: "pending", createdAt: now },
+        });
+      } else {
+        // Asking again after withdrawing: the same row (the key is (event_id, user_id)),
+        // as a new request that goes to the end of the Manager's list
+        await tx.spotRequest.update({
+          where: { eventId_userId: { eventId, userId: athleteId } },
+          data: { status: "pending", createdAt: now },
+        });
+      }
+      return { ok: true, changed: true };
+    });
   }
 
   async withdrawSpot(
@@ -456,50 +474,49 @@ export class PrismaEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<WithdrawSpotResult> {
-    // The Event first, in the fixed order
-    const event = await this.db.event.findFirst({
-      where: { id: eventId, orgId },
-      select: { cancelledAt: true, startsAt: true },
-    });
-    if (!event) {
-      return { ok: false, reason: "not-found" };
-    }
-    if (event.cancelledAt !== null) {
-      return { ok: false, reason: "cancelled" };
-    }
-    // Starting at now already counts as started
-    if (event.startsAt <= now) {
-      return { ok: false, reason: "started" };
-    }
-    // The state before: what to do depends on it
-    const existing = await this.db.spotRequest.findUnique({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      select: { status: true },
-    });
-    if (existing === null) {
-      return { ok: false, reason: "no-request" };
-    }
-    if (existing.status === "rejected") {
-      return { ok: false, reason: "rejected" };
-    }
-    // Already withdrawn: a double click, nothing is written
-    if (existing.status === "withdrawn") {
-      return { ok: true, changed: false };
-    }
-    await this.db.spotRequest.update({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      data: { status: "withdrawn" },
-    });
-    // An approved Athlete leaves the chat: the row stays with removedAt, so they
-    // still read the history (#155). updateMany: 0 rows is no error, the result
-    // is the same, no active participant (Q10). A pending one was never in it
-    if (existing.status === "approved") {
-      await this.db.conversationParticipant.updateMany({
-        where: { userId: athleteId, conversation: { eventId } },
-        data: { removedAt: now },
+    return this.db.$transaction(async (tx): Promise<WithdrawSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // The state before: what to do depends on it
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
       });
-    }
-    return { ok: true, changed: true };
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      if (existing.status === "rejected") {
+        return { ok: false, reason: "rejected" };
+      }
+      // Already withdrawn: a double click, nothing is written
+      if (existing.status === "withdrawn") {
+        return { ok: true, changed: false };
+      }
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "withdrawn" },
+      });
+      // An approved Athlete leaves the chat: the row stays with removedAt, so they
+      // still read the history (#155). updateMany: 0 rows is no error, the result
+      // is the same, no active participant (Q10). A pending one was never in it
+      if (existing.status === "approved") {
+        await tx.conversationParticipant.updateMany({
+          where: { userId: athleteId, conversation: { eventId } },
+          data: { removedAt: now },
+        });
+      }
+      return { ok: true, changed: true };
+    });
   }
 
   async approveSpot(
@@ -512,10 +529,7 @@ export class PrismaEventRepository implements EventRepository {
     // is undone too, so no approved spot is left without its chat
     return this.db.$transaction(async (tx): Promise<ReviewSpotResult> => {
       // The Event first, in the fixed order
-      const event = await tx.event.findFirst({
-        where: { id: eventId, orgId },
-        select: { cancelledAt: true, startsAt: true },
-      });
+      const event = await this.lockEvent(tx, orgId, eventId);
       if (!event) {
         return { ok: false, reason: "not-found" };
       }
@@ -573,43 +587,42 @@ export class PrismaEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<ReviewSpotResult> {
-    // The Event first, in the fixed order
-    const event = await this.db.event.findFirst({
-      where: { id: eventId, orgId },
-      select: { cancelledAt: true, startsAt: true },
+    return this.db.$transaction(async (tx): Promise<ReviewSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // Then the Spot Request
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      // Already rejected: a double click, or another Manager with the same decision
+      if (existing.status === "rejected") {
+        return { ok: true, changed: false };
+      }
+      // Only a pending request is rejected: an approved one would be an expulsion
+      if (existing.status !== "pending") {
+        return { ok: false, reason: "status-changed" };
+      }
+      // A pending request was never in the chat: nothing to do there
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "rejected" },
+      });
+      return { ok: true, changed: true };
     });
-    if (!event) {
-      return { ok: false, reason: "not-found" };
-    }
-    if (event.cancelledAt !== null) {
-      return { ok: false, reason: "cancelled" };
-    }
-    // Starting at now already counts as started
-    if (event.startsAt <= now) {
-      return { ok: false, reason: "started" };
-    }
-    // Then the Spot Request
-    const existing = await this.db.spotRequest.findUnique({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      select: { status: true },
-    });
-    if (existing === null) {
-      return { ok: false, reason: "no-request" };
-    }
-    // Already rejected: a double click, or another Manager with the same decision
-    if (existing.status === "rejected") {
-      return { ok: true, changed: false };
-    }
-    // Only a pending request is rejected: an approved one would be an expulsion
-    if (existing.status !== "pending") {
-      return { ok: false, reason: "status-changed" };
-    }
-    // A pending request was never in the chat: nothing to do there
-    await this.db.spotRequest.update({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      data: { status: "rejected" },
-    });
-    return { ok: true, changed: true };
   }
 
   async expelFromEvent(
@@ -618,50 +631,49 @@ export class PrismaEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<ReviewSpotResult> {
-    // The Event first, in the fixed order
-    const event = await this.db.event.findFirst({
-      where: { id: eventId, orgId },
-      select: { cancelledAt: true, startsAt: true },
+    return this.db.$transaction(async (tx): Promise<ReviewSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // Then the Spot Request
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      // Already rejected: a double click, or another Manager with the same decision.
+      // Nothing is written, so removedAt keeps the moment they left
+      if (existing.status === "rejected") {
+        return { ok: true, changed: false };
+      }
+      // Only an approved request is expelled: a pending one would be a rejection,
+      // and a withdrawn one already left by the Athlete's own decision
+      if (existing.status !== "approved") {
+        return { ok: false, reason: "status-changed" };
+      }
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "rejected" },
+      });
+      // As when withdrawing: the row stays, they read the history but no longer
+      // write. updateMany: with no row it is not an error (Q10)
+      await tx.conversationParticipant.updateMany({
+        where: { userId: athleteId, conversation: { eventId } },
+        data: { removedAt: now },
+      });
+      return { ok: true, changed: true };
     });
-    if (!event) {
-      return { ok: false, reason: "not-found" };
-    }
-    if (event.cancelledAt !== null) {
-      return { ok: false, reason: "cancelled" };
-    }
-    // Starting at now already counts as started
-    if (event.startsAt <= now) {
-      return { ok: false, reason: "started" };
-    }
-    // Then the Spot Request
-    const existing = await this.db.spotRequest.findUnique({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      select: { status: true },
-    });
-    if (existing === null) {
-      return { ok: false, reason: "no-request" };
-    }
-    // Already rejected: a double click, or another Manager with the same decision.
-    // Nothing is written, so removedAt keeps the moment they left
-    if (existing.status === "rejected") {
-      return { ok: true, changed: false };
-    }
-    // Only an approved request is expelled: a pending one would be a rejection,
-    // and a withdrawn one already left by the Athlete's own decision
-    if (existing.status !== "approved") {
-      return { ok: false, reason: "status-changed" };
-    }
-    await this.db.spotRequest.update({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      data: { status: "rejected" },
-    });
-    // As when withdrawing: the row stays, they read the history but no longer
-    // write. updateMany: with no row it is not an error (Q10)
-    await this.db.conversationParticipant.updateMany({
-      where: { userId: athleteId, conversation: { eventId } },
-      data: { removedAt: now },
-    });
-    return { ok: true, changed: true };
   }
 
   async listEvents(

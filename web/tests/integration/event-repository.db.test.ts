@@ -8,8 +8,11 @@ import { PrismaEventRepository } from "@/lib/events/event-repository";
 import {
   eventIdOf,
   runEventRepositoryContract,
+  SPOT_OPERATIONS,
   type NewSession,
+  type SpotOperation,
 } from "../support/event-repository-contract";
+import { withLockHarness } from "../support/lock-harness";
 
 // Delegates to the real function; a test replaces it once to make the audit
 // write fail, as in organization-repository.db.test.ts
@@ -359,5 +362,47 @@ describe("PrismaEventRepository.approveSpot", () => {
       );
       await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS test_reject_chat_participant()");
     }
+  });
+});
+
+// What the contract cannot see: two transactions at the same time, forced with a
+// lock harness as in organization-repository.db.test.ts
+describe("PrismaEventRepository at the same time", { timeout: 30_000 }, () => {
+  // A club, its Event and an Athlete whose Spot Request is already in that state
+  async function startIn(from: SpotOperation["from"]) {
+    const orgId = await createClub();
+    const managerId = await addMember(orgId, "manager");
+    const athleteId = await addMember(orgId, "athlete");
+    const eventId = eventIdOf(await repository.createEvent(orgId, managerId, DATA, NOW));
+    await repository.requestSpot(orgId, eventId, athleteId, NOW);
+    if (from === "approved") await repository.approveSpot(orgId, eventId, athleteId, NOW);
+    if (from === "withdrawn") await repository.withdrawSpot(orgId, eventId, athleteId, NOW);
+    return { orgId, eventId, athleteId };
+  }
+
+  // R5
+  it.each(SPOT_OPERATIONS)("$name waits for a lock on the Event", async ({ name, run, from, to }) => {
+    const { orgId, eventId, athleteId } = await startIn(from);
+
+    const result = await withLockHarness(async (harness) => {
+      // G holds the Event row, as another transition of the same Event would
+      const gate = await harness.holdLock("gate", (tx) =>
+        tx.$queryRaw`SELECT id FROM events WHERE id = ${eventId}::uuid FOR NO KEY UPDATE`,
+      );
+      const client = harness.client("operation");
+      const operation = harness.track(
+        run(new PrismaEventRepository(client.db), orgId, eventId, athleteId, NOW),
+      );
+
+      // Stopped at the Event, before reading anything that G could still change
+      await harness.waitUntilWaiting(gate, [{ name, client, queryFragment: "FROM events" }]);
+
+      gate.release();
+      return operation;
+    });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    const view = await repository.getEventForMember(orgId, eventId, athleteId);
+    expect(view?.mySpotRequest).toBe(to);
   });
 });
