@@ -9,9 +9,11 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=true
 RUN chown node:node /app
 USER node
 COPY --chown=node:node package.json package-lock.json ./
-# Clean npm's download cache in the same RUN: a later RUN would only hide it, and
-# its ~540 MB would stay in this layer, in every image built from deps (#269)
-RUN npm ci && npm cache clean --force
+# npm's download cache (~540 MB) lives in a BuildKit cache mount: it is kept between
+# builds, so changing branches does not download everything again, and it never enters
+# the layer or any image built from deps. uid=1000 is node: without it npm cannot write.
+# Do not add `npm cache clean` here: it would empty the cache this mount keeps (#269)
+RUN --mount=type=cache,target=/home/node/.npm,uid=1000 npm ci
 
 # Dev stage (make dev): no build, the source code is bind-mounted at runtime
 # and `next dev` reloads on every change. Not used by the default build.
