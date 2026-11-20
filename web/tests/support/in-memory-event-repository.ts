@@ -223,9 +223,11 @@ export class InMemoryEventRepository implements EventRepository {
     }
     // Same key as addSpotRequest: one Spot Request per user and Event
     const key = `${eventId}/${athleteId}`;
-    // Already pending: a double click. Nothing is written, so createdAt and its
-    // place in the Manager's list stay as they were
-    if (this.spotRequests.get(key)?.status === "pending") {
+    // Already pending or approved: a double click. Nothing is written, so
+    // createdAt and its place in the Manager's list stay as they were, and an
+    // approved Athlete keeps their spot
+    const status = this.spotRequests.get(key)?.status;
+    if (status === "pending" || status === "approved") {
       return { ok: true, changed: false };
     }
     // createdAt is now: the Manager's list orders by it
@@ -287,12 +289,21 @@ export class InMemoryEventRepository implements EventRepository {
     if (event.startsAt <= now) {
       return { ok: false, reason: "started" };
     }
+    // Then the Spot Request
     const key = `${eventId}/${athleteId}`;
     const request = this.spotRequests.get(key);
-    // No request yet is no-request, with its own test
-    if (request !== undefined) {
-      request.status = "approved";
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
     }
+    // Already approved: a double click, or another Manager with the same decision
+    if (request.status === "approved") {
+      return { ok: true, changed: false };
+    }
+    // Only a pending request is approved
+    if (request.status !== "pending") {
+      return { ok: false, reason: "status-changed" };
+    }
+    request.status = "approved";
     // set and not get: a new row, or the old one made active again
     this.chatParticipants.set(key, { removedAt: null });
     return { ok: true, changed: true };

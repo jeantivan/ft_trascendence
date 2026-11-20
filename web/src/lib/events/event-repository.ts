@@ -82,7 +82,12 @@ export type ReviewSpotResult =
   | { ok: false; reason: "not-found" }
   // With the Event cancelled or started, no spot is reviewed
   | { ok: false; reason: "cancelled" }
-  | { ok: false; reason: "started" };
+  | { ok: false; reason: "started" }
+  // No Spot Request: the Athlete deleted their account after the list was loaded
+  | { ok: false; reason: "no-request" }
+  // The request is not in the state the decision starts from: another Manager
+  // or the Athlete got there first. The Server Action turns it into a 409
+  | { ok: false; reason: "status-changed" };
 
 // Who deletes: only the Admin's deletion is audited (Marta, question e of #147:
 // the Privacy Policy, section 7, promises nothing more), so only the Admin carries an id
@@ -397,8 +402,9 @@ export class PrismaEventRepository implements EventRepository {
       where: { eventId_userId: { eventId, userId: athleteId } },
       select: { status: true },
     });
-    // Already pending: a double click, nothing is written
-    if (existing?.status === "pending") {
+    // Already pending or approved: a double click, nothing is written. An
+    // approved Athlete keeps their spot
+    if (existing?.status === "pending" || existing?.status === "approved") {
       return { ok: true, changed: false };
     }
     // createdAt is now and not the default now() of Postgres: the caller
@@ -478,6 +484,23 @@ export class PrismaEventRepository implements EventRepository {
     // Starting at now already counts as started
     if (event.startsAt <= now) {
       return { ok: false, reason: "started" };
+    }
+    // Then the Spot Request
+    const existing = await this.db.spotRequest.findUnique({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      select: { status: true },
+    });
+    if (existing === null) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already approved: a double click, or another Manager with the same decision
+    if (existing.status === "approved") {
+      return { ok: true, changed: false };
+    }
+    // Only a pending request is approved: anything else changed since the
+    // Manager loaded the list
+    if (existing.status !== "pending") {
+      return { ok: false, reason: "status-changed" };
     }
     // findUnique: event_id is unique in conversations, one chat per Event
     const chat = await this.db.conversation.findUnique({

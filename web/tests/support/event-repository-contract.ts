@@ -1046,6 +1046,57 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
     });
 
+    it("approveSpot again on an approved request changes nothing", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      // A double click, or two Managers with the same decision
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("approved");
+      expect(view?.approvedCount).toBe(1);
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
+    });
+
+    it("approveSpot without a request is no-request and lets nobody into the chat", async () => {
+      const { repo, createClub, addManager, addAthlete, chatParticipant } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "no-request" });
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("approveSpot on a withdrawn request is status-changed and lets nobody into the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      // The Athlete withdrew while the Manager had the list open
+      await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("requestSpot on an approved request changes nothing and keeps the spot", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("approved");
+    });
+
     // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent
     // in upper case must work as in lower case in both implementations (review of #241).
     // The ids come from randomUUID or Postgres, so they always have hex letters to change
