@@ -1175,6 +1175,41 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
     });
 
+    it("requestSpot on a rejected request is rejected: the rejection is for good", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: false, reason: "rejected" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+    });
+
+    it("withdrawSpot on a rejected request is rejected: withdrawing is no way back in", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      expect(result).toEqual({ ok: false, reason: "rejected" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+    });
+
+    it("approveSpot on a rejected request is status-changed and lets nobody into the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      // Another Manager rejected it while this one had the list open
+      await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
     it("requestSpot on an approved request changes nothing and keeps the spot", async () => {
       const { repo, orgId, eventId, athleteId } = await withPendingRequest();
       await repo.approveSpot(orgId, eventId, athleteId, NOW);

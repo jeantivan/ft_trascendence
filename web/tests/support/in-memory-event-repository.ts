@@ -227,6 +227,10 @@ export class InMemoryEventRepository implements EventRepository {
     // createdAt and its place in the Manager's list stay as they were, and an
     // approved Athlete keeps their spot
     const status = this.spotRequests.get(key)?.status;
+    // A rejection is for good for that Event
+    if (status === "rejected") {
+      return { ok: false, reason: "rejected" };
+    }
     if (status === "pending" || status === "approved") {
       return { ok: true, changed: false };
     }
@@ -261,6 +265,10 @@ export class InMemoryEventRepository implements EventRepository {
     const request = this.spotRequests.get(`${eventId}/${athleteId}`);
     if (request === undefined) {
       return { ok: false, reason: "no-request" };
+    }
+    // Rejected stays rejected: withdrawing it would open a way to ask again
+    if (request.status === "rejected") {
+      return { ok: false, reason: "rejected" };
     }
     // Already withdrawn: a double click, nothing is written
     if (request.status === "withdrawn") {

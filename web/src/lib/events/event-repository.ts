@@ -57,7 +57,9 @@ export type RequestSpotResult =
   // A cancelled Event takes no requests, not even a repeated one
   | { ok: false; reason: "cancelled" }
   // startsAt is now or earlier: too late to ask
-  | { ok: false; reason: "started" };
+  | { ok: false; reason: "started" }
+  // A rejection is for good for that Event (CONTEXT.md): the UI says so
+  | { ok: false; reason: "rejected" };
 
 // The Athlete withdraws their Spot Request (#232). changed false: it was
 // already withdrawn
@@ -72,7 +74,9 @@ export type WithdrawSpotResult =
   | { ok: false; reason: "started" }
   // The Athlete never asked: the UI shows no "withdraw" then, but a Server
   // Action can be called directly
-  | { ok: false; reason: "no-request" };
+  | { ok: false; reason: "no-request" }
+  // Rejected stays rejected: withdrawing it would open a way to ask again
+  | { ok: false; reason: "rejected" };
 
 // The Manager's three decisions (#232): approveSpot, rejectSpot and
 // expelFromEvent share it, as they have the same reasons
@@ -411,6 +415,9 @@ export class PrismaEventRepository implements EventRepository {
       where: { eventId_userId: { eventId, userId: athleteId } },
       select: { status: true },
     });
+    if (existing?.status === "rejected") {
+      return { ok: false, reason: "rejected" };
+    }
     // Already pending or approved: a double click, nothing is written. An
     // approved Athlete keeps their spot
     if (existing?.status === "pending" || existing?.status === "approved") {
@@ -461,6 +468,9 @@ export class PrismaEventRepository implements EventRepository {
     });
     if (existing === null) {
       return { ok: false, reason: "no-request" };
+    }
+    if (existing.status === "rejected") {
+      return { ok: false, reason: "rejected" };
     }
     // Already withdrawn: a double click, nothing is written
     if (existing.status === "withdrawn") {
