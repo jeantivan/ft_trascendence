@@ -2,6 +2,10 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { PrismaTrainingRepository } from "@/lib/training/prisma-training-repository";
+import type { Prisma } from "@/generated/prisma/client";
+import { notify } from "@/lib/notifications/notify";
+import { TrainingService } from "@/lib/training/training-service";
+import { TRAINING_TEMPLATE_CREATED, TRAINING_TEMPLATE_UPDATED, TRAINING_TEMPLATE_DELETED } from "@/lib/training/types";
 
 const PREFIX = "training-repo-db-";
 
@@ -249,5 +253,42 @@ describe("Integration: PrismaTrainingRepository", () => {
     });
     expect(updatedCopy).not.toBeNull();
     expect(updatedCopy?.sourceTemplateId).toBeNull();
+  });
+
+  it("persists notifications in Postgres for other managers on create, update, and delete", async () => {
+    const trainingService = new TrainingService(repo, (tx, input) =>
+      notify(tx as Prisma.TransactionClient, input)
+    );
+
+    const created = await trainingService.createTemplate(manager1Id, orgId, {
+      name: "Notify Test",
+      sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+    });
+    await trainingService.updateTemplate(manager1Id, orgId, created.id, {
+      name: "Notify Test Updated",
+    });
+    await trainingService.deleteTemplate(manager1Id, orgId, created.id);
+
+    const manager2Notifications = await prisma.notification.findMany({
+      where: { userId: manager2Id },
+      orderBy: { id: "asc" },
+    });
+    expect(manager2Notifications).toHaveLength(3);
+
+    const expectedPayload = { orgId, templateId: created.id, actorId: manager1Id };
+    expect(manager2Notifications.map((n) => n.type)).toEqual([
+      TRAINING_TEMPLATE_CREATED,
+      TRAINING_TEMPLATE_UPDATED,
+      TRAINING_TEMPLATE_DELETED,
+    ]);
+    for (const notification of manager2Notifications) {
+      expect(notification.readAt).toBeNull();
+      expect(notification.payload).toEqual(expectedPayload);
+    }
+
+    const otherUsersNotifications = await prisma.notification.findMany({
+      where: { userId: { in: [manager1Id, athleteId] } },
+    });
+    expect(otherUsersNotifications).toHaveLength(0);
   });
 });

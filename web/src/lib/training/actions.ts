@@ -1,8 +1,10 @@
 "use server";
 
 import { notFound } from "next/navigation";
+import type { Prisma } from "@/generated/prisma/client";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
+import { notify } from "@/lib/notifications/notify";
 import { trainingRepository } from "./prisma-training-repository";
 import { TrainingService } from "./training-service";
 import {
@@ -15,7 +17,9 @@ export type ActionResult<T = void> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-const trainingService = new TrainingService(trainingRepository);
+const trainingService = new TrainingService(trainingRepository, (tx, input) =>
+  notify(tx as Prisma.TransactionClient, input)
+);
 
 export async function listTrainingTemplatesAction(
   orgId: string
