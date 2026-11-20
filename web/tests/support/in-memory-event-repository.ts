@@ -233,12 +233,20 @@ export class InMemoryEventRepository implements EventRepository {
     eventId: string,
     athleteId: string,
   ): Promise<WithdrawSpotResult> {
-    const request = this.spotRequests.get(`${eventId}/${athleteId}`);
-    // get gives a reference to the object in the Map: this changes the stored one.
-    // No request yet is no-request, with its own test
-    if (request !== undefined) {
-      request.status = "withdrawn";
+    // The Event first, in the fixed order
+    if (!this.findInClub(orgId, eventId)) {
+      return { ok: false, reason: "not-found" };
     }
+    const request = this.spotRequests.get(`${eventId}/${athleteId}`);
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already withdrawn: a double click, nothing is written
+    if (request.status === "withdrawn") {
+      return { ok: true, changed: false };
+    }
+    // get gives a reference to the object in the Map: this changes the stored one
+    request.status = "withdrawn";
     return { ok: true, changed: true };
   }
 

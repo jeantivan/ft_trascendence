@@ -61,7 +61,14 @@ export type RequestSpotResult =
 
 // The Athlete withdraws their Spot Request (#232). changed false: it was
 // already withdrawn
-export type WithdrawSpotResult = { ok: true; changed: boolean };
+export type WithdrawSpotResult =
+  | { ok: true; changed: boolean }
+  // Does not exist or is from another club. Before no-request, so another
+  // club's Event never shows it exists
+  | { ok: false; reason: "not-found" }
+  // The Athlete never asked: the UI shows no "withdraw" then, but a Server
+  // Action can be called directly
+  | { ok: false; reason: "no-request" };
 
 // Who deletes: only the Admin's deletion is audited (Marta, question e of #147:
 // the Privacy Policy, section 7, promises nothing more), so only the Admin carries an id
@@ -393,6 +400,26 @@ export class PrismaEventRepository implements EventRepository {
     eventId: string,
     athleteId: string,
   ): Promise<WithdrawSpotResult> {
+    // The Event first, in the fixed order
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: { id: true },
+    });
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    // The state before: what to do depends on it
+    const existing = await this.db.spotRequest.findUnique({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      select: { status: true },
+    });
+    if (existing === null) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already withdrawn: a double click, nothing is written
+    if (existing.status === "withdrawn") {
+      return { ok: true, changed: false };
+    }
     await this.db.spotRequest.update({
       where: { eventId_userId: { eventId, userId: athleteId } },
       data: { status: "withdrawn" },

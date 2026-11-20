@@ -878,6 +878,56 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       expect(view?.mySpotRequest).toBe("withdrawn");
     });
 
+    it("withdrawSpot again on a withdrawn request changes nothing", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+      await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      // A double click on "withdraw"
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+    });
+
+    it("withdrawSpot without a request is no-request and leaves none", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "no-request" });
+      // Nothing created either: no withdrawn row out of nowhere
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBeNull();
+    });
+
+    it("withdrawSpot on an Event of another club is not-found and leaves the request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const athleteA = await addAthlete(orgA);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+      await repo.requestSpot(orgA, eventId, athleteA, NOW);
+
+      // The request exists, but the call says club B
+      const result = await repo.withdrawSpot(orgB, eventId, athleteA, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      // Read with the real club: still pending
+      const view = await repo.getEventForMember(orgA, eventId, athleteA);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
     it("requestSpot after withdrawing asks again, as a new request", async () => {
       const { repo, createClub, addManager, addAthlete } = createFixture();
       const orgId = await createClub();
