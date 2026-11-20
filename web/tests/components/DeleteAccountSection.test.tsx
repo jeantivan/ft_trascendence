@@ -113,6 +113,19 @@ describe("DeleteAccountSection", () => {
     expect(requestButton()).toBeDisabled();
   });
 
+  it("shows the wait in minutes when retryAfterSeconds exceeds a minute", async () => {
+    vi.mocked(requestDeleteCodeAction).mockResolvedValue({
+      success: false,
+      error: "Has alcanzado el límite de códigos por hora. Inténtalo más tarde.",
+      retryAfterSeconds: 3412,
+    });
+    render(<DeleteAccountSection />);
+
+    await clickRequest();
+
+    expect(requestButton()).toHaveTextContent("Reenviar en 57 min");
+  });
+
   it("lets the user retry at once when nothing was issued, e.g. wrong mail settings", async () => {
     vi.mocked(requestDeleteCodeAction).mockResolvedValue({
       success: false,

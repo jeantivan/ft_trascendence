@@ -18,6 +18,13 @@ export class PrismaOtpRepository implements OtpRepository {
     });
   }
 
+  findCreatedSince(userId: string, purpose: OtpPurpose, since: Date): Promise<OtpRecord[]> {
+    return this.db.emailOtpCode.findMany({
+      where: { userId, purpose, createdAt: { gt: since } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+  }
+
   // One UPDATE with all the conditions in its WHERE: the database decides, so
   // two concurrent calls cannot both take the last attempt
   async reserveAttempt(recordId: string, now: Date): Promise<boolean> {
@@ -48,5 +55,16 @@ export class PrismaOtpRepository implements OtpRepository {
       data: { consumedAt: now },
     });
     return count === 1;
+  }
+
+  async withUserLock<T>(userId: string, fn: (repo: OtpRepository) => Promise<T>): Promise<T> {
+    const runLocked = async (tx: Prisma.TransactionClient): Promise<T> => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      return fn(new PrismaOtpRepository(tx));
+    };
+    if ("$transaction" in this.db) {
+      return this.db.$transaction(runLocked);
+    }
+    return runLocked(this.db);
   }
 }

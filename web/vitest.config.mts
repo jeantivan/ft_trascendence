@@ -19,6 +19,9 @@ const baseExclude = testDatabaseUrl === null ? [...configDefaults.exclude, "**/*
 export default defineConfig({
   plugins: [tsconfigPaths(), react()],
   test: {
+    // next-auth imports "next/server", "next/headers" and "next/navigation" without .js:
+    // inline it so Vite resolves them and applies vi.mock inside next-auth when tested unmocked
+    server: { deps: { inline: ["next-auth"] } },
     setupFiles: ["./vitest.setup.ts"],
     // One test database shared by every file (#83): files in parallel deadlock (#243). Their
     // cleanup deletes users, Admins included, while lockAccountAndAdmins locks every Admin row
