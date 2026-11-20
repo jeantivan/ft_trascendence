@@ -1,19 +1,19 @@
-// Development demo data (issue #19): 1 Admin, 1 Club with 1 Manager,
+// Demo data (issue #19): 1 Admin, 1 Club with 1 Manager,
 // 2 Athletes and 2 Groups, plus 6 weeks of session history per Group (issue
-// #23, seed/session-logs.ts). Never run in production.
+// #23, seed/session-logs.ts). make dev loads it on every start; in make mode,
+// only when someone runs make seed (#213).
 // Safe to run many times: every write is an upsert ("create it if it does not
 // exist; if it exists, leave it as it is") or an updateMany that only fills
-// fields that are still empty, except the session history: each run deletes
-// the sessions of each group's id range and creates them again, with dates
-// from today. So changing seed/session-logs.ts needs no new database, but
-// moving a firstSessionNumber or giving a group fewer Athletes (a shorter
-// range) does: the old ids outside the new range would stay. Whatever points
-// at those sessions goes too: logs typed by hand (Cascade), and Events lose
-// their link (SetNull).
+// fields that are still empty. The session history too (#226): a group gets
+// it, with its Athletes' health consent, only while none of its range's ids
+// exists; a later run leaves it as it is, with the logs typed by hand and the
+// Events linked to it. So its dates stay those of the first run, and a change
+// to seed/session-logs.ts, a moved firstSessionNumber or a different number
+// of Athletes only shows on a new database (make fclean + make dev).
 // A database seeded before users had fixed ids fails here with a duplicate
-// email: recreate it with make fclean + make dev. WARNING: make fclean
-// DELETES ALL the local data stored in the project's Docker volumes
-// (the database and any other volume), not only the demo data.
+// email: recreate it with make fclean + make dev (or make + make seed).
+// WARNING: make fclean DELETES ALL the local data stored in the project's
+// Docker volumes (the database and any other volume), not only the demo data.
 // Demo users' password is configured via SEED_USER_PASSWORD env var.
 import { hashPassword } from "../src/lib/auth/password";
 import { prisma } from "../src/lib/prisma";
@@ -28,6 +28,7 @@ import {
   MANAGER_ID,
 } from "./seed/ids";
 import { seededRandom } from "./seed/random";
+import { ensureSessionHistory } from "./seed/session-history";
 import { generateSessionHistory, historyStart, maxSessionCount, sessionId } from "./seed/session-logs";
 
 async function main() {
@@ -37,8 +38,9 @@ async function main() {
     { id: GROUP_BEGINNERS_ID, name: "Iniciación", level: "inicial", objective: "carrera corta", athleteIds: [ATHLETE_1_ID], firstSessionNumber: 101 },
     { id: GROUP_ADVANCED_ID, name: "Avanzado", level: "avanzado", objective: "maratón", athleteIds: [ATHLETE_2_ID], firstSessionNumber: 201 },
   ];
-  // The id ranges of two groups must not overlap, or deleting one group's
-  // range would delete the other group's sessions. Checked before any write.
+  // The id ranges of two groups must not overlap, or one group's sessions
+  // would make the other look as if it already had its history, which would
+  // then never be created. Checked before any write.
   for (let i = 0; i < groups.length; i++) {
     for (let j = i + 1; j < groups.length; j++) {
       const a = groups[i];
@@ -60,9 +62,9 @@ async function main() {
     throw new Error("Missing required environment variable: SEED_USER_PASSWORD");
   }
   const passwordHash = await hashPassword(seedPassword);
-  // First day of the session history, also the date of the health consent.
-  // The history moves with today's date on every run; the consent keeps the
-  // date of the first run, which is never later, so no RPE predates it.
+  // First day of the session history, also the date of the health consent
+  // given with it, so no RPE predates it. Only used by a group that has no
+  // history yet: an existing history keeps the dates of the run that created it.
   const start = historyStart(new Date());
 
   // nick = name shown in the app
@@ -86,22 +88,6 @@ async function main() {
       passwordHash: null,
     },
     data: { passwordHash },
-  });
-
-  // The history stores RPE, and RPE is only stored with health consent
-  // (Privacy Policy). The Athletes give it when the history starts, so no RPE
-  // is older than the consent. updateMany instead of the upsert, like the
-  // password: it also fixes a database seeded before this line, and does
-  // nothing once they have it. Both fields together: CHECK
-  // users_health_consent_both_or_neither.
-  // Demo data only: it gives consent on the user's behalf and would give it
-  // back after they withdraw it. In the app, only the user gives consent.
-  await prisma.user.updateMany({
-    where: {
-      id: { in: [ATHLETE_1_ID, ATHLETE_2_ID] },
-      healthConsentAt: null,
-    },
-    data: { healthConsentAt: start, healthConsentVersion: 1 },
   });
 
   await prisma.organization.upsert({
@@ -162,24 +148,16 @@ async function main() {
     for (let number = group.firstSessionNumber; number < rangeEnd; number++) {
       rangeIds.push(sessionId(number));
     }
-    const logRows = [];
-    for (const log of history.logs) {
-      // incompletionReason is not a column: it goes in extra, with the name of
-      // the export spec (docs/gdpr/export-spec.md 3.3). Completed logs have no
-      // extra (undefined leaves the column null).
-      const { incompletionReason, ...columns } = log;
-      logRows.push({
-        ...columns,
-        extra: incompletionReason === null ? undefined : { incompletion_reason: incompletionReason },
-      });
-    }
-    // All or nothing: delete the old history (its logs go with it, Cascade)
-    // and create the new one. Sessions before logs: every log points to one.
-    await prisma.$transaction([
-      prisma.trainingSession.deleteMany({ where: { id: { in: rangeIds } } }),
-      prisma.trainingSession.createMany({ data: history.sessions }),
-      prisma.sessionLog.createMany({ data: logRows }),
-    ]);
+    // Created only if the group has no history yet (#226): a later run leaves
+    // it as it is, with the logs typed by hand and the Events linked to it.
+    // Demo data only: it gives the health consent on the Athletes' behalf, with
+    // the history, each time it is created from scratch. In the app, only the
+    // user gives consent.
+    await ensureSessionHistory(prisma, {
+      rangeIds,
+      history,
+      consent: { athleteIds: group.athleteIds, at: start },
+    });
     sessionCount += history.sessions.length;
     logCount += history.logs.length;
   }

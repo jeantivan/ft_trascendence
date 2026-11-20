@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { PrismaPg } from "@prisma/adapter-pg";
-import { afterAll, beforeAll, beforeEach, describe } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
+import { issueOtp } from "@/lib/gdpr/otp";
 import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
 import { OTHER_USER_ID, runOtpRepositoryContract, USER_ID } from "../support/otp-repository-contract";
 
@@ -35,4 +36,13 @@ describe("PrismaOtpRepository", () => {
   });
 
   runOtpRepositoryContract("prisma", () => new PrismaOtpRepository(db));
+
+  it("serializes concurrent issueOtp calls for the same user (at most 1 issued)", async () => {
+    const repo = new PrismaOtpRepository(db);
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => issueOtp(USER_ID, "delete_account", repo)),
+    );
+    expect(results.filter((r) => r.issued)).toHaveLength(1);
+    expect(await db.emailOtpCode.count({ where: { userId: USER_ID } })).toBe(1);
+  });
 });

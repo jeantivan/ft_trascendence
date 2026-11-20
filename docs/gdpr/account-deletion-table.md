@@ -31,7 +31,7 @@ Fuentes: spec final de #8 (último comentario, "Solicitar Borrado de Cuenta", "M
 | `contacts` (cualquiera de las dos puntas) | Se borran | Spec | Cascade |
 | `messages` en DM | Se conservan con `author_id = null` para el otro Contact, hasta que esa persona borre la conversación. Si esa persona también borra su cuenta, se borran | Spec | SetNull |
 | `messages` en chats de Event | Se conservan con `author_id = null` | Spec | SetNull |
-| `conversation_participants` del usuario | Se borra la fila (o `removed_at`); la conversación DM sigue para el otro Contact | Derivado | Cascade |
+| `conversation_participants` del usuario | Se borra la fila del usuario (`Cascade`). `removed_at` quita la escritura, no la lectura: la conversación DM se conserva mientras quede algún participante con cuenta (incluidas filas con `removed_at`) y se borra cuando ya no quede ninguno | Decidido (Jacobo, #34) | Cascade |
 | `spot_requests` del usuario | Se borran | Derivado | Cascade |
 | `notifications` del usuario | Se borran | Derivado | Cascade |
 | `events.created_by` | El Event **se conserva**, con `created_by = null` | Decidido | SetNull |

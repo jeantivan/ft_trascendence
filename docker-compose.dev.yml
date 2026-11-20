@@ -5,6 +5,9 @@ services:
     image: transcendence-app-dev
     build:
       target: dev
+    # root only with rootless Docker (the campus), where node cannot enter the mounted
+    # ./web; the Makefile sets it (scripts/container-user.sh, #236). Otherwise node
+    user: "${DEV_CONTAINER_USER:-node}"
     environment:
       SEED_USER_PASSWORD: ${SEED_USER_PASSWORD}
     volumes:

@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { PrismaPg } from "@prisma/adapter-pg";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@/generated/prisma/client";
+import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
 import { deleteAccountAsAdmin } from "@/lib/gdpr/delete-account";
 import { deleteWithFreshOtp } from "../support/delete-account-helper";
@@ -79,7 +79,7 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
   }
 
   // The caller's audit row (#104 writes the real one); here it only shows that the callback runs in the transaction
-  const writeAudit = (actorId: string, subjectId: string) => (tx: Parameters<Parameters<typeof deleteAccountAsAdmin>[1]>[0]) =>
+  const writeAudit = (actorId: string, subjectId: string) => (tx: Prisma.TransactionClient) =>
     tx.auditLog.create({ data: { actorId, subjectId, actorRole: "admin", action: "account_deleted", resource: "account" } }).then(() => {});
 
   beforeEach(async () => {
@@ -103,6 +103,26 @@ describe("deleteAccountAsAdmin y la regla del último Admin", { timeout: 30_000 
     expect(result).toEqual({ deleted: true });
     expect(await db.user.findUnique({ where: { id: USER_1 } })).toBeNull();
     expect(await db.auditLog.count({ where: { actorId: ADMIN_1, subjectId: USER_1 } })).toBe(1);
+  });
+
+  it("borra también el ZIP de exportación y su .tmp, pero no el de otra cuenta", async () => {
+    const uploadsDir = await mkdtemp(path.join(tmpdir(), "delete-account-admin-exports-"));
+    try {
+      const mine = await db.dataExport.create({ data: { userId: USER_1 } });
+      const others = await db.dataExport.create({ data: { userId: ADMIN_1 } });
+      await mkdir(path.join(uploadsDir, "exports"), { recursive: true });
+      for (const name of [`${mine.id}.zip`, `${mine.id}.zip.tmp`, `${others.id}.zip`]) {
+        await writeFile(path.join(uploadsDir, "exports", name), "x");
+      }
+
+      expect(await deleteAccountAsAdmin(USER_1, writeAudit(ADMIN_1, USER_1), db, uploadsDir)).toEqual({ deleted: true });
+
+      expect(await db.dataExport.count({ where: { id: mine.id } })).toBe(0);
+      expect(await readdir(path.join(uploadsDir, "exports"))).toEqual([`${others.id}.zip`]);
+    } finally {
+      await db.dataExport.deleteMany({ where: { userId: { in: [USER_1, ADMIN_1] } } });
+      await rm(uploadsDir, { recursive: true, force: true });
+    }
   });
 
   // Same effects as the OTP path (docs/gdpr/account-deletion-table.md): row, cascade, avatar files and Admin notice

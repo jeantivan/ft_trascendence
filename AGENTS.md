@@ -50,6 +50,12 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/`. T
 - Un token en un enlace va siempre en el parámetro `token` (`?token=...`), nunca en la ruta: así NGINX y `next dev` lo dejan fuera de sus logs (#185). Su ruta necesita además su propio bloque `location` en `nginx/app.conf`, como el de la descarga de la exportación, para que el log de errores de NGINX tampoco lo copie. El `callbackUrl` de `/login` ya lo cubre su propio bloque: no hace falta otro para eso.
 - Una página que recibe un token en su enlace no se muestra con el token en la URL: un Route Handler o `proxy.ts` lo gasta (verificar el email) o, si hace falta después (el formulario de cambiar la contraseña), lo guarda en una cookie `HttpOnly; Secure; SameSite=Lax`, solo para esa ruta y que caduque con el token, y redirige (303) a la misma página sin él. Así sus peticiones (CSS, imágenes, datos) no llevan el token en el `Referer`, ni siquiera desde un cliente que ignore `Referrer-Policy` (#185).
 
+## Datos de ejemplo (seed)
+
+- Los datos de ejemplo de cada parte van en `web/prisma/seed/<su-parte>.ts` y se llaman desde `web/prisma/seed.ts`. Se añaden en el mismo PR que la funcionalidad que los usa, no antes (#213).
+- El seed se puede lanzar dos veces sin duplicar nada: `make seed` en modo `make` y cada arranque de `make dev`. Usar `upsert` y los ids fijos de `web/prisma/seed/ids.ts`. El historial de sesiones no usa `upsert`: se crea solo si el grupo aún no lo tiene (cabecera de `web/prisma/seed.ts`, #226).
+- Cuando termina bien, el seed solo imprime recuentos: nunca contraseñas ni datos de salud.
+
 ## Operaciones destructivas
 
 - `prisma migrate reset`, `db push --force-reset`, `DROP`, `TRUNCATE` y borrar volúmenes de Docker requieren explicar la pérdida de datos y confirmación explícita.

@@ -230,5 +230,48 @@ export function runOtpRepositoryContract(name: string, createRepo: () => OtpRepo
         expect(await repo.consumeIfUnusedFor(UNKNOWN_ID, USER_ID, "delete_account", NOW)).toBe(false);
       });
     });
+
+    describe("findCreatedSince", () => {
+      it("devuelve solo los códigos posteriores a since del mismo usuario y propósito, del más antiguo al más reciente", async () => {
+        const repo = createRepo();
+        const atCutoff = await createCode(repo);
+        const newer1 = await repo.create({
+          userId: USER_ID,
+          purpose: "delete_account",
+          codeHash: "hash-1",
+          createdAt: new Date(NOW.getTime() + 1_000),
+          expiresAt: IN_TEN_MINUTES,
+          consumedAt: null,
+        });
+        const newer2 = await repo.create({
+          userId: USER_ID,
+          purpose: "delete_account",
+          codeHash: "hash-2",
+          createdAt: new Date(NOW.getTime() + 2_000),
+          expiresAt: IN_TEN_MINUTES,
+          consumedAt: null,
+        });
+        await repo.create({
+          userId: USER_ID,
+          purpose: "export_data",
+          codeHash: "other-purpose",
+          createdAt: new Date(NOW.getTime() + 1_500),
+          expiresAt: IN_TEN_MINUTES,
+          consumedAt: null,
+        });
+        await repo.create({
+          userId: OTHER_USER_ID,
+          purpose: "delete_account",
+          codeHash: "other-user",
+          createdAt: new Date(NOW.getTime() + 1_500),
+          expiresAt: IN_TEN_MINUTES,
+          consumedAt: null,
+        });
+
+        const found = await repo.findCreatedSince(USER_ID, "delete_account", atCutoff.createdAt);
+
+        expect(found.map((r) => r.id)).toEqual([newer1.id, newer2.id]);
+      });
+    });
   });
 }

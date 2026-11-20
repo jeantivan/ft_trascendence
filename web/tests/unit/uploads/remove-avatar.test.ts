@@ -8,7 +8,7 @@ describe("removeAvatar", () => {
     const queries: string[] = [];
 
     const fakeTx = {
-      $queryRaw: vi.fn(async (strings: TemplateStringsArray, ..._values: unknown[]) => {
+      $queryRaw: vi.fn(async (strings: TemplateStringsArray) => {
         queries.push(strings.join("?"));
         return [{ id: userId }];
       }),

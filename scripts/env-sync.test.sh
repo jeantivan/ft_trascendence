@@ -207,9 +207,55 @@ test_example_leaves_mailpit_password_empty() {
   fi
 }
 
+# The initial Admin (#213) and the demo users: 8 characters, the sign-up minimum,
+# because someone types them on another computer during the evaluation
+test_generates_empty_admin_and_seed_passwords() {
+  setup
+  printf 'A=1\nADMIN_PASSWORD=\nSEED_USER_PASSWORD=\n' > .env.example
+  sh "$SCRIPT"
+  if ! grep -Eq '^ADMIN_PASSWORD=[0-9a-f]{8}$' .env || ! grep -Eq '^SEED_USER_PASSWORD=[0-9a-f]{8}$' .env; then
+    fail "fills empty ADMIN_PASSWORD and SEED_USER_PASSWORD with 8 hexadecimal characters"
+  fi
+  teardown
+}
+
+test_adds_admin_variables_to_existing_env_keeping_seed_password() {
+  setup
+  printf 'ADMIN_EMAIL=admin@stridesync.local\nADMIN_PASSWORD=\nSEED_USER_PASSWORD=\n' > .env.example
+  # A .env from before #213: it has the old fixed demo password, which must stay
+  printf 'SEED_USER_PASSWORD=dev_password_123\n' > .env
+  sh "$SCRIPT"
+  if ! grep -q '^SEED_USER_PASSWORD=dev_password_123$' .env \
+    || ! grep -q '^ADMIN_EMAIL=admin@stridesync.local$' .env \
+    || ! grep -Eq '^ADMIN_PASSWORD=[0-9a-f]{8}$' .env; then
+    fail "adds ADMIN_EMAIL and a generated ADMIN_PASSWORD, keeping the SEED_USER_PASSWORD already there"
+  fi
+  teardown
+}
+
+test_keeps_existing_admin_password() {
+  setup
+  printf 'ADMIN_PASSWORD=\n' > .env.example
+  printf 'ADMIN_PASSWORD=mine\n' > .env
+  cp .env before
+  sh "$SCRIPT"
+  if ! cmp -s .env before; then
+    fail "never changes an ADMIN_PASSWORD that already has a value"
+  fi
+  teardown
+}
+
+test_example_has_admin_email_and_empty_passwords() {
+  if ! grep -q '^ADMIN_EMAIL=admin@stridesync.local$' "$EXAMPLE" \
+    || ! grep -q '^ADMIN_PASSWORD=$' "$EXAMPLE" \
+    || ! grep -q '^SEED_USER_PASSWORD=$' "$EXAMPLE"; then
+    fail "the real .env.example has ADMIN_EMAIL=admin@stridesync.local and leaves ADMIN_PASSWORD and SEED_USER_PASSWORD empty"
+  fi
+}
+
 test_second_run_changes_nothing() {
   setup
-  printf 'A=1\nAUTH_SECRET=\nPOSTGRES_PASSWORD=\nMAILPIT_PASSWORD=\n' > .env.example
+  printf 'A=1\nAUTH_SECRET=\nPOSTGRES_PASSWORD=\nMAILPIT_PASSWORD=\nADMIN_PASSWORD=\nSEED_USER_PASSWORD=\n' > .env.example
   sh "$SCRIPT"
   cp .env first-run
   sh "$SCRIPT"
@@ -312,6 +358,10 @@ test_generates_empty_mailpit_password
 test_adds_and_generates_mailpit_password_in_existing_env
 test_keeps_existing_mailpit_password
 test_example_leaves_mailpit_password_empty
+test_generates_empty_admin_and_seed_passwords
+test_adds_admin_variables_to_existing_env_keeping_seed_password
+test_keeps_existing_admin_password
+test_example_has_admin_email_and_empty_passwords
 test_second_run_changes_nothing
 test_adds_on_new_line_when_last_line_has_no_newline
 test_fails_when_secret_cannot_be_generated
