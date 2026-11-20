@@ -862,6 +862,41 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       });
     });
 
+    it("withdrawSpot on a pending request leaves it withdrawn", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+
+      // NOW again: withdrawing a pending request stores no time
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+    });
+
+    it("requestSpot after withdrawing asks again, as a new request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId, "Ana");
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+      await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      // One row, reused, with the new createdAt: it goes to the end of the Manager's list
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([
+        { athleteId, nick: "Ana", status: "pending", createdAt: REQUEST_AGAIN_AT },
+      ]);
+    });
+
     // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent
     // in upper case must work as in lower case in both implementations (review of #241).
     // The ids come from randomUUID or Postgres, so they always have hex letters to change

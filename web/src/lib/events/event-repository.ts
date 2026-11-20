@@ -59,6 +59,10 @@ export type RequestSpotResult =
   // startsAt is now or earlier: too late to ask
   | { ok: false; reason: "started" };
 
+// The Athlete withdraws their Spot Request (#232). changed false: it was
+// already withdrawn
+export type WithdrawSpotResult = { ok: true; changed: boolean };
+
 // Who deletes: only the Admin's deletion is audited (Marta, question e of #147:
 // the Privacy Policy, section 7, promises nothing more), so only the Admin carries an id
 export type DeleteEventActor = { kind: "manager" } | { kind: "admin"; adminId: string };
@@ -105,6 +109,15 @@ export interface EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<RequestSpotResult>;
+
+  // The Athlete's Spot Request becomes withdrawn. The row stays: asking again
+  // reuses it
+  withdrawSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<WithdrawSpotResult>;
 
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
@@ -359,8 +372,30 @@ export class PrismaEventRepository implements EventRepository {
     }
     // createdAt is now and not the default now() of Postgres: the caller
     // chooses the moment, and the Manager's list orders by it
-    await this.db.spotRequest.create({
-      data: { eventId, userId: athleteId, status: "pending", createdAt: now },
+    if (existing === null) {
+      await this.db.spotRequest.create({
+        data: { eventId, userId: athleteId, status: "pending", createdAt: now },
+      });
+    } else {
+      // Asking again after withdrawing: the same row (the key is (event_id, user_id)),
+      // as a new request that goes to the end of the Manager's list
+      await this.db.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "pending", createdAt: now },
+      });
+    }
+    return { ok: true, changed: true };
+  }
+
+  // Without now for the moment: withdrawing a pending request stores no time
+  async withdrawSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+  ): Promise<WithdrawSpotResult> {
+    await this.db.spotRequest.update({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      data: { status: "withdrawn" },
     });
     return { ok: true, changed: true };
   }

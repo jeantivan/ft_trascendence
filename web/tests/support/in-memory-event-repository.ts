@@ -9,6 +9,7 @@ import type {
   EventRepository,
   RequestSpotResult,
   UpdateEventResult,
+  WithdrawSpotResult,
 } from "@/lib/events/event-repository";
 import { normalizeId } from "@/lib/org/schemas";
 import type { NewSession } from "./event-repository-contract";
@@ -223,6 +224,21 @@ export class InMemoryEventRepository implements EventRepository {
       status: "pending",
       createdAt: now,
     });
+    return { ok: true, changed: true };
+  }
+
+  // Without now for the moment: withdrawing a pending request stores no time
+  async withdrawSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+  ): Promise<WithdrawSpotResult> {
+    const request = this.spotRequests.get(`${eventId}/${athleteId}`);
+    // get gives a reference to the object in the Map: this changes the stored one.
+    // No request yet is no-request, with its own test
+    if (request !== undefined) {
+      request.status = "withdrawn";
+    }
     return { ok: true, changed: true };
   }
 
