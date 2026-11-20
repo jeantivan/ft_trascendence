@@ -48,6 +48,17 @@ export type CancelEventResult =
   // startsAt is now or earlier: no Feedback may hang from a cancelled Event
   | { ok: false; reason: "started" };
 
+// The Athlete asks for a spot (#232). changed false: the request was already
+// pending or approved, so a double click is not an error
+export type RequestSpotResult =
+  | { ok: true; changed: boolean }
+  // Does not exist or is from another club
+  | { ok: false; reason: "not-found" }
+  // A cancelled Event takes no requests, not even a repeated one
+  | { ok: false; reason: "cancelled" }
+  // startsAt is now or earlier: too late to ask
+  | { ok: false; reason: "started" };
+
 // Who deletes: only the Admin's deletion is audited (Marta, question e of #147:
 // the Privacy Policy, section 7, promises nothing more), so only the Admin carries an id
 export type DeleteEventActor = { kind: "manager" } | { kind: "admin"; adminId: string };
@@ -86,6 +97,14 @@ export interface EventRepository {
   // At any moment, started or cancelled too: no now. Its chat and Spot Requests
   // go with it; its Feedback stays, without the Event
   deleteEvent(orgId: string, eventId: string, actor: DeleteEventActor): Promise<DeleteEventResult>;
+
+  // The Athlete's Spot Request becomes pending. athleteId comes from the session
+  requestSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<RequestSpotResult>;
 
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
@@ -305,6 +324,45 @@ export class PrismaEventRepository implements EventRepository {
       }
       return { ok: true };
     });
+  }
+
+  async requestSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<RequestSpotResult> {
+    // The Event first, in the fixed order. An INSERT has no WHERE: the foreign
+    // key only checks the Event exists, not that it is of this club
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: { cancelledAt: true, startsAt: true },
+    });
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // eventId_userId: the name Prisma gives the primary key @@id([eventId, userId])
+    const existing = await this.db.spotRequest.findUnique({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      select: { status: true },
+    });
+    // Already pending: a double click, nothing is written
+    if (existing?.status === "pending") {
+      return { ok: true, changed: false };
+    }
+    // createdAt is now and not the default now() of Postgres: the caller
+    // chooses the moment, and the Manager's list orders by it
+    await this.db.spotRequest.create({
+      data: { eventId, userId: athleteId, status: "pending", createdAt: now },
+    });
+    return { ok: true, changed: true };
   }
 
   async listEvents(

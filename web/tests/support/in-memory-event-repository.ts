@@ -7,6 +7,7 @@ import type {
   DeleteEventResult,
   EventData,
   EventRepository,
+  RequestSpotResult,
   UpdateEventResult,
 } from "@/lib/events/event-repository";
 import { normalizeId } from "@/lib/org/schemas";
@@ -188,6 +189,41 @@ export class InMemoryEventRepository implements EventRepository {
       }
     }
     return { ok: true };
+  }
+
+  async requestSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<RequestSpotResult> {
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Same key as addSpotRequest: one Spot Request per user and Event
+    const key = `${eventId}/${athleteId}`;
+    // Already pending: a double click. Nothing is written, so createdAt and its
+    // place in the Manager's list stay as they were
+    if (this.spotRequests.get(key)?.status === "pending") {
+      return { ok: true, changed: false };
+    }
+    // createdAt is now: the Manager's list orders by it
+    this.spotRequests.set(key, {
+      eventId,
+      userId: athleteId,
+      status: "pending",
+      createdAt: now,
+    });
+    return { ok: true, changed: true };
   }
 
   async listEvents(

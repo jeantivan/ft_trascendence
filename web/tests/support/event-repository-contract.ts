@@ -20,6 +20,9 @@ const TOMORROW_END = new Date("2030-01-03T00:00:00.000Z");
 // shows cancelledAt comes from the parameter
 const CANCEL_AT = new Date("2030-01-01T12:00:00.000Z");
 const CANCEL_AGAIN_AT = new Date("2030-01-01T15:00:00.000Z");
+// A second request, after NOW and before TOMORROW: a createdAt that changed to
+// this moment would show the request was written again
+const REQUEST_AGAIN_AT = new Date("2030-01-01T12:00:00.000Z");
 // The actor of the contract's deletions. The Admin is audited, and only Prisma
 // writes audit rows: its tests are in event-repository.db.test.ts
 const MANAGER: DeleteEventActor = { kind: "manager" };
@@ -749,6 +752,114 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
 
       expect(result).toEqual({ ok: false, reason: "not-found" });
       await expect(repo.getEventForMember(orgA, eventId, managerA)).resolves.not.toBeNull();
+    });
+
+    // The Spot Requests (#232): checked through what the operation returns and
+    // what the reads show afterwards, never by looking at the table
+    it("requestSpot on a future Event without a request leaves it pending", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it("requestSpot again on a pending request changes nothing", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId, "Ana");
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+
+      // A double click: the same request, a moment later
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      // Still one request, with its first createdAt: its place in the list is kept
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([
+        { athleteId, nick: "Ana", status: "pending", createdAt: NOW },
+      ]);
+    });
+
+    it("requestSpot on an Event of another club is not-found and leaves no request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const athleteB = await addAthlete(orgB);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+
+      // An Athlete of club B who knows the id of an Event of club A
+      const result = await repo.requestSpot(orgB, eventId, athleteB, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      const view = await repo.getEventForManager(orgA, eventId);
+      expect(view?.spotRequests).toEqual([]);
+    });
+
+    it("requestSpot of an id no Event has is not-found", async () => {
+      const { repo, createClub, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const athleteId = await addAthlete(orgId);
+
+      await expect(repo.requestSpot(orgId, UNKNOWN_ID, athleteId, NOW)).resolves.toEqual({
+        ok: false,
+        reason: "not-found",
+      });
+    });
+
+    it("requestSpot on a cancelled Event is cancelled and leaves no request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // After the cancel and before the start: cancelled is the only reason
+      const result = await repo.requestSpot(orgId, eventId, athleteId, CANCEL_AGAIN_AT);
+
+      expect(result).toEqual({ ok: false, reason: "cancelled" });
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([]);
+    });
+
+    it("requestSpot on an Event that starts right now is started and leaves no request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      // TOMORROW and not later: the limit. Starting at now already counts as started
+      const result = await repo.requestSpot(orgId, eventId, athleteId, TOMORROW);
+
+      expect(result).toEqual({ ok: false, reason: "started" });
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([]);
+    });
+
+    it("requestSpot on an Event cancelled and started is cancelled", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // Both reasons apply: cancelled comes first in the fixed order
+      await expect(repo.requestSpot(orgId, eventId, athleteId, TOMORROW)).resolves.toEqual({
+        ok: false,
+        reason: "cancelled",
+      });
     });
 
     // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent
