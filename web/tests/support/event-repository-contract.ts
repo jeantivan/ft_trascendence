@@ -90,38 +90,46 @@ export function eventIdOf(result: CreateEventResult): string {
 // The Spot Request operations, as rows of a table: the same test runs once per
 // row (it.each). run is a function kept in a field, like a function pointer in
 // a C struct. unknown: the test only hands the result to expect. from is the
-// state the request is in before the operation: the one it would change
+// state the request is in before the operation: the one it would change. to is
+// the state the operation leads to
 interface SpotOperation {
   name: string;
-  from: "pending" | "approved";
+  from: "pending" | "approved" | "withdrawn";
+  to: SpotRequestStatus;
   run(repo: EventRepository, orgId: string, eventId: string, athleteId: string, now: Date): Promise<unknown>;
 }
 
 const SPOT_OPERATIONS: SpotOperation[] = [
   {
+    // From withdrawn: on a pending one, asking again would change nothing
     name: "requestSpot",
-    from: "pending",
+    from: "withdrawn",
+    to: "pending",
     run: (repo, orgId, eventId, athleteId, now) => repo.requestSpot(orgId, eventId, athleteId, now),
   },
   {
     name: "withdrawSpot",
     from: "pending",
+    to: "withdrawn",
     run: (repo, orgId, eventId, athleteId, now) => repo.withdrawSpot(orgId, eventId, athleteId, now),
   },
   {
     name: "approveSpot",
     from: "pending",
+    to: "approved",
     run: (repo, orgId, eventId, athleteId, now) => repo.approveSpot(orgId, eventId, athleteId, now),
   },
   {
     name: "rejectSpot",
     from: "pending",
+    to: "rejected",
     run: (repo, orgId, eventId, athleteId, now) => repo.rejectSpot(orgId, eventId, athleteId, now),
   },
   {
     // From approved: what matters is that an admitted Athlete is not expelled
     name: "expelFromEvent",
     from: "approved",
+    to: "rejected",
     run: (repo, orgId, eventId, athleteId, now) => repo.expelFromEvent(orgId, eventId, athleteId, now),
   },
 ];
@@ -1018,6 +1026,9 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       if (from === "approved") {
         await start.repo.approveSpot(start.orgId, start.eventId, start.athleteId, NOW);
       }
+      if (from === "withdrawn") {
+        await start.repo.withdrawSpot(start.orgId, start.eventId, start.athleteId, NOW);
+      }
       return start;
     }
 
@@ -1381,6 +1392,18 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       });
       await expect(repo.deleteEvent(org, event, MANAGER)).resolves.toEqual({ ok: true });
       await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toBeNull();
+    });
+
+    // R9
+    it.each(SPOT_OPERATIONS)("$name takes the club, the Event and the Athlete in upper case", async ({ run, from, to }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
+
+      const result = await run(repo, orgId.toUpperCase(), eventId.toUpperCase(), athleteId.toUpperCase(), NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      // Read in lower case: the change is on the same request, not on a new one
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe(to);
     });
   });
 }

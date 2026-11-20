@@ -209,6 +209,9 @@ export class InMemoryEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<RequestSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
     // The Event first, in the fixed order
     const event = this.findInClub(orgId, eventId);
     if (!event) {
@@ -250,6 +253,9 @@ export class InMemoryEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<WithdrawSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
     // The Event first, in the fixed order
     const event = this.findInClub(orgId, eventId);
     if (!event) {
@@ -291,6 +297,9 @@ export class InMemoryEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<ReviewSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
     // The Event first, in the fixed order
     const event = this.findInClub(orgId, eventId);
     if (!event) {
@@ -329,6 +338,9 @@ export class InMemoryEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<ReviewSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
     // The Event first, in the fixed order
     const event = this.findInClub(orgId, eventId);
     if (!event) {
@@ -365,6 +377,9 @@ export class InMemoryEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<ReviewSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
     // The Event first, in the fixed order
     const event = this.findInClub(orgId, eventId);
     if (!event) {
