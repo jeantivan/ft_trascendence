@@ -26,6 +26,10 @@ const REQUEST_AGAIN_AT = new Date("2030-01-01T12:00:00.000Z");
 // When an approved Athlete withdraws: not NOW, so the test shows the chat's
 // removedAt comes from the parameter
 const WITHDRAW_AT = new Date("2030-01-01T14:00:00.000Z");
+// When the Manager expels an approved Athlete: not NOW either, for the same reason
+const EXPEL_AT = new Date("2030-01-01T16:00:00.000Z");
+// A second expulsion: a removedAt that changed to this moment would show it was written again
+const EXPEL_AGAIN_AT = new Date("2030-01-01T17:00:00.000Z");
 // The actor of the contract's deletions. The Admin is audited, and only Prisma
 // writes audit rows: its tests are in event-repository.db.test.ts
 const MANAGER: DeleteEventActor = { kind: "manager" };
@@ -85,28 +89,40 @@ export function eventIdOf(result: CreateEventResult): string {
 
 // The Spot Request operations, as rows of a table: the same test runs once per
 // row (it.each). run is a function kept in a field, like a function pointer in
-// a C struct. unknown: the test only hands the result to expect
+// a C struct. unknown: the test only hands the result to expect. from is the
+// state the request is in before the operation: the one it would change
 interface SpotOperation {
   name: string;
+  from: "pending" | "approved";
   run(repo: EventRepository, orgId: string, eventId: string, athleteId: string, now: Date): Promise<unknown>;
 }
 
 const SPOT_OPERATIONS: SpotOperation[] = [
   {
     name: "requestSpot",
+    from: "pending",
     run: (repo, orgId, eventId, athleteId, now) => repo.requestSpot(orgId, eventId, athleteId, now),
   },
   {
     name: "withdrawSpot",
+    from: "pending",
     run: (repo, orgId, eventId, athleteId, now) => repo.withdrawSpot(orgId, eventId, athleteId, now),
   },
   {
     name: "approveSpot",
+    from: "pending",
     run: (repo, orgId, eventId, athleteId, now) => repo.approveSpot(orgId, eventId, athleteId, now),
   },
   {
     name: "rejectSpot",
+    from: "pending",
     run: (repo, orgId, eventId, athleteId, now) => repo.rejectSpot(orgId, eventId, athleteId, now),
+  },
+  {
+    // From approved: what matters is that an admitted Athlete is not expelled
+    name: "expelFromEvent",
+    from: "approved",
+    run: (repo, orgId, eventId, athleteId, now) => repo.expelFromEvent(orgId, eventId, athleteId, now),
   },
 ];
 
@@ -996,42 +1012,51 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       return { ...fixture, orgId, eventId, athleteId };
     }
 
-    it.each(SPOT_OPERATIONS)("$name on an Event of another club is not-found and changes nothing", async ({ run }) => {
-      const { repo, createClub, orgId, eventId, athleteId } = await withPendingRequest();
+    // The start of a row: its request in the state from of the row
+    async function withRequestIn(from: SpotOperation["from"]) {
+      const start = await withPendingRequest();
+      if (from === "approved") {
+        await start.repo.approveSpot(start.orgId, start.eventId, start.athleteId, NOW);
+      }
+      return start;
+    }
+
+    it.each(SPOT_OPERATIONS)("$name on an Event of another club is not-found and changes nothing", async ({ run, from }) => {
+      const { repo, createClub, orgId, eventId, athleteId } = await withRequestIn(from);
       const otherClub = await createClub();
 
       const result = await run(repo, otherClub, eventId, athleteId, NOW);
 
       expect(result).toEqual({ ok: false, reason: "not-found" });
-      // Read with the real club: still pending
+      // Read with the real club: still in the state it started in
       const view = await repo.getEventForMember(orgId, eventId, athleteId);
-      expect(view?.mySpotRequest).toBe("pending");
+      expect(view?.mySpotRequest).toBe(from);
     });
 
     // R4: with the Event cancelled or started, nothing changes, not even a repetition
-    it.each(SPOT_OPERATIONS)("$name on a cancelled Event is cancelled and changes nothing", async ({ run }) => {
-      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+    it.each(SPOT_OPERATIONS)("$name on a cancelled Event is cancelled and changes nothing", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
       await repo.cancelEvent(orgId, eventId, CANCEL_AT);
 
       const result = await run(repo, orgId, eventId, athleteId, CANCEL_AGAIN_AT);
 
       expect(result).toEqual({ ok: false, reason: "cancelled" });
       const view = await repo.getEventForMember(orgId, eventId, athleteId);
-      expect(view?.mySpotRequest).toBe("pending");
+      expect(view?.mySpotRequest).toBe(from);
     });
 
-    it.each(SPOT_OPERATIONS)("$name on an Event that starts right now is started and changes nothing", async ({ run }) => {
-      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+    it.each(SPOT_OPERATIONS)("$name on an Event that starts right now is started and changes nothing", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
 
       const result = await run(repo, orgId, eventId, athleteId, TOMORROW);
 
       expect(result).toEqual({ ok: false, reason: "started" });
       const view = await repo.getEventForMember(orgId, eventId, athleteId);
-      expect(view?.mySpotRequest).toBe("pending");
+      expect(view?.mySpotRequest).toBe(from);
     });
 
-    it.each(SPOT_OPERATIONS)("$name on an Event cancelled and started is cancelled, not started", async ({ run }) => {
-      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+    it.each(SPOT_OPERATIONS)("$name on an Event cancelled and started is cancelled, not started", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
       await repo.cancelEvent(orgId, eventId, CANCEL_AT);
 
       await expect(run(repo, orgId, eventId, athleteId, TOMORROW)).resolves.toEqual({
@@ -1219,6 +1244,70 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       expect(result).toEqual({ ok: true, changed: false });
       const view = await repo.getEventForMember(orgId, eventId, athleteId);
       expect(view?.mySpotRequest).toBe("approved");
+    });
+
+    it("expelFromEvent on an approved request rejects it and leaves the chat read-only", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+      expect(view?.approvedCount).toBe(0);
+      // As when withdrawing: the row stays, they read the history but no longer write
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: EXPEL_AT });
+    });
+
+    it("expelFromEvent without a request is no-request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      await expect(repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT)).resolves.toEqual({
+        ok: false,
+        reason: "no-request",
+      });
+    });
+
+    it("expelFromEvent again on an expelled request changes nothing", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+      await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      // A double click, or another Manager with the same decision
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      // The moment they left the chat stays the first one
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: EXPEL_AT });
+    });
+
+    it("expelFromEvent on a pending request is status-changed and never rejects", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it("expelFromEvent on a withdrawn request is status-changed and keeps the chat as it was", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+      // The Athlete withdrew while the Manager had the list open
+      await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: WITHDRAW_AT });
     });
 
     // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent

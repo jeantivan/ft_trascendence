@@ -168,6 +168,16 @@ export interface EventRepository {
     now: Date,
   ): Promise<ReviewSpotResult>;
 
+  // An approved Spot Request becomes rejected, and the Athlete leaves the chat:
+  // the row stays with removedAt, as when withdrawing. Only from approved: a
+  // pending one is status-changed, so an expulsion never rejects a request
+  expelFromEvent(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult>;
+
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
   // ones included, no size limit. For members, Managers and the Admin alike
@@ -594,6 +604,58 @@ export class PrismaEventRepository implements EventRepository {
     await this.db.spotRequest.update({
       where: { eventId_userId: { eventId, userId: athleteId } },
       data: { status: "rejected" },
+    });
+    return { ok: true, changed: true };
+  }
+
+  async expelFromEvent(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    // The Event first, in the fixed order
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: { cancelledAt: true, startsAt: true },
+    });
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Then the Spot Request
+    const existing = await this.db.spotRequest.findUnique({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      select: { status: true },
+    });
+    if (existing === null) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already rejected: a double click, or another Manager with the same decision.
+    // Nothing is written, so removedAt keeps the moment they left
+    if (existing.status === "rejected") {
+      return { ok: true, changed: false };
+    }
+    // Only an approved request is expelled: a pending one would be a rejection,
+    // and a withdrawn one already left by the Athlete's own decision
+    if (existing.status !== "approved") {
+      return { ok: false, reason: "status-changed" };
+    }
+    await this.db.spotRequest.update({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      data: { status: "rejected" },
+    });
+    // As when withdrawing: the row stays, they read the history but no longer
+    // write. updateMany: with no row it is not an error (Q10)
+    await this.db.conversationParticipant.updateMany({
+      where: { userId: athleteId, conversation: { eventId } },
+      data: { removedAt: now },
     });
     return { ok: true, changed: true };
   }

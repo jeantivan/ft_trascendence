@@ -359,6 +359,46 @@ export class InMemoryEventRepository implements EventRepository {
     return { ok: true, changed: true };
   }
 
+  async expelFromEvent(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    const key = `${eventId}/${athleteId}`;
+    const request = this.spotRequests.get(key);
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already rejected: nothing is written, removedAt keeps the moment they left
+    if (request.status === "rejected") {
+      return { ok: true, changed: false };
+    }
+    // Only an approved request is expelled
+    if (request.status !== "approved") {
+      return { ok: false, reason: "status-changed" };
+    }
+    request.status = "rejected";
+    // As in Prisma: the row stays with removedAt
+    const participant = this.chatParticipants.get(key);
+    if (participant !== undefined) {
+      participant.removedAt = now;
+    }
+    return { ok: true, changed: true };
+  }
+
   async listEvents(
     orgId: string,
     viewerId: string,
