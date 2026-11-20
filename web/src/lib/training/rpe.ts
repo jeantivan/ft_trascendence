@@ -25,7 +25,7 @@ export function rpeTierOf(value: RpeValue): RpeTier {
 export const RPE_DESCRIPTORS: Record<RpeValue, RpeDescriptor> = {
   1: {
     value: 1,
-    label: "Muy suave / Mínimo",
+    label: "Regenerativo",
     guidance: "Esfuerzo casi nulo, respiración completamente relajada",
     tier: rpeTierOf(1),
   },

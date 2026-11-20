@@ -74,8 +74,6 @@ export const SessionLogExtraSchema = z
     incompletion_reason: IncompletionReasonEnum.optional(),
     avg_heart_rate_bpm: heartRateBpmSchema,
     max_heart_rate_bpm: heartRateBpmSchema,
-    elevation_gain_m: z.number().int().min(0).max(20000).optional(),
-    cadence_spm: z.number().int().min(50).max(300).optional(),
   })
   .strict()
   .refine(

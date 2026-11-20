@@ -136,29 +136,41 @@ describe("trainingTemplateSchema", () => {
 });
 
 describe("SessionLogExtraSchema", () => {
-  it("accepts valid closed incompletion reasons and in-range metrics", () => {
+  it("accepts valid closed incompletion reasons and in-range heart rate metrics", () => {
     expect(IncompletionReasonEnum.parse("time_constraints")).toBe("time_constraints");
     expect(
       SessionLogExtraSchema.parse({
         incompletion_reason: "equipment_issue",
         avg_heart_rate_bpm: 148,
         max_heart_rate_bpm: 175,
-        elevation_gain_m: 320,
-        cadence_spm: 176,
       }),
     ).toEqual({
       incompletion_reason: "equipment_issue",
       avg_heart_rate_bpm: 148,
       max_heart_rate_bpm: 175,
-      elevation_gain_m: 320,
-      cadence_spm: 176,
+    });
+    expect(
+      SessionLogExtraSchema.parse({
+        avg_heart_rate_bpm: 30,
+        max_heart_rate_bpm: 250,
+      }),
+    ).toEqual({
+      avg_heart_rate_bpm: 30,
+      max_heart_rate_bpm: 250,
     });
   });
 
-  it("rejects unknown keys, free text, out-of-range values, and max < avg heart rate", () => {
+  it("rejects unknown keys, removed metrics, free text, out-of-range or decimal values, and max < avg heart rate", () => {
     expect(SessionLogExtraSchema.safeParse({ notes: "me dolía la rodilla" }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ elevation_gain_m: 320 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ cadence_spm: 176 }).success).toBe(false);
     expect(SessionLogExtraSchema.safeParse({ incompletion_reason: "tired" }).success).toBe(false);
     expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 29 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 251 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 148.5 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ max_heart_rate_bpm: 29 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ max_heart_rate_bpm: 251 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ max_heart_rate_bpm: 175.5 }).success).toBe(false);
     expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 160, max_heart_rate_bpm: 150 }).success).toBe(false);
   });
 });

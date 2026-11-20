@@ -13,7 +13,7 @@ describe("RPE descriptors catalog (Borg CR-10)", () => {
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
 
-    expect(RPE_DESCRIPTORS[1].label).toBe("Muy suave / Mínimo");
+    expect(RPE_DESCRIPTORS[1].label).toBe("Regenerativo");
     expect(RPE_DESCRIPTORS[6].label).toBe("Duro (controlado)");
     expect(RPE_DESCRIPTORS[10].label).toBe("Esfuerzo máximo");
 
