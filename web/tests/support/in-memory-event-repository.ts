@@ -227,15 +227,23 @@ export class InMemoryEventRepository implements EventRepository {
     return { ok: true, changed: true };
   }
 
-  // Without now for the moment: withdrawing a pending request stores no time
   async withdrawSpot(
     orgId: string,
     eventId: string,
     athleteId: string,
+    now: Date,
   ): Promise<WithdrawSpotResult> {
     // The Event first, in the fixed order
-    if (!this.findInClub(orgId, eventId)) {
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
       return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
     }
     const request = this.spotRequests.get(`${eventId}/${athleteId}`);
     if (request === undefined) {

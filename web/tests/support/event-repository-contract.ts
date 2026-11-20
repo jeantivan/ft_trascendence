@@ -76,6 +76,25 @@ export function eventIdOf(result: CreateEventResult): string {
   return result.eventId;
 }
 
+// The Spot Request operations, as rows of a table: the same test runs once per
+// row (it.each). run is a function kept in a field, like a function pointer in
+// a C struct. unknown: the test only hands the result to expect
+interface SpotOperation {
+  name: string;
+  run(repo: EventRepository, orgId: string, eventId: string, athleteId: string, now: Date): Promise<unknown>;
+}
+
+const SPOT_OPERATIONS: SpotOperation[] = [
+  {
+    name: "requestSpot",
+    run: (repo, orgId, eventId, athleteId, now) => repo.requestSpot(orgId, eventId, athleteId, now),
+  },
+  {
+    name: "withdrawSpot",
+    run: (repo, orgId, eventId, athleteId, now) => repo.withdrawSpot(orgId, eventId, athleteId, now),
+  },
+];
+
 // Rules every EventRepository must follow
 export function runEventRepositoryContract(name: string, createFixture: () => EventFixture) {
   describe(`EventRepository contract: ${name}`, () => {
@@ -945,6 +964,50 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       expect(view?.spotRequests).toEqual([
         { athleteId, nick: "Ana", status: "pending", createdAt: REQUEST_AGAIN_AT },
       ]);
+    });
+
+    // The start of the table tests: an Athlete with a pending request in an
+    // Event of tomorrow. The same for every row, so the Event decides the result
+    async function withPendingRequest() {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+      return { repo, orgId, eventId, athleteId };
+    }
+
+    // R4: with the Event cancelled or started, nothing changes, not even a repetition
+    it.each(SPOT_OPERATIONS)("$name on a cancelled Event is cancelled and changes nothing", async ({ run }) => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      const result = await run(repo, orgId, eventId, athleteId, CANCEL_AGAIN_AT);
+
+      expect(result).toEqual({ ok: false, reason: "cancelled" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it.each(SPOT_OPERATIONS)("$name on an Event that starts right now is started and changes nothing", async ({ run }) => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+
+      const result = await run(repo, orgId, eventId, athleteId, TOMORROW);
+
+      expect(result).toEqual({ ok: false, reason: "started" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it.each(SPOT_OPERATIONS)("$name on an Event cancelled and started is cancelled, not started", async ({ run }) => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      await expect(run(repo, orgId, eventId, athleteId, TOMORROW)).resolves.toEqual({
+        ok: false,
+        reason: "cancelled",
+      });
     });
 
     // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent

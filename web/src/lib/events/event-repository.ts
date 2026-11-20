@@ -66,6 +66,10 @@ export type WithdrawSpotResult =
   // Does not exist or is from another club. Before no-request, so another
   // club's Event never shows it exists
   | { ok: false; reason: "not-found" }
+  // As in RequestSpotResult: with the Event cancelled or started, the spot stays
+  // as it was, not even a repetition passes
+  | { ok: false; reason: "cancelled" }
+  | { ok: false; reason: "started" }
   // The Athlete never asked: the UI shows no "withdraw" then, but a Server
   // Action can be called directly
   | { ok: false; reason: "no-request" };
@@ -394,19 +398,26 @@ export class PrismaEventRepository implements EventRepository {
     return { ok: true, changed: true };
   }
 
-  // Without now for the moment: withdrawing a pending request stores no time
   async withdrawSpot(
     orgId: string,
     eventId: string,
     athleteId: string,
+    now: Date,
   ): Promise<WithdrawSpotResult> {
     // The Event first, in the fixed order
     const event = await this.db.event.findFirst({
       where: { id: eventId, orgId },
-      select: { id: true },
+      select: { cancelledAt: true, startsAt: true },
     });
     if (!event) {
       return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
     }
     // The state before: what to do depends on it
     const existing = await this.db.spotRequest.findUnique({
