@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import type { SettingsProfile } from "@/lib/user/user-settings-service";
 import { PrivacySettingsSection } from "./PrivacySettingsSection";
@@ -8,6 +8,8 @@ import { ProfileAvatarSection } from "./ProfileAvatarSection";
 import { ProfileCredentialsSection } from "./ProfileCredentialsSection";
 
 export type SettingsTab = "perfil" | "privacidad";
+
+const TAB_ORDER: SettingsTab[] = ["perfil", "privacidad"];
 
 interface SettingsTabsProps {
   profile: SettingsProfile;
@@ -21,6 +23,52 @@ export function SettingsTabs({
   initialTab = "perfil",
 }: SettingsTabsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const tabRefs = useRef<Record<SettingsTab, HTMLButtonElement | null>>({
+    perfil: null,
+    privacidad: null,
+  });
+
+  useEffect(() => {
+    function handlePopState() {
+      const tabParam = new URLSearchParams(window.location.search).get("tab");
+      setActiveTab(tabParam === "privacidad" ? "privacidad" : "perfil");
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  function selectTab(tab: SettingsTab) {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === "privacidad") {
+      url.searchParams.set("tab", "privacidad");
+    } else {
+      url.searchParams.delete("tab");
+    }
+    window.history.pushState(null, "", `${url.pathname}${url.search}`);
+  }
+
+  function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    let nextTab: SettingsTab | undefined;
+
+    if (event.key === "ArrowRight") {
+      nextTab = TAB_ORDER[(currentIndex + 1) % TAB_ORDER.length];
+    } else if (event.key === "ArrowLeft") {
+      nextTab = TAB_ORDER[(currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length];
+    } else if (event.key === "Home") {
+      nextTab = TAB_ORDER[0];
+    } else if (event.key === "End") {
+      nextTab = TAB_ORDER[TAB_ORDER.length - 1];
+    }
+
+    if (!nextTab) return;
+    event.preventDefault();
+    selectTab(nextTab);
+    tabRefs.current[nextTab]?.focus();
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
@@ -48,13 +96,18 @@ export function SettingsTabs({
           className="inline-flex w-fit rounded-md border border-border-subtle bg-surface-elevated p-1"
         >
           <button
+            ref={(el) => {
+              tabRefs.current.perfil = el;
+            }}
             type="button"
             role="tab"
             id="tab-perfil"
+            tabIndex={activeTab === "perfil" ? 0 : -1}
             aria-selected={activeTab === "perfil"}
             aria-controls="panel-perfil"
-            onClick={() => setActiveTab("perfil")}
-            className={`inline-flex items-center gap-2 rounded px-5 py-2 font-heading text-label-caps uppercase transition-colors ${
+            onClick={() => selectTab("perfil")}
+            onKeyDown={handleTabKeyDown}
+            className={`inline-flex items-center gap-2 rounded px-5 py-2 font-heading text-label-caps uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volt ${
               activeTab === "perfil"
                 ? "bg-volt text-surface-base"
                 : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary"
@@ -63,13 +116,18 @@ export function SettingsTabs({
             Perfil
           </button>
           <button
+            ref={(el) => {
+              tabRefs.current.privacidad = el;
+            }}
             type="button"
             role="tab"
             id="tab-privacidad"
+            tabIndex={activeTab === "privacidad" ? 0 : -1}
             aria-selected={activeTab === "privacidad"}
             aria-controls="panel-privacidad"
-            onClick={() => setActiveTab("privacidad")}
-            className={`inline-flex items-center gap-2 rounded px-5 py-2 font-heading text-label-caps uppercase transition-colors ${
+            onClick={() => selectTab("privacidad")}
+            onKeyDown={handleTabKeyDown}
+            className={`inline-flex items-center gap-2 rounded px-5 py-2 font-heading text-label-caps uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-volt ${
               activeTab === "privacidad"
                 ? "bg-volt text-surface-base"
                 : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary"

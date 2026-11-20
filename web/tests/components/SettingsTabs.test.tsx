@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
+import { MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
 import type { SettingsProfile } from "@/lib/user/user-settings-service";
 
 const {
@@ -61,6 +62,7 @@ const BASE_PROFILE: SettingsProfile = {
 describe("SettingsTabs (/settings)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState(null, "", "/settings");
     updateNickActionMock.mockResolvedValue({
       success: true,
       message: "Nick actualizado correctamente",
@@ -91,6 +93,10 @@ describe("SettingsTabs (/settings)", () => {
     });
     globalThis.URL.createObjectURL = vi.fn(() => "blob:preview-url");
     globalThis.URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("permite cambiar entre las pestañas Perfil y Privacidad", () => {
@@ -271,5 +277,91 @@ describe("SettingsTabs (/settings)", () => {
     await waitFor(() => {
       expect(purgeHealthDataActionMock).toHaveBeenCalledOnce();
     });
+  });
+
+  it("rechaza en cliente imágenes mayores que MAX_IMAGE_BYTES y traduce errores 413/415 conservando la vista previa", async () => {
+    const maxMb = Math.round(MAX_IMAGE_BYTES / (1024 * 1024));
+    const instances: MockXHR[] = [];
+
+    class MockXHR {
+      upload: { onprogress?: (e: ProgressEvent) => void } = {};
+      onload?: () => void;
+      onerror?: () => void;
+      status = 413;
+      responseText = "";
+      open = vi.fn();
+      send = vi.fn();
+      constructor() {
+        instances.push(this);
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", MockXHR);
+
+    render(<SettingsTabs profile={BASE_PROFILE} recentAuth />);
+
+    const input = screen.getByLabelText("Seleccionar imagen de avatar");
+    const oversized = new File(["x"], "enorme.png", { type: "image/png" });
+    Object.defineProperty(oversized, "size", { value: MAX_IMAGE_BYTES + 1 });
+    fireEvent.change(input, { target: { files: [oversized] } });
+
+    expect(screen.getByText(`La imagen supera el tamaño máximo de ${maxMb} MB`)).toBeInTheDocument();
+    expect(screen.queryByText("Vista previa")).not.toBeInTheDocument();
+    expect(instances).toHaveLength(0);
+
+    const validFile = new File(["png"], "foto.png", { type: "image/png" });
+    fireEvent.change(input, { target: { files: [validFile] } });
+    expect(screen.getByText("Vista previa")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Subir imagen" }));
+    instances[0].status = 413;
+    instances[0].responseText = JSON.stringify({ error: "Image too large" });
+    act(() => instances[0].onload?.());
+
+    expect(screen.getByText("La imagen supera el máximo de 8000 px por lado")).toBeInTheDocument();
+    expect(screen.getByText("Vista previa")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Subir imagen" }));
+    instances[1].status = 413;
+    instances[1].responseText = "<html><body>413 Request Entity Too Large</body></html>";
+    act(() => instances[1].onload?.());
+
+    expect(screen.getByText(`La imagen supera el tamaño máximo de ${maxMb} MB`)).toBeInTheDocument();
+    expect(screen.getByText("Vista previa")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Subir imagen" }));
+    instances[2].status = 415;
+    instances[2].responseText = JSON.stringify({ error: "Unsupported image type" });
+    act(() => instances[2].onload?.());
+
+    expect(
+      screen.getByText("Formato de imagen no válido o archivo dañado (usa JPG, PNG o WEBP)")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Vista previa")).toBeInTheDocument();
+  });
+
+  it("sincroniza la URL con pushState, responde a popstate y permite navegar con flechas", () => {
+    render(<SettingsTabs profile={BASE_PROFILE} recentAuth />);
+
+    const perfilTab = screen.getByRole("tab", { name: "Perfil" });
+    const privacidadTab = screen.getByRole("tab", { name: /privacidad/i });
+
+    fireEvent.click(privacidadTab);
+    expect(window.location.search).toBe("?tab=privacidad");
+    expect(screen.getByRole("heading", { name: "Visibilidad y Notificaciones" })).toBeInTheDocument();
+
+    window.history.replaceState(null, "", "/settings");
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(screen.getByRole("heading", { name: "Avatar" })).toBeInTheDocument();
+
+    perfilTab.focus();
+    fireEvent.keyDown(perfilTab, { key: "ArrowRight" });
+    expect(privacidadTab).toHaveFocus();
+    expect(window.location.search).toBe("?tab=privacidad");
+
+    fireEvent.keyDown(privacidadTab, { key: "ArrowLeft" });
+    expect(perfilTab).toHaveFocus();
+    expect(window.location.search).toBe("");
   });
 });

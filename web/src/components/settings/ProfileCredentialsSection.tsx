@@ -80,7 +80,7 @@ export function ProfileCredentialsSection({
 
       <Card as="section" aria-labelledby="email-section-title" className="flex flex-col gap-5">
         <div className="flex flex-col justify-between gap-2 border-b border-border-subtle pb-4 sm:flex-row sm:items-start">
-          <div>
+          <div className="min-w-0">
             <h2 id="email-section-title" className="font-heading text-headline-md text-text-primary">
               Correo electrónico
             </h2>
@@ -88,9 +88,9 @@ export function ProfileCredentialsSection({
               Dirección asociada a tu cuenta y a las notificaciones de StrideSync.
             </p>
           </div>
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-rpe-low bg-surface-overlay px-3 py-1 font-heading text-label-caps uppercase text-rpe-low">
-            <Icon name="check" size={14} />
-            Actual: {email}
+          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-rpe-low bg-surface-overlay px-3 py-1 font-heading text-label-caps uppercase text-rpe-low sm:shrink-0">
+            <Icon name="check" size={14} className="shrink-0" />
+            <span className="truncate">Actual: {email}</span>
           </span>
         </div>
 

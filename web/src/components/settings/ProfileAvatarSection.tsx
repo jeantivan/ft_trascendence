@@ -6,6 +6,33 @@ import { Alert } from "@/components/ui/Alert";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
+
+const MAX_IMAGE_MB = Math.round(MAX_IMAGE_BYTES / (1024 * 1024));
+
+function parseUploadBody(responseText: string): { url?: string; error?: string } | null {
+  try {
+    return JSON.parse(responseText) as { url?: string; error?: string };
+  } catch {
+    return null;
+  }
+}
+
+function mapUploadError(status: number, body: { error?: string } | null): string {
+  if (status === 413) {
+    if (body?.error === "Image too large") {
+      return "La imagen supera el máximo de 8000 px por lado";
+    }
+    return `La imagen supera el tamaño máximo de ${MAX_IMAGE_MB} MB`;
+  }
+  if (status === 415) {
+    return "Formato de imagen no válido o archivo dañado (usa JPG, PNG o WEBP)";
+  }
+  if (status === 401) {
+    return "Tu sesión ha caducado; vuelve a iniciar sesión";
+  }
+  return "No se pudo subir la imagen";
+}
 
 interface ProfileAvatarSectionProps {
   initialImage: string | null;
@@ -43,6 +70,16 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
     event.target.value = "";
     if (!file) return;
 
+    if (file.size > MAX_IMAGE_BYTES) {
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setFeedback({
+        variant: "error",
+        message: `La imagen supera el tamaño máximo de ${MAX_IMAGE_MB} MB`,
+      });
+      return;
+    }
+
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setFeedback(null);
@@ -73,30 +110,25 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
 
     xhr.onload = () => {
       setUploadProgress(null);
-      setSelectedFile(null);
-      setPreviewUrl(null);
+      const body = parseUploadBody(xhr.responseText);
 
-      try {
-        const body = JSON.parse(xhr.responseText) as { url?: string; error?: string };
-        if (xhr.status >= 200 && xhr.status < 300 && body.url) {
-          setCurrentImage(body.url);
-          setFeedback({ variant: "success", message: "Avatar actualizado correctamente" });
-          router.refresh();
-          return;
-        }
-        setFeedback({
-          variant: "error",
-          message: body.error ?? "No se pudo subir la imagen",
-        });
-      } catch {
-        setFeedback({ variant: "error", message: "Error inesperado al subir la imagen" });
+      if (xhr.status >= 200 && xhr.status < 300 && body?.url) {
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setCurrentImage(body.url);
+        setFeedback({ variant: "success", message: "Avatar actualizado correctamente" });
+        router.refresh();
+        return;
       }
+
+      setFeedback({
+        variant: "error",
+        message: mapUploadError(xhr.status, body),
+      });
     };
 
     xhr.onerror = () => {
       setUploadProgress(null);
-      setSelectedFile(null);
-      setPreviewUrl(null);
       setFeedback({ variant: "error", message: "Error de red al subir la imagen" });
     };
 
@@ -138,7 +170,7 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
           </p>
         </div>
         <span className="self-start rounded border border-border-subtle bg-surface-overlay px-2.5 py-1 font-heading text-label-caps uppercase text-text-muted">
-          JPG / PNG / WEBP
+          JPG / PNG / WEBP · Máx. {MAX_IMAGE_MB} MB
         </span>
       </div>
 

@@ -1,14 +1,22 @@
-import { SettingsTabs } from "@/components/settings/SettingsTabs";
+import { SettingsTabs, type SettingsTab } from "@/components/settings/SettingsTabs";
 import { requireAuth } from "@/lib/permissions/require-auth";
 import { isRecentAuth } from "@/lib/user/actions";
 import { userSettingsService } from "@/lib/user/user-settings-service";
 
-export default async function SettingsPage() {
+interface SettingsPageProps {
+  searchParams?: Promise<{ tab?: string | string[] }>;
+}
+
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
   const user = await requireAuth();
-  const [profile, recentAuth] = await Promise.all([
+  const [profile, recentAuth, resolvedParams] = await Promise.all([
     userSettingsService.getProfile(user.id),
     isRecentAuth(),
+    searchParams,
   ]);
 
-  return <SettingsTabs profile={profile} recentAuth={recentAuth} />;
+  const initialTab: SettingsTab =
+    resolvedParams?.tab === "privacidad" ? "privacidad" : "perfil";
+
+  return <SettingsTabs profile={profile} recentAuth={recentAuth} initialTab={initialTab} />;
 }
