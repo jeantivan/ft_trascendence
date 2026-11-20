@@ -4,6 +4,7 @@ import { OTP_MAX_ATTEMPTS, type OtpRecord, type OtpRepository } from "@/lib/gdpr
 
 export class InMemoryOtpRepository implements OtpRepository {
   private records: OtpRecord[] = [];
+  private locks = new Map<string, Promise<void>>();
 
   async create(data: Omit<OtpRecord, "id" | "attempts">): Promise<OtpRecord> {
     const record = { ...data, id: randomUUID(), attempts: 0 };
@@ -27,6 +28,13 @@ export class InMemoryOtpRepository implements OtpRepository {
     return latest ? { ...latest } : null;
   }
 
+  async findCreatedSince(userId: string, purpose: OtpPurpose, since: Date): Promise<OtpRecord[]> {
+    return this.records
+      .filter((r) => r.userId === userId && r.purpose === purpose && r.createdAt > since)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((r) => ({ ...r }));
+  }
+
   async reserveAttempt(recordId: string, now: Date): Promise<boolean> {
     const record = this.records.find((r) => r.id === recordId);
     if (!record || record.consumedAt || now >= record.expiresAt) return false;
@@ -47,5 +55,23 @@ export class InMemoryOtpRepository implements OtpRepository {
     const record = this.records.find((r) => r.id === recordId);
     if (!record || record.userId !== userId || record.purpose !== purpose) return false;
     return this.consumeIfUnused(recordId, now);
+  }
+
+  async withUserLock<T>(userId: string, fn: (repo: OtpRepository) => Promise<T>): Promise<T> {
+    const previous = this.locks.get(userId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.locks.set(userId, current);
+    await previous;
+    try {
+      return await fn(this);
+    } finally {
+      release();
+      if (this.locks.get(userId) === current) {
+        this.locks.delete(userId);
+      }
+    }
   }
 }

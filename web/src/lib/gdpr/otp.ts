@@ -18,6 +18,8 @@ export interface OtpRecord {
 const OTP_TTL_MS = 10 * 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;
 const OTP_COOLDOWN_MS = 60 * 1000;
+export const OTP_MAX_PER_HOUR = 10;
+const OTP_WINDOW_MS = 60 * 60 * 1000;
 
 export interface OtpRepository {
   // attempts starts at 0 (same as the schema default)
@@ -25,6 +27,9 @@ export interface OtpRepository {
   // ties go to the greatest id (Prisma: orderBy [{ createdAt: "desc" }, { id: "desc" }])
   create(record: Omit<OtpRecord, "id" | "attempts">): Promise<OtpRecord>;
   findLatest(userId: string, purpose: OtpPurpose): Promise<OtpRecord | null>;
+  // Returns the codes for userId and purpose with createdAt > since, oldest first
+  // (ties go to the smallest id). Used by issueOtp to enforce the hourly cap.
+  findCreatedSince(userId: string, purpose: OtpPurpose, since: Date): Promise<OtpRecord[]>;
   // Atomically reserves one of the OTP_MAX_ATTEMPTS checks, only if the code is
   // unused and not expired. Must be a single conditional write (in SQL:
   // UPDATE ... SET attempts = attempts + 1 WHERE id = ? AND consumed_at IS NULL
@@ -42,6 +47,9 @@ export interface OtpRepository {
   // Expiry is checked here against the given now: callers inside a transaction
   // pass a fresh new Date(), not the time of the earlier verification.
   consumeIfUnusedFor(recordId: string, userId: string, purpose: OtpPurpose, now: Date): Promise<boolean>;
+  // Serializes operations for userId (in Postgres: a transaction with
+  // SELECT ... FOR UPDATE on the user row, passing a repo bound to that tx).
+  withUserLock<T>(userId: string, fn: (repo: OtpRepository) => Promise<T>): Promise<T>;
 }
 
 export type VerifyOtpResult = { success: true } | { success: false; reason: "invalid" };
@@ -71,26 +79,36 @@ export type IssueOtpResult =
   | { issued: false; retryAfterSeconds: number };
 
 // Returns the plain code (to send by email). Only its hash is stored.
-// Refuses to issue another one for the same user and purpose until the cooldown
-// has passed, so requesting codes cannot be used to get unlimited attempts.
+// Refuses to issue another one for the same user and purpose until the 60 s cooldown
+// has passed and while 10 codes have already been issued in the last hour, so
+// requesting codes cannot be used to get unlimited attempts.
 export async function issueOtp(
   userId: string,
   purpose: OtpPurpose,
   repo: OtpRepository,
   now: Date = new Date(),
 ): Promise<IssueOtpResult> {
-  const latest = await repo.findLatest(userId, purpose);
-  if (latest) {
-    const elapsedMs = now.getTime() - latest.createdAt.getTime();
-    if (elapsedMs < OTP_COOLDOWN_MS) {
-      return { issued: false, retryAfterSeconds: Math.ceil((OTP_COOLDOWN_MS - elapsedMs) / 1000) };
+  return repo.withUserLock(userId, async (lockedRepo) => {
+    const latest = await lockedRepo.findLatest(userId, purpose);
+    if (latest) {
+      const elapsedMs = now.getTime() - latest.createdAt.getTime();
+      if (elapsedMs < OTP_COOLDOWN_MS) {
+        return { issued: false, retryAfterSeconds: Math.ceil((OTP_COOLDOWN_MS - elapsedMs) / 1000) };
+      }
+      const windowStart = new Date(now.getTime() - OTP_WINDOW_MS);
+      const recent = await lockedRepo.findCreatedSince(userId, purpose, windowStart);
+      if (recent.length >= OTP_MAX_PER_HOUR) {
+        const oldestInWindow = recent[recent.length - OTP_MAX_PER_HOUR];
+        const retryAfterMs = oldestInWindow.createdAt.getTime() + OTP_WINDOW_MS - now.getTime();
+        return { issued: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) };
+      }
     }
-  }
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
-  const codeHash = await hashPassword(code);
-  await repo.create({ userId, purpose, codeHash, createdAt: now, expiresAt, consumedAt: null });
-  return { issued: true, code };
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
+    const codeHash = await hashPassword(code);
+    await lockedRepo.create({ userId, purpose, codeHash, createdAt: now, expiresAt, consumedAt: null });
+    return { issued: true, code };
+  });
 }
 
 // Checks the code and reserves an attempt, but does not consume it: the caller

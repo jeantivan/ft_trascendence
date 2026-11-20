@@ -1,9 +1,10 @@
 // GET /api/events: the one SSE stream per browser tab (ADR 0001).
-// Sends a heartbeat and every event the hub dispatches.
+// Sends a heartbeat and the events the hub dispatches that are meant for this user.
 
 import { subscribe } from "@/lib/realtime/hub";
 import { ensureListener } from "@/lib/realtime/listener";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
+import { isRecipient } from "@/lib/realtime/recipients";
 
 // pg (LISTEN/NOTIFY) needs Node APIs, so this route cannot run on Edge.
 export const runtime = "nodejs";
@@ -73,6 +74,9 @@ export async function GET(request: Request) {
       }, PING_INTERVAL_MS);
 
       unsubscribe = subscribe((event) => {
+        if (!isRecipient(event, auth.id)) {
+          return;
+        }
         const message = `event: ${event.channel}\ndata: ${JSON.stringify(event.payload)}\n\n`;
         send(message);
       });

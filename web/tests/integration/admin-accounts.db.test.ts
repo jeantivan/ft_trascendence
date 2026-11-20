@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { blockAccount, getAccount, listAccounts, unblockAccount, updateAccountNick } from "@/lib/admin/accounts";
+import {
+  blockAccount,
+  deleteAccount,
+  getAccount,
+  listAccounts,
+  unblockAccount,
+  updateAccountNick,
+} from "@/lib/admin/accounts";
 import { getCurrentUser } from "@/lib/permissions/current-user";
 import { PrismaCurrentUserRepository } from "@/lib/permissions/current-user-repository";
 
@@ -229,15 +236,32 @@ describe("Integration: blockAccount and unblockAccount", () => {
     expect(rows[0].subjectId).toBe(target);
   });
 
-  // Until the last-Admin rule (#102, with lockAccountAndAdmins from #158): two Admins
-  // blocking each other at once would leave the app with none
-  it("does not block an Admin account, also with the id in upper case, and writes no row", async () => {
+  // Last-Admin rule (#102, lockAccountAndAdmins from #158): another unblocked Admin
+  // (the one acting) is left, so blocking an Admin goes through like any account
+  it("blocks another Admin account while another unblocked Admin is left", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+
+    const result = await blockAccount(prisma, { adminId: ADMIN_ID, accountId: target });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await blockedAtOf(target)).toBeInstanceOf(Date);
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ action: "block", subjectId: target });
+  });
+
+  // Two Admins blocking each other at once: the second one runs after the first commit,
+  // so the Admin acting is already blocked and the target is the last unblocked Admin.
+  // The race itself is tested in lockAccountAndAdmins (#191); here, the rule it feeds
+  it("does not block the last unblocked Admin, also with the id in upper case, and writes no row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin", blockedAt: new Date("2099-01-05T00:00:00Z") });
     await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
 
     for (const accountId of [target, target.toUpperCase()]) {
       await expect(blockAccount(prisma, { adminId: ADMIN_ID, accountId })).resolves.toEqual({
         ok: false,
-        reason: "admin",
+        reason: "last-admin",
       });
     }
     expect(await blockedAtOf(target)).toBeNull();
@@ -403,6 +427,86 @@ describe("Integration: updateAccountNick", () => {
     await expect(
       updateAccountNick(prisma, { adminId: ADMIN_ID, accountId: "hola", nick: "Nuevo" }),
     ).resolves.toEqual({ ok: false, reason: "not-found" });
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+});
+
+describe("Integration: deleteAccount", () => {
+  const target = IDS.middle;
+  const auditRows = () => prisma.auditLog.findMany({ where: { actorId: ADMIN_ID } });
+  const exists = async (id: string) => (await prisma.user.findUnique({ where: { id }, select: { id: true } })) !== null;
+
+  afterEach(async () => {
+    await prisma.auditLog.deleteMany({ where: { actorId: ADMIN_ID } });
+    await prisma.user.deleteMany({ where: { email: { endsWith: "@admin-accounts.test" } } });
+  });
+
+  // The same deletion as the person's own (deleteAccountAsAdmin, #158): here, the panel's rules
+  it("deletes the account and writes one delete row in audit_log", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z");
+
+    const result = await deleteAccount(prisma, { adminId: ADMIN_ID, accountId: target });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await exists(target)).toBe(false);
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorRole: "admin", action: "delete", resource: "account", subjectId: target });
+  });
+
+  // Deleting yourself would lock you out of the panel, and the panel is not where you
+  // delete your own account (that is /settings, with the email code)
+  it("does not let the Admin delete their own account, also with the id in upper or mixed case", async () => {
+    const selfId = "abcdef00-0000-4000-8000-0000000002cd";
+    await createUser(selfId, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(ADMIN_ID, "2099-01-03T00:00:00Z", { roleGlobal: "admin" });
+
+    for (const accountId of [selfId, "ABCDEF00-0000-4000-8000-0000000002CD", "AbCdEf00-0000-4000-8000-0000000002Cd"]) {
+      await expect(deleteAccount(prisma, { adminId: selfId, accountId })).resolves.toEqual({ ok: false, reason: "self" });
+    }
+    expect(await exists(selfId)).toBe(true);
+    await expect(prisma.auditLog.findMany({ where: { actorId: selfId } })).resolves.toEqual([]);
+  });
+
+  // The id comes from a form anyone can send by hand: a malformed one would make Postgres
+  // throw 22P02 (a 500) instead of saying the account does not exist
+  it("says not-found for an account that does not exist or a malformed id, and writes no row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+
+    for (const accountId of [target, "hola", ""]) {
+      await expect(deleteAccount(prisma, { adminId: ADMIN_ID, accountId })).resolves.toEqual({
+        ok: false,
+        reason: "not-found",
+      });
+    }
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  // The Admin acting is another unblocked Admin, so one is left (lockAccountAndAdmins, #158)
+  it("deletes another Admin account sent with the id in upper case, and audit_log keeps it in lowercase", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+
+    const result = await deleteAccount(prisma, { adminId: ADMIN_ID, accountId: target.toUpperCase() });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await exists(target)).toBe(false);
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].subjectId).toBe(target);
+  });
+
+  // Two Admins deleting each other at once: the second one runs after the first commit,
+  // so the Admin acting is gone or blocked and the target is the last unblocked Admin
+  it("does not delete the last unblocked Admin, and writes no row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin", blockedAt: new Date("2099-01-05T00:00:00Z") });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+
+    const result = await deleteAccount(prisma, { adminId: ADMIN_ID, accountId: target });
+
+    expect(result).toEqual({ ok: false, reason: "last-admin" });
+    expect(await exists(target)).toBe(true);
     await expect(auditRows()).resolves.toEqual([]);
   });
 });

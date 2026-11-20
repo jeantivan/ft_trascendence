@@ -57,7 +57,7 @@ describe("AccountBlockForm", () => {
   it.each([
     [{ ok: false, reason: "self" } as const, "No puedes bloquear tu propia cuenta."],
     [{ ok: false, reason: "not-found" } as const, "Esta cuenta ya no existe."],
-    [{ ok: false, reason: "admin" } as const, "No se puede bloquear a un administrador."],
+    [{ ok: false, reason: "last-admin" } as const, "No se puede bloquear al último administrador sin bloquear."],
   ])("a refused block says why (%j)", async (result, message) => {
     vi.mocked(blockAccountAction).mockResolvedValue(result);
     render(<AccountBlockForm accountId={ID} blockedAt={null} />);

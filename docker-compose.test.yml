@@ -28,6 +28,8 @@ services:
     build:
       context: ./web
       target: dev
+    # Same as make dev: root only with rootless Docker (scripts/container-user.sh, #236)
+    user: "${DEV_CONTAINER_USER:-node}"
     environment:
       # Both point to db-test: this container cannot reach the development database.
       # DATABASE_URL too, because prisma migrate deploy reads it before Vitest starts.
