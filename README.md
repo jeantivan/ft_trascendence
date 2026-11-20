@@ -28,7 +28,7 @@ It creates `.env` with random secrets if it is missing, builds the images and st
 
 Then open **https://localhost:8443**. The certificate is self-signed, so the browser shows a warning the first time: accept it to continue. NGINX only listens on this HTTPS port; there is no plain HTTP access.
 
-From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
+From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. `make` prints that address when it finishes (`scripts/host-ip.sh`). On WSL, or when it cannot find it (for example macOS without `ip`), it prints `<this computer's IP>` instead: look the address up by hand. With a VPN on, it may print the VPN address, which the other computers cannot reach. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
 
 In a fresh clone or after `make fclean`, `make` starts with an empty database (all the tables) and one account: the **initial Admin**, `admin@stridesync.local`, with its password in `ADMIN_PASSWORD` in `.env`. It is created on every start if it does not exist yet, and never changed afterwards. Register any other user from the app.
 
