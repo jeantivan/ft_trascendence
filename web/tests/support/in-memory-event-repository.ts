@@ -266,6 +266,12 @@ export class InMemoryEventRepository implements EventRepository {
     if (request.status === "withdrawn") {
       return { ok: true, changed: false };
     }
+    // An approved Athlete leaves the chat, as in Prisma: the row stays with
+    // removedAt. Read before changing status, which is what says it was approved
+    const participant = this.chatParticipants.get(`${eventId}/${athleteId}`);
+    if (request.status === "approved" && participant !== undefined) {
+      participant.removedAt = now;
+    }
     // get gives a reference to the object in the Map: this changes the stored one
     request.status = "withdrawn";
     return { ok: true, changed: true };

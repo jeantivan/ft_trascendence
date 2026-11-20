@@ -461,6 +461,15 @@ export class PrismaEventRepository implements EventRepository {
       where: { eventId_userId: { eventId, userId: athleteId } },
       data: { status: "withdrawn" },
     });
+    // An approved Athlete leaves the chat: the row stays with removedAt, so they
+    // still read the history (#155). updateMany: 0 rows is no error, the result
+    // is the same, no active participant (Q10). A pending one was never in it
+    if (existing.status === "approved") {
+      await this.db.conversationParticipant.updateMany({
+        where: { userId: athleteId, conversation: { eventId } },
+        data: { removedAt: now },
+      });
+    }
     return { ok: true, changed: true };
   }
 

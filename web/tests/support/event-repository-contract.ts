@@ -23,6 +23,9 @@ const CANCEL_AGAIN_AT = new Date("2030-01-01T15:00:00.000Z");
 // A second request, after NOW and before TOMORROW: a createdAt that changed to
 // this moment would show the request was written again
 const REQUEST_AGAIN_AT = new Date("2030-01-01T12:00:00.000Z");
+// When an approved Athlete withdraws: not NOW, so the test shows the chat's
+// removedAt comes from the parameter
+const WITHDRAW_AT = new Date("2030-01-01T14:00:00.000Z");
 // The actor of the contract's deletions. The Admin is audited, and only Prisma
 // writes audit rows: its tests are in event-repository.db.test.ts
 const MANAGER: DeleteEventActor = { kind: "manager" };
@@ -1084,6 +1087,40 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       const view = await repo.getEventForMember(orgId, eventId, athleteId);
       expect(view?.mySpotRequest).toBe("withdrawn");
       await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("withdrawSpot on an approved request frees the spot and leaves the chat read-only", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+      expect(view?.approvedCount).toBe(0);
+      // The row stays, with removedAt: they still read the history, as in the DMs (#155)
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: WITHDRAW_AT });
+    });
+
+    it("withdrawSpot on a pending request leaves nobody in the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+
+      await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("approving again after withdrawing makes the same chat row active again", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+      await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+      await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      await repo.approveSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      // removedAt back to null: they write again, and the history is the same row's
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
     });
 
     it("requestSpot on an approved request changes nothing and keeps the spot", async () => {
