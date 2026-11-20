@@ -368,12 +368,18 @@ describe("PrismaEventRepository.approveSpot", () => {
 // What the contract cannot see: two transactions at the same time, forced with a
 // lock harness as in organization-repository.db.test.ts
 describe("PrismaEventRepository at the same time", { timeout: 30_000 }, () => {
-  // A club, its Event and an Athlete whose Spot Request is already in that state
-  async function startIn(from: SpotOperation["from"]) {
+  // A club, its Event and an Athlete who has not asked for a spot yet
+  async function newEvent() {
     const orgId = await createClub();
     const managerId = await addMember(orgId, "manager");
     const athleteId = await addMember(orgId, "athlete");
     const eventId = eventIdOf(await repository.createEvent(orgId, managerId, DATA, NOW));
+    return { orgId, eventId, athleteId };
+  }
+
+  // The same, with the Athlete's Spot Request already in that state
+  async function startIn(from: SpotOperation["from"]) {
+    const { orgId, eventId, athleteId } = await newEvent();
     await repository.requestSpot(orgId, eventId, athleteId, NOW);
     if (from === "approved") await repository.approveSpot(orgId, eventId, athleteId, NOW);
     if (from === "withdrawn") await repository.withdrawSpot(orgId, eventId, athleteId, NOW);
@@ -404,5 +410,104 @@ describe("PrismaEventRepository at the same time", { timeout: 30_000 }, () => {
     expect(result).toEqual({ ok: true, changed: true });
     const view = await repository.getEventForMember(orgId, eventId, athleteId);
     expect(view?.mySpotRequest).toBe(to);
+  });
+
+  // R3
+  it("approving and rejecting the same request at once: one wins and the other is status-changed", async () => {
+    const { orgId, eventId, athleteId } = await startIn("pending");
+
+    const [approved, rejected] = await withLockHarness(async (harness) => {
+      const gate = await harness.holdLock("gate", (tx) =>
+        tx.$queryRaw`SELECT id FROM events WHERE id = ${eventId}::uuid FOR NO KEY UPDATE`,
+      );
+      const approver = harness.client("approve");
+      const rejecter = harness.client("reject");
+      const approve = harness.track(
+        new PrismaEventRepository(approver.db).approveSpot(orgId, eventId, athleteId, NOW),
+      );
+      const reject = harness.track(
+        new PrismaEventRepository(rejecter.db).rejectSpot(orgId, eventId, athleteId, NOW),
+      );
+
+      // Both stopped at the Event, before either has read the request
+      await harness.waitUntilWaiting(gate, [
+        { name: "approve", client: approver, queryFragment: "FROM events" },
+        { name: "reject", client: rejecter, queryFragment: "FROM events" },
+      ]);
+
+      gate.release();
+      return Promise.all([approve, reject]);
+    });
+
+    // Which one goes first is up to Postgres: the test accepts either
+    const STATUS_CHANGED = { ok: false, reason: "status-changed" };
+    expect([approved, rejected]).toContainEqual({ ok: true, changed: true });
+    expect([approved, rejected]).toContainEqual(STATUS_CHANGED);
+    // The state is the winner's: the loser wrote nothing over it
+    const view = await repository.getEventForMember(orgId, eventId, athleteId);
+    const participant = await chatParticipant(eventId, athleteId);
+    if (rejected.ok) {
+      expect(view?.mySpotRequest).toBe("rejected");
+      expect(participant).toBeNull();
+    } else {
+      expect(view?.mySpotRequest).toBe("approved");
+      expect(participant).toEqual({ removedAt: null });
+    }
+  });
+
+  // R4
+  it("asking for a spot while the Event is being cancelled gives cancelled once the cancellation commits", async () => {
+    const { orgId, eventId, athleteId } = await newEvent();
+
+    const result = await withLockHarness(async (harness) => {
+      // G is a cancellation that has not committed yet: an UPDATE locks the row too
+      const gate = await harness.holdLock("cancel", (tx) =>
+        tx.event.update({ where: { id: eventId }, data: { cancelledAt: NOW } }),
+      );
+      const client = harness.client("request");
+      const request = harness.track(
+        new PrismaEventRepository(client.db).requestSpot(orgId, eventId, athleteId, NOW),
+      );
+
+      await harness.waitUntilWaiting(gate, [{ name: "request", client, queryFragment: "FROM events" }]);
+
+      // G commits: the operation gets the lock and reads the cancelled Event
+      gate.release();
+      return request;
+    });
+
+    expect(result).toEqual({ ok: false, reason: "cancelled" });
+    const view = await repository.getEventForMember(orgId, eventId, athleteId);
+    expect(view?.mySpotRequest).toBeNull();
+  });
+
+  // R6
+  it("two requests of the same Athlete at once: one creates it, the other changes nothing", async () => {
+    const { orgId, eventId, athleteId } = await newEvent();
+
+    const results = await withLockHarness(async (harness) => {
+      const gate = await harness.holdLock("gate", (tx) =>
+        tx.$queryRaw`SELECT id FROM events WHERE id = ${eventId}::uuid FOR NO KEY UPDATE`,
+      );
+      const first = harness.client("request-1");
+      const second = harness.client("request-2");
+      const requests = [first, second].map((client) =>
+        harness.track(new PrismaEventRepository(client.db).requestSpot(orgId, eventId, athleteId, NOW)),
+      );
+
+      await harness.waitUntilWaiting(gate, [
+        { name: "request 1", client: first, queryFragment: "FROM events" },
+        { name: "request 2", client: second, queryFragment: "FROM events" },
+      ]);
+
+      gate.release();
+      // Promise.all rejects if either throws: a P2002 (duplicate key) fails the test here
+      return Promise.all(requests);
+    });
+
+    expect(results).toContainEqual({ ok: true, changed: true });
+    expect(results).toContainEqual({ ok: true, changed: false });
+    const view = await repository.getEventForMember(orgId, eventId, athleteId);
+    expect(view?.mySpotRequest).toBe("pending");
   });
 });
