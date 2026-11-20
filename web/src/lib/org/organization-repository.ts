@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
+import { notify } from "@/lib/notifications/notify";
+import {
+  ORGANIZATION_DELETION_CANCELLED,
+  ORGANIZATION_DELETION_SCHEDULED,
+} from "./club-deletion-notifier";
 import { normalizeId, type CreateOrganizationInput } from "./schemas";
 
 // Two clubs cannot have the same name (exact match, case included)
@@ -394,13 +399,12 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
           where: { orgId },
           select: { userId: true, user: { select: { email: true } } },
         });
-        if (members.length > 0) {
-          await tx.notification.createMany({
-            data: members.map((member) => ({
-              userId: member.userId,
-              type: "organization_deletion_scheduled",
-              payload: { orgId, deleteAt: deleteAt.toISOString() },
-            })),
+        // The payload only carries ids: the date goes by email and is read from the club
+        for (const member of members) {
+          await notify(tx, {
+            userId: member.userId,
+            type: ORGANIZATION_DELETION_SCHEDULED,
+            payload: { orgId },
           });
         }
         await recordAdminAction(tx, {
@@ -440,13 +444,11 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
           where: { orgId },
           select: { userId: true },
         });
-        if (members.length > 0) {
-          await tx.notification.createMany({
-            data: members.map((member) => ({
-              userId: member.userId,
-              type: "organization_deletion_cancelled",
-              payload: { orgId },
-            })),
+        for (const member of members) {
+          await notify(tx, {
+            userId: member.userId,
+            type: ORGANIZATION_DELETION_CANCELLED,
+            payload: { orgId },
           });
         }
         await recordAdminAction(tx, {
