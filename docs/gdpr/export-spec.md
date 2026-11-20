@@ -70,8 +70,8 @@ export.zip
 
 Convenciones:
 - **Fechas:** ISO 8601 en UTC (`2026-10-01T07:00:00Z`).
-- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180. Valor ausente = celda vacía.
-- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todos los campos de texto libre.
+- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180, fin de línea CRLF. Valor ausente = celda vacía.
+- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todas las celdas de texto (los números y booleanos no se tocan).
 - **JSON:** `null` para valores ausentes. Claves en `snake_case`, igual que las columnas de la base de datos.
 
 ### 3.1 `data.json`
@@ -139,7 +139,7 @@ El `access_log` cubre el derecho a saber quién ha accedido a tus datos (art. 15
 
 ### 3.2 `sessions.csv`
 
-Sesiones individuales del usuario (`athlete_id` = usuario) y sesiones de grupo de los grupos a los que pertenece.
+Sesiones individuales del usuario (`athlete_id` = usuario), sesiones de grupo de los grupos a los que pertenece y sesiones de grupos que ya no son suyos si tiene un registro (`SessionLog`) en ellas, para que `session_logs.csv` nunca apunte a una sesión que falte.
 
 ```
 session_id,org_id,origin,session_type,target_distance_m,target_pace_s_per_km,target_duration_s,scheduled_at,group_id,customizes_session_id

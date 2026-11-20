@@ -34,5 +34,30 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
         email2faEnabled: user.email2faEnabled,
       };
     },
+
+    async findSessions(userId) {
+      return db.trainingSession.findMany({
+        where: {
+          OR: [
+            { athleteId: userId },
+            { group: { members: { some: { userId } } } },
+            { logs: { some: { athleteId: userId } } },
+          ],
+        },
+        select: {
+          id: true,
+          orgId: true,
+          origin: true,
+          sessionType: true,
+          targetDistanceM: true,
+          targetPaceSPerKm: true,
+          targetDurationS: true,
+          scheduledAt: true,
+          groupId: true,
+          customizesSessionId: true,
+        },
+        orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
+      });
+    },
   };
 }

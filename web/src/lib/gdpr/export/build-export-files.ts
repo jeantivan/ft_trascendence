@@ -1,3 +1,4 @@
+import { toCsv } from "@/lib/gdpr/export/csv";
 import type { ExportFile } from "@/lib/gdpr/export/write-export-zip";
 
 // What the export may read about a user. The repository selects exactly these
@@ -14,8 +15,26 @@ export type ExportProfileSource = {
   email2faEnabled: boolean;
 };
 
+// One row of sessions.csv: the prescription only, never the logs of other athletes
+export type ExportSessionSource = {
+  id: string;
+  orgId: string;
+  origin: "template" | "customized" | "free";
+  sessionType: "rodaje" | "intervalos" | "cuestas" | "tirada_larga" | "fartlek";
+  targetDistanceM: number | null;
+  targetPaceSPerKm: number | null;
+  targetDurationS: number | null;
+  scheduledAt: Date;
+  groupId: string | null;
+  customizesSessionId: string | null;
+};
+
 export type ExportUserRepository = {
   findProfile(userId: string): Promise<ExportProfileSource | null>;
+  // Sessions of the user: individual ones, those of the groups they belong to, and
+  // those of any group where they have a log (so session_logs.csv never points to a
+  // missing session), ordered by date
+  findSessions(userId: string): Promise<ExportSessionSource[]>;
 };
 
 // ISO 8601 in UTC without milliseconds (docs/gdpr/export-spec.md, section 3)
@@ -30,6 +49,7 @@ export async function buildExportFiles(
 ): Promise<ExportFile[] | null> {
   const profile = await repository.findProfile(userId);
   if (profile === null) return null;
+  const sessions = await repository.findSessions(userId);
 
   const data = {
     exported_at: toExportDate(now),
@@ -46,8 +66,38 @@ export async function buildExportFiles(
   };
   return [
     { name: "data.json", content: JSON.stringify(data, null, 2) },
+    { name: "sessions.csv", content: buildSessionsCsv(sessions) },
     { name: "README.txt", content: buildReadme(profile.email, now) },
   ];
+}
+
+function buildSessionsCsv(sessions: ExportSessionSource[]): string {
+  return toCsv(
+    [
+      "session_id",
+      "org_id",
+      "origin",
+      "session_type",
+      "target_distance_m",
+      "target_pace_s_per_km",
+      "target_duration_s",
+      "scheduled_at",
+      "group_id",
+      "customizes_session_id",
+    ],
+    sessions.map((session) => [
+      session.id,
+      session.orgId,
+      session.origin,
+      session.sessionType,
+      session.targetDistanceM,
+      session.targetPaceSPerKm,
+      session.targetDurationS,
+      toExportDate(session.scheduledAt),
+      session.groupId,
+      session.customizesSessionId,
+    ]),
+  );
 }
 
 // Text from docs/gdpr/export-spec.md section 3.5, limited to what the ZIP holds today.
@@ -62,6 +112,8 @@ function buildReadme(email: string, now: Date): string {
     "CONTENIDO:",
     "- data.json: tu perfil (identificador, email, nick, imagen, fecha de alta,",
     "  métodos de acceso y ajustes de seguridad)",
+    "- sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de",
+    "  grupos que dejaste si registraste la sesión), una fila por sesión",
     "",
     "ZONA HORARIA: UTC",
     "",
