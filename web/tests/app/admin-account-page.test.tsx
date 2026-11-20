@@ -6,6 +6,7 @@ import { getAccountForAdmin } from "@/lib/admin/queries";
 vi.mock("@/lib/admin/queries", () => ({ getAccountForAdmin: vi.fn() }));
 vi.mock("@/lib/admin/actions", () => ({
   blockAccountAction: vi.fn(),
+  deleteAccountAction: vi.fn(),
   unblockAccountAction: vi.fn(),
   updateAccountNickAction: vi.fn(),
 }));
@@ -42,7 +43,7 @@ describe("/admin/accounts/[id]", () => {
     expect(screen.getByRole("link", { name: "Volver a cuentas" })).toHaveAttribute("href", "/admin/accounts");
   });
 
-  it("offers the Admin's actions: change the nick and block", async () => {
+  it("offers the Admin's actions: change the nick, block and delete", async () => {
     vi.mocked(getAccountForAdmin).mockResolvedValue({
       id: ID,
       email: "ana@demo.local",
@@ -58,6 +59,7 @@ describe("/admin/accounts/[id]", () => {
 
     expect(screen.getByLabelText("Nick")).toHaveValue("Ana");
     expect(screen.getByRole("button", { name: "Bloquear cuenta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Borrar cuenta" })).toBeInTheDocument();
   });
 
   it("an account that does not exist (or a malformed id) is a 404", async () => {
@@ -66,7 +68,7 @@ describe("/admin/accounts/[id]", () => {
     await expect(AdminAccountPage({ params: params("hola") })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it("on the Admin's own account there is no block button, only why", async () => {
+  it("on the Admin's own account there is no block or delete button, only why", async () => {
     vi.mocked(getAccountForAdmin).mockResolvedValue({
       id: ID,
       email: "admin@demo.local",
@@ -81,10 +83,12 @@ describe("/admin/accounts/[id]", () => {
     render(await AdminAccountPage({ params: params(ID) }));
 
     expect(screen.queryByRole("button", { name: "Bloquear cuenta" })).not.toBeInTheDocument();
-    expect(screen.getByText("Es tu cuenta: no puedes bloquear tu propia cuenta.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Borrar cuenta" })).not.toBeInTheDocument();
+    expect(screen.getByText("Es tu cuenta: no puedes bloquearla ni borrarla desde aquí.")).toBeInTheDocument();
   });
-  // Until the last-Admin rule (#102): blocking an Admin is always refused, so no button for it
-  it("on another Admin's account there is no block button, only why", async () => {
+  // The last-Admin rule (#102) decides when the form is sent: the Admin acting is always
+  // another unblocked Admin, so the button is there like for any account
+  it("on another Admin's account there is a block button", async () => {
     vi.mocked(getAccountForAdmin).mockResolvedValue({
       id: ID,
       email: "otra-admin@demo.local",
@@ -98,8 +102,7 @@ describe("/admin/accounts/[id]", () => {
 
     render(await AdminAccountPage({ params: params(ID) }));
 
-    expect(screen.queryByRole("button", { name: "Bloquear cuenta" })).not.toBeInTheDocument();
-    expect(screen.getByText("No se puede bloquear a un administrador.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bloquear cuenta" })).toBeInTheDocument();
   });
 
   it("an Admin's account that is already blocked still offers to unblock it", async () => {
@@ -117,6 +120,5 @@ describe("/admin/accounts/[id]", () => {
     render(await AdminAccountPage({ params: params(ID) }));
 
     expect(screen.getByRole("button", { name: "Desbloquear cuenta" })).toBeInTheDocument();
-    expect(screen.queryByText("No se puede bloquear a un administrador.")).not.toBeInTheDocument();
   });
 });

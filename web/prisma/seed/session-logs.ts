@@ -61,7 +61,7 @@ export interface GeneratedLog {
   durationS: number;
   completed: boolean;
   // Why the Athlete did not finish (one of INCOMPLETION_REASONS); null when
-  // completed. seed.ts saves it in SessionLog.extra as incompletion_reason.
+  // completed. session-history.ts saves it in SessionLog.extra as incompletion_reason.
   incompletionReason: string | null;
 }
 

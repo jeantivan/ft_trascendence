@@ -1,7 +1,7 @@
 import { deleteAvatarFile } from "./delete-avatar-file";
 
-// Deletes the avatar files of a deleted account (#34). relativePaths are Avatar.path
-// values (e.g. avatars/<uuid>.png).
+// Deletes the avatar files of a deleted account (#34) and the orphans of the avatar
+// sweep (#254). relativePaths are Avatar.path values (e.g. avatars/<uuid>.png).
 //
 // Returns how many files could NOT be deleted (0 = clean). Never throws and never
 // logs, so no path or raw error leaks here: the caller decides what to log.
