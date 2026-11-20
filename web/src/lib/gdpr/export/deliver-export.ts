@@ -2,23 +2,11 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@/generated/prisma/client";
+import { buildExportEmail } from "@/lib/gdpr/export/export-email";
 import { generateExport } from "@/lib/gdpr/export/generate-export";
 import type { MailSender } from "@/lib/mail/mail-sender";
 import { createSmtpMailSender } from "@/lib/mail/smtp-mail-sender";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
-
-const SUBJECT = "Tu exportación de datos de StrideSync está lista";
-
-// Minimal text: the link and when it expires, no data. #169 replaces it with the final text
-function bodyFor(link: string, expiresAt: Date): string {
-  return [
-    "Tu exportación de datos de StrideSync está lista.",
-    "",
-    `Descárgala con tu sesión iniciada: ${link}`,
-    "",
-    `El enlace caduca el ${expiresAt.toISOString().slice(0, 10)} (UTC).`,
-  ].join("\n");
-}
 
 // Fills a pending export and emails the user the download link (#165). Never throws, because
 // it runs after the 202 response (after()) and nobody could catch it. Returns whether the
@@ -56,7 +44,7 @@ export async function deliverExport(
     });
     if (row.expiresAt === null) throw new Error("ready export without expiry");
     const link = `${origin}/api/gdpr/export/${exportId}/download?token=${generated.token}`;
-    await createMailer().send({ to: row.user.email, subject: SUBJECT, text: bodyFor(link, row.expiresAt) });
+    await createMailer().send({ to: row.user.email, ...buildExportEmail(link, row.expiresAt) });
     // The email is out: a failure here must not undo the export. Without the mark the next
     // start would treat it as undelivered (cleanupInterruptedExports) and fail it
     await db.dataExport
