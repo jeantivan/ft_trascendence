@@ -316,3 +316,48 @@ describe("PrismaEventRepository.deleteEvent", () => {
     expect(feedback).toEqual({ body: FEEDBACK_BODY, eventId: null });
   });
 });
+
+// What the contract cannot see: a failure halfway, which needs a Postgres trigger
+describe("PrismaEventRepository.approveSpot", () => {
+  it("leaves the request pending if the Athlete cannot be let into the chat", async () => {
+    // Only this club's chats reject participants, as in the test of createEvent
+    const club = await prisma.organization.create({
+      data: { name: `${PREFIX}reject-participant`, timezone: "Europe/Madrid" },
+    });
+    const managerId = await addMember(club.id, "manager");
+    const athleteId = await addMember(club.id, "athlete");
+    const eventId = eventIdOf(await repository.createEvent(club.id, managerId, DATA, NOW));
+    await repository.requestSpot(club.id, eventId, athleteId, NOW);
+    await prisma.$executeRawUnsafe(`
+      CREATE FUNCTION test_reject_chat_participant() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM conversations c
+          JOIN events e ON e.id = c.event_id
+          JOIN organizations o ON o.id = e.org_id
+          WHERE c.id = NEW.conversation_id AND o.name = '${PREFIX}reject-participant'
+        ) THEN
+          RAISE EXCEPTION 'test: participant rejected';
+        END IF;
+        RETURN NEW;
+      END $$`);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER test_reject_chat_participant BEFORE INSERT ON conversation_participants
+      FOR EACH ROW EXECUTE FUNCTION test_reject_chat_participant()`);
+
+    try {
+      await expect(repository.approveSpot(club.id, eventId, athleteId, NOW)).rejects.toThrow(
+        "test: participant rejected",
+      );
+      // The rollback undid the approval too: no approved spot without its chat
+      const view = await repository.getEventForMember(club.id, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    } finally {
+      await prisma.$executeRawUnsafe(
+        "DROP TRIGGER IF EXISTS test_reject_chat_participant ON conversation_participants",
+      );
+      await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS test_reject_chat_participant()");
+    }
+  });
+});

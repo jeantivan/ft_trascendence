@@ -508,59 +508,63 @@ export class PrismaEventRepository implements EventRepository {
     athleteId: string,
     now: Date,
   ): Promise<ReviewSpotResult> {
-    // The Event first, in the fixed order
-    const event = await this.db.event.findFirst({
-      where: { id: eventId, orgId },
-      select: { cancelledAt: true, startsAt: true },
+    // One transaction: if letting the Athlete into the chat fails, the approval
+    // is undone too, so no approved spot is left without its chat
+    return this.db.$transaction(async (tx): Promise<ReviewSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await tx.event.findFirst({
+        where: { id: eventId, orgId },
+        select: { cancelledAt: true, startsAt: true },
+      });
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // Then the Spot Request
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      // Already approved: a double click, or another Manager with the same decision
+      if (existing.status === "approved") {
+        return { ok: true, changed: false };
+      }
+      // Only a pending request is approved: anything else changed since the
+      // Manager loaded the list
+      if (existing.status !== "pending") {
+        return { ok: false, reason: "status-changed" };
+      }
+      // findUnique: event_id is unique in conversations, one chat per Event
+      const chat = await tx.conversation.findUnique({
+        where: { eventId },
+        select: { id: true },
+      });
+      // createEvent creates the Event and its chat together: it should never happen
+      if (chat === null) {
+        throw new Error(`Event ${eventId} has no chat`);
+      }
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "approved" },
+      });
+      // upsert: the row may exist from an earlier approval (they withdrew and came
+      // back). Then it is made active again, keeping the chat history
+      await tx.conversationParticipant.upsert({
+        where: { conversationId_userId: { conversationId: chat.id, userId: athleteId } },
+        create: { conversationId: chat.id, userId: athleteId, removedAt: null },
+        update: { removedAt: null },
+      });
+      return { ok: true, changed: true };
     });
-    if (!event) {
-      return { ok: false, reason: "not-found" };
-    }
-    if (event.cancelledAt !== null) {
-      return { ok: false, reason: "cancelled" };
-    }
-    // Starting at now already counts as started
-    if (event.startsAt <= now) {
-      return { ok: false, reason: "started" };
-    }
-    // Then the Spot Request
-    const existing = await this.db.spotRequest.findUnique({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      select: { status: true },
-    });
-    if (existing === null) {
-      return { ok: false, reason: "no-request" };
-    }
-    // Already approved: a double click, or another Manager with the same decision
-    if (existing.status === "approved") {
-      return { ok: true, changed: false };
-    }
-    // Only a pending request is approved: anything else changed since the
-    // Manager loaded the list
-    if (existing.status !== "pending") {
-      return { ok: false, reason: "status-changed" };
-    }
-    // findUnique: event_id is unique in conversations, one chat per Event
-    const chat = await this.db.conversation.findUnique({
-      where: { eventId },
-      select: { id: true },
-    });
-    // createEvent creates the Event and its chat together: it should never happen
-    if (chat === null) {
-      throw new Error(`Event ${eventId} has no chat`);
-    }
-    await this.db.spotRequest.update({
-      where: { eventId_userId: { eventId, userId: athleteId } },
-      data: { status: "approved" },
-    });
-    // upsert: the row may exist from an earlier approval (they withdrew and came
-    // back). Then it is made active again, keeping the chat history
-    await this.db.conversationParticipant.upsert({
-      where: { conversationId_userId: { conversationId: chat.id, userId: athleteId } },
-      create: { conversationId: chat.id, userId: athleteId, removedAt: null },
-      update: { removedAt: null },
-    });
-    return { ok: true, changed: true };
   }
 
   async rejectSpot(
