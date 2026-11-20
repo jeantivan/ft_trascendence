@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
+import { Switch } from "@/components/ui/Switch";
 import {
   giveHealthConsentAction,
   purgeHealthDataAction,
@@ -44,6 +45,8 @@ function PrivacySwitchRow({
   disabled: boolean;
   onToggle: () => void;
 }) {
+  const descriptionId = `${id}-description`;
+
   return (
     <div className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center">
       <div className="flex max-w-xl flex-col gap-1">
@@ -55,28 +58,18 @@ function PrivacySwitchRow({
             {tag}
           </span>
         </div>
-        <p className="text-body-sm text-text-secondary">{description}</p>
+        <p id={descriptionId} className="text-body-sm text-text-secondary">
+          {description}
+        </p>
       </div>
 
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-labelledby={id}
+      <Switch
+        checked={checked}
         disabled={disabled}
-        onClick={onToggle}
-        className={`relative inline-flex h-6 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-volt disabled:cursor-not-allowed disabled:opacity-50 ${
-          checked
-            ? "border-volt bg-volt"
-            : "border-border-strong bg-surface-overlay"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 rounded-full transition-transform ${
-            checked ? "translate-x-7 bg-surface-base" : "translate-x-1 bg-text-secondary"
-          }`}
-        />
-      </button>
+        aria-labelledby={id}
+        aria-describedby={descriptionId}
+        onCheckedChange={onToggle}
+      />
     </div>
   );
 }
