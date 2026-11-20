@@ -2,7 +2,10 @@
 // The type comes ONLY from the first bytes (magic bytes): the client's Content-Type
 // and file name can say anything.
 
-export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+// 8 MiB, not 10: the Next.js proxy keeps only the first 10 MiB of a body, so the route's
+// Content-Length check (this limit + 64 KiB for the form) must stay under that, or a cut
+// body would reach formData(). NGINX's client_max_body_size is 10 MiB (#263).
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
