@@ -155,6 +155,15 @@ export interface EventRepository {
     now: Date,
   ): Promise<ReviewSpotResult>;
 
+  // A pending Spot Request becomes rejected, for good for that Event. Only from
+  // pending: an approved one is status-changed, so a rejection never expels
+  rejectSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult>;
+
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
   // ones included, no size limit. For members, Managers and the Admin alike
@@ -530,6 +539,51 @@ export class PrismaEventRepository implements EventRepository {
       where: { conversationId_userId: { conversationId: chat.id, userId: athleteId } },
       create: { conversationId: chat.id, userId: athleteId, removedAt: null },
       update: { removedAt: null },
+    });
+    return { ok: true, changed: true };
+  }
+
+  async rejectSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    // The Event first, in the fixed order
+    const event = await this.db.event.findFirst({
+      where: { id: eventId, orgId },
+      select: { cancelledAt: true, startsAt: true },
+    });
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Then the Spot Request
+    const existing = await this.db.spotRequest.findUnique({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      select: { status: true },
+    });
+    if (existing === null) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already rejected: a double click, or another Manager with the same decision
+    if (existing.status === "rejected") {
+      return { ok: true, changed: false };
+    }
+    // Only a pending request is rejected: an approved one would be an expulsion
+    if (existing.status !== "pending") {
+      return { ok: false, reason: "status-changed" };
+    }
+    // A pending request was never in the chat: nothing to do there
+    await this.db.spotRequest.update({
+      where: { eventId_userId: { eventId, userId: athleteId } },
+      data: { status: "rejected" },
     });
     return { ok: true, changed: true };
   }

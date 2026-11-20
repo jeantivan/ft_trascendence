@@ -315,6 +315,42 @@ export class InMemoryEventRepository implements EventRepository {
     return { ok: true, changed: true };
   }
 
+  async rejectSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Then the Spot Request
+    const request = this.spotRequests.get(`${eventId}/${athleteId}`);
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already rejected: a double click, or another Manager with the same decision
+    if (request.status === "rejected") {
+      return { ok: true, changed: false };
+    }
+    // Only a pending request is rejected: an approved one would be an expulsion
+    if (request.status !== "pending") {
+      return { ok: false, reason: "status-changed" };
+    }
+    // A pending request was never in the chat: nothing to do there
+    request.status = "rejected";
+    return { ok: true, changed: true };
+  }
+
   async listEvents(
     orgId: string,
     viewerId: string,
