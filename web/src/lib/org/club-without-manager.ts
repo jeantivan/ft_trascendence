@@ -1,19 +1,10 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { notify as realNotify } from "@/lib/notifications/notify";
 
 export const CLUB_WITHOUT_MANAGER = "club_without_manager";
 
-// Same signature as notify() of #153: called with the tx of the write it belongs to, so a
-// failure rolls everything back. Returns the notification id, or null when none was created.
-export type Notify = (
-  tx: Prisma.TransactionClient,
-  input: { userId: string; type: string; payload: Record<string, string> },
-) => Promise<bigint | null>;
-
-// Stand-in until #153 is merged: always writes the row, with no preference check
-export const insertNotification: Notify = async (tx, { userId, type, payload }) => {
-  const row = await tx.notification.create({ data: { userId, type, payload }, select: { id: true } });
-  return row.id;
-};
+// The callers take notify() as a port so tests can swap it for a fake with the same signature
+export type Notify = typeof realNotify;
 
 // Locks the clubs (by id, to acquire club locks in a consistent order), counts their Managers
 // other than leavingUserId and, for each club left without one, notifies every Admin except
@@ -30,7 +21,7 @@ export async function notifyAdminsOfClubsWithoutManager(
   tx: Prisma.TransactionClient,
   orgIds: string[],
   leavingUserId: string,
-  notify: Notify = insertNotification,
+  notify: Notify = realNotify,
 ): Promise<void> {
   if (orgIds.length === 0) return;
 

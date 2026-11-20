@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
-import { insertNotification, notifyAdminsOfClubsWithoutManager, type Notify } from "./club-without-manager";
+import { notify as realNotify } from "@/lib/notifications/notify";
+import { notifyAdminsOfClubsWithoutManager, type Notify } from "./club-without-manager";
 
-// Provisional name, to confirm with Jacobo (#149 pending item 3 on notification types)
 export const MEMBERSHIP_REMOVED = "membership_removed";
 
 // The user is not a member of the club (never was, or already left or was expelled)
@@ -40,7 +40,7 @@ export class PrismaClubExit {
     ports: { cancelPendingContacts?: CancelPendingContacts; notify?: Notify } = {},
   ) {
     this.cancelPendingContacts = ports.cancelPendingContacts ?? cancelNothing;
-    this.notify = ports.notify ?? insertNotification;
+    this.notify = ports.notify ?? realNotify;
   }
 
   // The user leaves on their own. NotMemberError if they are not in the club.
