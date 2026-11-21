@@ -47,10 +47,10 @@ export const spotRequestStatusSchema = z.enum(SpotRequestStatus);
 
 // Spot Request transitions. Checked and applied by EventRepository (#147) in the
 // transaction; Zod only checks the shape of each action:
-//   Athlete  no row or withdrawn  -> pending
-//   Athlete  pending or approved  -> withdrawn
-//   Manager  pending              -> approved or rejected
-//   Manager  approved             -> rejected (expels the Athlete)
+//   Athlete  no row or withdrawn  -> pending              requestSpot
+//   Athlete  pending or approved  -> withdrawn            withdrawSpot
+//   Manager  pending              -> approved or rejected approveSpot, rejectSpot
+//   Manager  approved             -> rejected             expelFromEvent
 // rejected is final for that Event. Once the Event is cancelled or has started,
 // no transition is allowed.
 

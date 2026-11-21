@@ -78,8 +78,10 @@ export type WithdrawSpotResult =
   // Rejected stays rejected: withdrawing it would open a way to ask again
   | { ok: false; reason: "rejected" };
 
-// The Manager's three decisions (#232): approveSpot, rejectSpot and
-// expelFromEvent share it, as they have the same reasons
+// The Manager's three actions (#232): approveSpot, rejectSpot and
+// expelFromEvent share it, as they have the same reasons.
+// Known limit (#238): the caller checks the Manager's role before the transaction,
+// as in #251. A Manager who loses the role in between still gets the action done
 export type ReviewSpotResult =
   | { ok: true; changed: boolean }
   // Does not exist or is from another club
@@ -400,7 +402,8 @@ export class PrismaEventRepository implements EventRepository {
 
   // The first step of every Spot Request operation, inside its transaction. It locks
   // the Event row until the commit, so the operations on one Event go one at a time,
-  // and it reads the row after the lock, so it sees what the one before saved (Q3).
+  // and it reads the row after the lock, so it sees what the one before saved: what
+  // was read before the lock may already be old.
   // FOR NO KEY UPDATE and not FOR UPDATE: a Feedback pointing at the Event can still
   // be inserted. null: no such Event in this club.
   // Every write to spot_requests locks its Event first: here, or withdrawMemberSpots
@@ -421,6 +424,10 @@ export class PrismaEventRepository implements EventRepository {
     return rows[0] ?? null;
   }
 
+  // Known limit (#238): the caller checks that the Athlete is a member before the
+  // transaction. If leaving the club (#150) commits in between, a pending request of
+  // someone no longer in the club stays. The chat does not let them in: it checks
+  // the membership (Jacobo, answer d of #147)
   async requestSpot(
     orgId: string,
     eventId: string,
@@ -512,7 +519,7 @@ export class PrismaEventRepository implements EventRepository {
       });
       // An approved Athlete leaves the chat: the row stays with removedAt, so they
       // still read the history (#155). updateMany: 0 rows is no error, the result
-      // is the same, no active participant (Q10). A pending one was never in it
+      // is the same, no active participant. A pending one was never in it
       if (existing.status === "approved") {
         await tx.conversationParticipant.updateMany({
           where: { userId: athleteId, conversation: { eventId } },
@@ -575,7 +582,11 @@ export class PrismaEventRepository implements EventRepository {
         data: { status: "approved" },
       });
       // upsert: the row may exist from an earlier approval (they withdrew and came
-      // back). Then it is made active again, keeping the chat history
+      // back). Then it is made active again, keeping the chat history.
+      // Known limit (#238): if the Athlete deletes their account at the same moment,
+      // it can deadlock. The upsert waits for their users row (foreign key), which
+      // the deletion holds, and the deletion's cascade waits for this Spot Request.
+      // Postgres aborts one of them (40P01) and the Manager tries again
       await tx.conversationParticipant.upsert({
         where: { conversationId_userId: { conversationId: chat.id, userId: athleteId } },
         create: { conversationId: chat.id, userId: athleteId, removedAt: null },
@@ -671,7 +682,7 @@ export class PrismaEventRepository implements EventRepository {
         data: { status: "rejected" },
       });
       // As when withdrawing: the row stays, they read the history but no longer
-      // write. updateMany: with no row it is not an error (Q10)
+      // write. updateMany: with no row it is not an error, the result is the same
       await tx.conversationParticipant.updateMany({
         where: { userId: athleteId, conversation: { eventId } },
         data: { removedAt: now },

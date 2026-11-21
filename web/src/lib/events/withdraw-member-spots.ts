@@ -12,7 +12,8 @@ export async function withdrawMemberSpots(
 ): Promise<number> {
   // 1. Lock those Events until the caller's commit, as lockEvent does for one Event.
   // OF e: only the events rows, not spot_requests. ORDER BY id: two exits at once
-  // lock in the same order, so neither waits for the other forever (deadlock)
+  // lock in the same order, so neither waits for the other forever (deadlock).
+  // Known limit (#238): that case has no test
   const locked = await tx.$queryRaw<{ id: string }[]>`
     SELECT e.id
     FROM events e
@@ -27,7 +28,8 @@ export async function withdrawMemberSpots(
   const eventIds = locked.map((row) => row.id);
 
   // 2. The requests read after the lock, not in the query above: the lock only
-  // protects what is read after it (Q3)
+  // protects what is read after it. A request that another transaction changed
+  // while this one waited can come back old from the JOIN
   const requests = await tx.spotRequest.findMany({
     where: { eventId: { in: eventIds }, userId, status: { in: ["pending", "approved"] } },
     select: { eventId: true, status: true },

@@ -227,14 +227,14 @@ export class InMemoryEventRepository implements EventRepository {
     }
     // Same key as addSpotRequest: one Spot Request per user and Event
     const key = `${eventId}/${athleteId}`;
-    // Already pending or approved: a double click. Nothing is written, so
-    // createdAt and its place in the Manager's list stay as they were, and an
-    // approved Athlete keeps their spot
     const status = this.spotRequests.get(key)?.status;
     // A rejection is for good for that Event
     if (status === "rejected") {
       return { ok: false, reason: "rejected" };
     }
+    // Already pending or approved: a double click. Nothing is written, so
+    // createdAt and its place in the Manager's list stay as they were, and an
+    // approved Athlete keeps their spot
     if (status === "pending" || status === "approved") {
       return { ok: true, changed: false };
     }
