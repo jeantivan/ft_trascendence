@@ -863,17 +863,6 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       expect(view?.spotRequests).toEqual([]);
     });
 
-    it("requestSpot of an id no Event has is not-found", async () => {
-      const { repo, createClub, addAthlete } = createFixture();
-      const orgId = await createClub();
-      const athleteId = await addAthlete(orgId);
-
-      await expect(repo.requestSpot(orgId, UNKNOWN_ID, athleteId, NOW)).resolves.toEqual({
-        ok: false,
-        reason: "not-found",
-      });
-    });
-
     it("requestSpot on a cancelled Event is cancelled and leaves no request", async () => {
       const { repo, createClub, addManager, addAthlete } = createFixture();
       const orgId = await createClub();
@@ -1040,6 +1029,17 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
 
       expect(result).toEqual({ ok: false, reason: "not-found" });
       // Read with the real club: still in the state it started in
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe(from);
+    });
+
+    it.each(SPOT_OPERATIONS)("$name of an id no Event has is not-found and changes nothing", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
+
+      const result = await run(repo, orgId, UNKNOWN_ID, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      // The Athlete's request in the real Event: still in the state it started in
       const view = await repo.getEventForMember(orgId, eventId, athleteId);
       expect(view?.mySpotRequest).toBe(from);
     });
