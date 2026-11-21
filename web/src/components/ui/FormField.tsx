@@ -4,8 +4,8 @@ interface FormFieldProps {
   label: string;
   htmlFor: string;
   error?: string;
-  // One control (Input...); FormField adds the aria attributes that tie it to the error
-  children: ReactElement<ComponentProps<"input">>;
+  // One control (Input or Select); FormField adds the aria attributes that tie it to the error
+  children: ReactElement<ComponentProps<"input"> | ComponentProps<"select">>;
 }
 
 export function FormField({ label, htmlFor, error, children }: FormFieldProps) {

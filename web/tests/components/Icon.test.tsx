@@ -32,4 +32,10 @@ describe("Icon", () => {
     const { container } = render(<Icon name="help" className="text-volt" />);
     expect(container.querySelector("svg")).toHaveClass("text-volt");
   });
+
+  it("supports the chevron-down icon with a non-empty path", () => {
+    const { container } = render(<Icon name="chevron-down" />);
+    const path = container.querySelector("path");
+    expect(path).toHaveAttribute("d", expect.stringMatching(/\S+/));
+  });
 });
