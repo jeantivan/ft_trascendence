@@ -99,4 +99,5 @@ The port can be changed with `HTTPS_PORT` in `.env`.
 - **SSR (Minor - 1pt)**: Server-Side Rendering with Next.js App Router.
 - **Custom Design System (Minor - 1pt)**: Reusable UI component library built on the Kinetic Obsidian design tokens, with no third-party UI libraries. It has 12 components (`Alert`, `Avatar`, `Badge`, `Button`, `Card`, `FormField`, `Icon`, `Input`, `LegalLinks`, `Logo`, `Modal`, `RpeBadge`), documented in `web/src/components/ui/docs/`.
 - **GDPR Compliance (Minor - 1pt)**: User data export and account deletion with OTP verification.
+
 **Total Target**: 17 points (14 points minimum required)
