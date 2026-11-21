@@ -2,16 +2,27 @@ import { randomUUID } from "node:crypto";
 import {
   AdminCannotBeManagerError,
   AlreadyManagerError,
+  AlreadyMemberError,
   LastManagerError,
+  MembershipRequestNotFoundError,
+  MembershipRequestNotPendingError,
+  RequestAlreadyPendingError,
   NotManagerError,
   OrganizationNameTakenError,
   OrganizationNotFoundError,
   UserNotFoundError,
+  type MembershipRequestDetail,
   type OrganizationDetail,
   type OrganizationEdit,
   type OrganizationRepository,
   type OrganizationSummary,
 } from "@/lib/org/organization-repository";
+import {
+  MEMBERSHIP_ACCEPTED,
+  MEMBERSHIP_INVITATION_CREATED,
+  MEMBERSHIP_REQUEST_CREATED,
+} from "@/lib/org/membership-notifier";
+import type { NotifyInput } from "@/lib/notifications/notify";
 import { normalizeId, type CreateOrganizationInput } from "@/lib/org/schemas";
 import type { NewClub } from "./organization-repository-contract";
 
@@ -38,6 +49,11 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   private users: Set<string> = new Set();
   // The registered users that are Admin accounts
   private admins: Set<string> = new Set();
+  // The registered users that are blocked
+  private blocked: Set<string> = new Set();
+  private requests: Map<string, MembershipRequestDetail> = new Map();
+  // What the notifier received, like the fake notify() of the Prisma tests
+  readonly sent: NotifyInput[] = [];
 
   addUser(userId: string): void {
     this.users.add(normalizeId(userId));
@@ -46,6 +62,10 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   addAdmin(userId: string): void {
     this.addUser(userId);
     this.admins.add(normalizeId(userId));
+  }
+
+  block(userId: string): void {
+    this.blocked.add(normalizeId(userId));
   }
 
   // Like the Prisma implementation: the user is checked first, then the club
@@ -145,5 +165,125 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   async listManagerIds(orgId: string): Promise<string[]> {
     const members = this.clubs.get(orgId)?.members ?? new Map<string, Role>();
     return [...members].filter(([, role]) => role === "manager").map(([userId]) => userId);
+  }
+
+  // Blocked reads like missing, like the database one
+  private assertUserCanJoin(userId: string): void {
+    if (!this.users.has(userId) || this.blocked.has(userId)) throw new UserNotFoundError();
+  }
+
+  private create(
+    creatorId: string,
+    orgId: string,
+    userId: string,
+    kind: "invite" | "request",
+  ): MembershipRequestDetail {
+    this.assertUserCanJoin(userId);
+    const club = this.clubs.get(orgId);
+    if (!club) throw new OrganizationNotFoundError();
+    if (club.members.has(userId)) throw new AlreadyMemberError();
+    const pending = [...this.requests.values()].some(
+      (request) => request.orgId === orgId && request.userId === userId && request.status === "pending",
+    );
+    if (pending) throw new RequestAlreadyPendingError();
+    const request: MembershipRequestDetail = {
+      id: randomUUID(),
+      orgId,
+      userId,
+      kind,
+      status: "pending",
+      createdBy: creatorId,
+      createdAt: new Date(),
+    };
+    this.requests.set(request.id, request);
+    const payload = { orgId, requestId: request.id };
+    if (kind === "invite") {
+      this.sent.push({ userId, type: MEMBERSHIP_INVITATION_CREATED, payload });
+    } else {
+      for (const [managerId, role] of club.members) {
+        if (role === "manager") this.sent.push({ userId: managerId, type: MEMBERSHIP_REQUEST_CREATED, payload });
+      }
+    }
+    return { ...request };
+  }
+
+  async inviteUser(managerId: string, orgId: string, userId: string): Promise<MembershipRequestDetail> {
+    return this.create(normalizeId(managerId), normalizeId(orgId), normalizeId(userId), "invite");
+  }
+
+  async requestToJoin(userId: string, orgId: string): Promise<MembershipRequestDetail> {
+    userId = normalizeId(userId);
+    return this.create(userId, normalizeId(orgId), userId, "request");
+  }
+
+  // Same checks as the conditional update: not found, then not pending
+  private decide(
+    requestId: string,
+    owns: (request: MembershipRequestDetail) => boolean,
+    status: "accepted" | "rejected" | "revoked",
+  ): MembershipRequestDetail {
+    const request = this.requests.get(normalizeId(requestId));
+    if (!request || !owns(request)) throw new MembershipRequestNotFoundError();
+    if (request.status !== "pending") throw new MembershipRequestNotPendingError();
+    request.status = status;
+    return request;
+  }
+
+  private join(request: MembershipRequestDetail): void {
+    this.assertUserCanJoin(request.userId);
+    const members = this.clubs.get(request.orgId)?.members;
+    if (!members) throw new OrganizationNotFoundError();
+    if (members.has(request.userId)) throw new AlreadyMemberError();
+    members.set(request.userId, "athlete");
+  }
+
+  async revokeInvitation(orgId: string, requestId: string): Promise<void> {
+    orgId = normalizeId(orgId);
+    this.decide(requestId, (r) => r.orgId === orgId && r.kind === "invite", "revoked");
+  }
+
+  async withdrawRequest(userId: string, requestId: string): Promise<void> {
+    userId = normalizeId(userId);
+    this.decide(requestId, (r) => r.userId === userId && r.kind === "request", "revoked");
+  }
+
+  async answerInvitation(userId: string, requestId: string, accept: boolean): Promise<void> {
+    userId = normalizeId(userId);
+    const request = this.requests.get(normalizeId(requestId));
+    // Like the transaction: a failed join leaves the invitation pending
+    if (accept && request?.userId === userId && request.kind === "invite" && request.status === "pending") {
+      this.join(request);
+    }
+    const decided = this.decide(requestId, (r) => r.userId === userId && r.kind === "invite", accept ? "accepted" : "rejected");
+    if (accept && decided.createdBy) {
+      this.sent.push({
+        userId: decided.createdBy,
+        type: MEMBERSHIP_ACCEPTED,
+        payload: { orgId: decided.orgId, requestId: decided.id, userId: decided.userId },
+      });
+    }
+  }
+
+  async reviewRequest(orgId: string, requestId: string, approve: boolean): Promise<void> {
+    orgId = normalizeId(orgId);
+    const request = this.requests.get(normalizeId(requestId));
+    if (approve && request?.orgId === orgId && request.kind === "request" && request.status === "pending") {
+      this.join(request);
+    }
+    const decided = this.decide(requestId, (r) => r.orgId === orgId && r.kind === "request", approve ? "accepted" : "rejected");
+    if (approve) {
+      this.sent.push({
+        userId: decided.userId,
+        type: MEMBERSHIP_ACCEPTED,
+        payload: { orgId: decided.orgId, requestId: decided.id, userId: decided.userId },
+      });
+    }
+  }
+
+  async listPendingRequests(orgId: string): Promise<MembershipRequestDetail[]> {
+    orgId = normalizeId(orgId);
+    return [...this.requests.values()]
+      .filter((r) => r.orgId === orgId && r.kind === "request" && r.status === "pending")
+      .map((r) => ({ ...r }));
   }
 }
