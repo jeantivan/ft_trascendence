@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -6,6 +7,7 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DELETE, POST } from "@/app/api/upload/route";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
+import { MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
 
 // The real requireApiAuth needs NextAuth and the users table: fake it, so these
 // tests only check what the route does with the upload.
@@ -166,7 +168,8 @@ describe("POST /api/upload", () => {
     }
   });
 
-  it("returns 413 when the request says it is far over 2 MB, before reading it", async () => {
+  it("returns 413 for a body at the Next.js proxy's 10 MiB cut, before reading it", async () => {
+    // The proxy passes on only the first 10 MiB: a body that big must never reach formData()
     const tenMb = String(10 * 1024 * 1024);
     const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png"), tenMb));
     expect(response.status).toBe(413);
@@ -412,6 +415,21 @@ describe("POST /api/upload: the saved image", () => {
     expect(response.status).toBe(201);
   });
 
+  it("accepts a photo of about 5 MB, like a phone's", async () => {
+    // Random pixels do not compress, so the PNG stays about as big as the raw pixels
+    const width = 1300;
+    const height = 1300;
+    const pixels = randomBytes(width * height * 3);
+    const photo = new Uint8Array(await sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer());
+    expect(photo.length).toBeGreaterThan(4 * 1024 * 1024);
+    expect(photo.length).toBeLessThan(8 * 1024 * 1024);
+
+    // The real size, plus room for the form around the file, as a browser would send
+    const contentLength = String(photo.length + 1024);
+    const response = await POST(uploadRequest(formWithFile(photo, "photo.png", "image/png"), contentLength));
+    expect(response.status).toBe(201);
+  });
+
   // Both sides: a check on the width alone would let a tall image through
   it.each([
     { width: 8001, height: 1 },
@@ -420,17 +438,17 @@ describe("POST /api/upload: the saved image", () => {
     const response = await POST(uploadRequest(formWithFile(await pngOf(width, height), "a.png", "image/png")));
 
     expect(response.status).toBe(413);
-    // Not "File too large": that one is the 2 MB limit, and this file is a few bytes
+    // Not "File too large": that one is the 8 MB limit, and this file is a few bytes
     expect(await response.json()).toEqual({ error: "Image too large" });
     expect(await readdir(fake.uploadsDir)).toEqual([]);
     expect(fake.transaction).not.toHaveBeenCalled();
   });
 
-  it("rejects an 8001 × 8001 image with 413 and stores nothing, though it is far under 2 MB", async () => {
+  it("rejects an 8001 × 8001 image with 413 and stores nothing, though it is far under the size limit", async () => {
     // One colour compresses to about 200 KB. Its area is over sharp's pixel limit, which
     // already applies when reading the header: the side check must still get to see it.
     const image = await pngOf(8001, 8001);
-    expect(image.length).toBeLessThan(2 * 1024 * 1024);
+    expect(image.length).toBeLessThan(MAX_IMAGE_BYTES);
 
     const response = await POST(uploadRequest(formWithFile(image, "a.png", "image/png")));
 
