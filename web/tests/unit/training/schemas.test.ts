@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  IncompletionReasonEnum,
   MAX_DAY_OFFSET,
   MAX_DURATION_SECONDS,
   MAX_PACE_SECONDS,
   POSTGRES_INT_MAX,
+  SessionLogExtraSchema,
+  rpeSchema,
+  sessionLogSchema,
   sessionTypeSchema,
   trainingTemplateNameSchema,
   trainingTemplateSchema,
@@ -128,5 +132,90 @@ describe("trainingTemplateSchema", () => {
         ],
       }),
     ).toThrow();
+  });
+});
+
+describe("SessionLogExtraSchema", () => {
+  it("accepts valid closed incompletion reasons and in-range heart rate metrics", () => {
+    expect(IncompletionReasonEnum.parse("time_constraints")).toBe("time_constraints");
+    expect(
+      SessionLogExtraSchema.parse({
+        incompletion_reason: "equipment_issue",
+        avg_heart_rate_bpm: 148,
+        max_heart_rate_bpm: 175,
+      }),
+    ).toEqual({
+      incompletion_reason: "equipment_issue",
+      avg_heart_rate_bpm: 148,
+      max_heart_rate_bpm: 175,
+    });
+    expect(
+      SessionLogExtraSchema.parse({
+        avg_heart_rate_bpm: 30,
+        max_heart_rate_bpm: 250,
+      }),
+    ).toEqual({
+      avg_heart_rate_bpm: 30,
+      max_heart_rate_bpm: 250,
+    });
+  });
+
+  it("rejects unknown keys, removed metrics, free text, out-of-range or decimal values, and max < avg heart rate", () => {
+    expect(SessionLogExtraSchema.safeParse({ notes: "me dolía la rodilla" }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ elevation_gain_m: 320 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ cadence_spm: 176 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ incompletion_reason: "tired" }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 29 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 251 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 148.5 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ max_heart_rate_bpm: 29 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ max_heart_rate_bpm: 251 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ max_heart_rate_bpm: 175.5 }).success).toBe(false);
+    expect(SessionLogExtraSchema.safeParse({ avg_heart_rate_bpm: 160, max_heart_rate_bpm: 150 }).success).toBe(false);
+  });
+});
+
+describe("sessionLogSchema", () => {
+  it("accepts completed or incomplete logs with valid rpe (1..10 or null) and defaults omitted fields to null", () => {
+    expect(rpeSchema.parse(1)).toBe(1);
+    expect(rpeSchema.parse(10)).toBe(10);
+    expect(sessionLogSchema.parse({ completed: true, rpe: null })).toEqual({
+      completed: true,
+      rpe: null,
+      distanceM: null,
+      durationS: null,
+      extra: null,
+    });
+    expect(sessionLogSchema.parse({ completed: true, rpe: 7, distanceM: 10000, durationS: 3000 })).toEqual({
+      completed: true,
+      rpe: 7,
+      distanceM: 10000,
+      durationS: 3000,
+      extra: null,
+    });
+    expect(
+      sessionLogSchema.parse({
+        completed: false,
+        extra: { incompletion_reason: "time_constraints" },
+      }),
+    ).toEqual({
+      completed: false,
+      rpe: null,
+      distanceM: null,
+      durationS: null,
+      extra: { incompletion_reason: "time_constraints" },
+    });
+  });
+
+  it("rejects rpe outside 1..10, decimals, non-positive distance/duration, and unknown keys", () => {
+    expect(rpeSchema.safeParse(0).success).toBe(false);
+    expect(rpeSchema.safeParse(11).success).toBe(false);
+    expect(rpeSchema.safeParse(6.5).success).toBe(false);
+    expect(sessionLogSchema.safeParse({ completed: true, rpe: 0 }).success).toBe(false);
+    expect(sessionLogSchema.safeParse({ completed: true, rpe: 11 }).success).toBe(false);
+    expect(sessionLogSchema.safeParse({ completed: true, rpe: 6.5 }).success).toBe(false);
+    expect(sessionLogSchema.safeParse({ completed: true, distanceM: 0 }).success).toBe(false);
+    expect(sessionLogSchema.safeParse({ completed: true, durationS: MAX_DURATION_SECONDS + 1 }).success).toBe(false);
+    expect(sessionLogSchema.safeParse({ completed: true, unknownField: 1 }).success).toBe(false);
   });
 });

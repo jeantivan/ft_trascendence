@@ -116,6 +116,41 @@ export function formatSecondsPerKmToPace(secondsPerKm: number): string {
   return `${minutes}:${pad2(seconds)}`;
 }
 
+export function calculateAveragePaceSecondsPerKm(
+  distanceM: number | null | undefined,
+  durationS: number | null | undefined,
+): number | null {
+  if (
+    distanceM === null ||
+    distanceM === undefined ||
+    durationS === null ||
+    durationS === undefined ||
+    !Number.isFinite(distanceM) ||
+    !Number.isFinite(durationS) ||
+    distanceM <= 0 ||
+    durationS <= 0
+  ) {
+    return null;
+  }
+
+  const secondsPerKm = Math.round((durationS * 1000) / distanceM);
+  if (secondsPerKm < 1 || secondsPerKm > MAX_PACE_SECONDS) {
+    return null;
+  }
+  return secondsPerKm;
+}
+
+export function formatAveragePace(
+  distanceM: number | null | undefined,
+  durationS: number | null | undefined,
+): string | null {
+  const secondsPerKm = calculateAveragePaceSecondsPerKm(distanceM, durationS);
+  if (secondsPerKm === null) {
+    return null;
+  }
+  return formatSecondsPerKmToPace(secondsPerKm);
+}
+
 const DURATION_HMS_PATTERN = /^(\d{1,2}):([0-5]\d):([0-5]\d)$/;
 // Restrict mm:ss minutes to 00-59 so values like "75:00" are not confused with hh:mm
 const DURATION_MS_PATTERN = /^([0-5]?\d):([0-5]\d)$/;
