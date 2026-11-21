@@ -13,6 +13,7 @@ declare module "next-auth" {
   }
 
   interface Session {
+    authTime?: number;
     user: {
       id: string;
       nick?: string;
@@ -30,6 +31,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
     nick?: string;
+    authTime?: number;
     /**
      * Informational only (e.g. for client-side UI).
      * Server authorization MUST verify the active role and blockedAt
@@ -43,6 +45,7 @@ declare module "@auth/core/jwt" {
   interface JWT {
     id?: string;
     nick?: string;
+    authTime?: number;
     /**
      * Informational only (e.g. for client-side UI).
      * Server authorization MUST verify the active role and blockedAt

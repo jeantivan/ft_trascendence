@@ -9,6 +9,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/training", label: "Entrenamiento" },
   { href: "/events", label: "Eventos" },
   { href: "/contacts", label: "Contactos" },
+  { href: "/settings", label: "Ajustes" },
 ];
 
 // The Admin panel (#102): only in the menu of an Admin. It is not the protection,
