@@ -47,9 +47,9 @@ export interface EventFixture {
   // A new Session of that club; returns its id. A Template Session of the Group
   // has origin "template" and no athleteId
   addSession(orgId: string, session: NewSession): Promise<string>;
-  // A Spot Request of that user in that Event, already in that status. The
-  // interface cannot create one until #232. createdAt fixes the order of the
-  // Manager's list; without it, the moment of the call
+  // A Spot Request of that user in that Event, put straight in that status without
+  // the operations, so a test starts from approved or rejected in one line.
+  // createdAt fixes the order of the Manager's list; without it, the moment of the call
   addSpotRequest(
     eventId: string,
     userId: string,

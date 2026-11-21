@@ -65,7 +65,8 @@ export class InMemoryEventRepository implements EventRepository {
     return id;
   }
 
-  // For the tests only, until #232 gives EventRepository its own operations
+  // For the tests only: puts a Spot Request straight in a status, without the
+  // operations (the fixture's addSpotRequest)
   addSpotRequest(
     eventId: string,
     userId: string,

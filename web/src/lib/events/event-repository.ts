@@ -402,7 +402,11 @@ export class PrismaEventRepository implements EventRepository {
   // the Event row until the commit, so the operations on one Event go one at a time,
   // and it reads the row after the lock, so it sees what the one before saved (Q3).
   // FOR NO KEY UPDATE and not FOR UPDATE: a Feedback pointing at the Event can still
-  // be inserted. null: no such Event in this club
+  // be inserted. null: no such Event in this club.
+  // Every write to spot_requests locks its Event first: here, or withdrawMemberSpots
+  // when someone leaves the club. That is why the updates need no where status (rule 3
+  // of #238): the state read after the lock cannot change before the update. A new
+  // write that skips the lock breaks this
   private async lockEvent(
     tx: Prisma.TransactionClient,
     orgId: string,
