@@ -4,6 +4,8 @@ import {
   AlreadyManagerError,
   LastManagerError,
   NotManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   OrganizationNameTakenError,
   OrganizationNotFoundError,
   UserNotFoundError,
@@ -11,6 +13,7 @@ import {
   type OrganizationEdit,
   type OrganizationRepository,
   type OrganizationSummary,
+  type ScheduleDeletionResult,
 } from "@/lib/org/organization-repository";
 import { normalizeId, type CreateOrganizationInput } from "@/lib/org/schemas";
 import type { NewClub } from "./organization-repository-contract";
@@ -29,6 +32,7 @@ type Role = "athlete" | "manager";
 // A club as stored: its data, and each member's role by user id
 interface StoredClub {
   data: Omit<NewClub, "members">;
+  deleteAt: Date | null;
   members: Map<string, Role>;
 }
 
@@ -65,7 +69,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
 
   private store(data: StoredClub["data"], members: Map<string, Role>): string {
     const id = randomUUID();
-    this.clubs.set(id, { data, members });
+    this.clubs.set(id, { data, deleteAt: null, members });
     return id;
   }
 
@@ -79,6 +83,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
       id,
       name: club.data.name,
       description: club.data.description,
+      deleteAt: club.deleteAt,
       memberCount: club.members.size,
     }));
   }
@@ -109,7 +114,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
       { name: input.name, description: input.description, timezone: input.timezone },
       new Map(managerIds.map((userId) => [userId, "manager" as Role])),
     );
-    return { id, name: input.name, description: input.description, timezone: input.timezone };
+    return { id, name: input.name, description: input.description, timezone: input.timezone, deleteAt: null };
   }
 
   async findById(orgId: string): Promise<OrganizationDetail | null> {
@@ -121,6 +126,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
       name: club.data.name,
       description: club.data.description,
       timezone: club.data.timezone,
+      deleteAt: club.deleteAt,
     };
   }
 
@@ -128,8 +134,12 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     orgId = normalizeId(orgId);
     userId = normalizeId(userId);
     const members = this.memberRoles(orgId, userId);
+    const club = this.clubs.get(orgId);
     if (this.admins.has(userId)) throw new AdminCannotBeManagerError();
     if (members.get(userId) === "manager") throw new AlreadyManagerError();
+    if (!members.has(userId) && club && club.deleteAt !== null) {
+      throw new OrganizationDeletionAlreadyScheduledError();
+    }
     members.set(userId, "manager");
   }
 
@@ -145,5 +155,35 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   async listManagerIds(orgId: string): Promise<string[]> {
     const members = this.clubs.get(orgId)?.members ?? new Map<string, Role>();
     return [...members].filter(([, role]) => role === "manager").map(([userId]) => userId);
+  }
+
+  async scheduleDeletion(
+    _adminId: string,
+    orgId: string,
+    now: Date = new Date(),
+  ): Promise<ScheduleDeletionResult> {
+    orgId = normalizeId(orgId);
+    assertUuid(orgId);
+    const club = this.clubs.get(orgId);
+    if (!club) throw new OrganizationNotFoundError();
+    if (club.deleteAt !== null) throw new OrganizationDeletionAlreadyScheduledError();
+    const deleteAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    club.deleteAt = deleteAt;
+    return { orgId, orgName: club.data.name, deleteAt, memberEmails: [] };
+  }
+
+  async cancelDeletion(
+    _adminId: string,
+    orgId: string,
+    now: Date = new Date(),
+  ): Promise<void> {
+    orgId = normalizeId(orgId);
+    assertUuid(orgId);
+    const club = this.clubs.get(orgId);
+    if (!club) throw new OrganizationNotFoundError();
+    if (club.deleteAt === null || club.deleteAt <= now) {
+      throw new OrganizationDeletionNotScheduledError();
+    }
+    club.deleteAt = null;
   }
 }
