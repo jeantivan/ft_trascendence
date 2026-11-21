@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 describe("FormField", () => {
   it("links the label to its control", () => {
@@ -52,5 +53,19 @@ describe("FormField", () => {
       </FormField>
     );
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("supports Select as its child and wires aria-invalid and error description", () => {
+    render(
+      <FormField label="Club" htmlFor="club" error="Select a club">
+        <Select id="club" name="club" defaultValue="">
+          <option value="demo">Club Demo</option>
+        </Select>
+      </FormField>
+    );
+    const select = screen.getByLabelText("Club");
+    expect(select).toHaveAttribute("name", "club");
+    expect(select).toHaveAttribute("aria-invalid", "true");
+    expect(select).toHaveAccessibleDescription("Select a club");
   });
 });
