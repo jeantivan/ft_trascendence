@@ -21,8 +21,10 @@ vi.mock("@/lib/user/user-settings-service", () => ({
     })),
   },
 }));
-vi.mock("@/lib/user/actions", () => ({
+vi.mock("@/lib/auth/recent-auth", () => ({
   isRecentAuth: vi.fn(async () => true),
+}));
+vi.mock("@/lib/user/actions", () => ({
   reauthenticateAction: vi.fn(),
   updateNickAction: vi.fn(),
   updateEmailAction: vi.fn(),

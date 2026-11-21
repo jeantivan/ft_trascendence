@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/Alert";
 import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
@@ -169,9 +170,9 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
             Tu imagen visible en tu Club Profile y listas de eventos.
           </p>
         </div>
-        <span className="self-start rounded border border-border-subtle bg-surface-overlay px-2.5 py-1 font-heading text-label-caps uppercase text-text-muted">
+        <Badge variant="neutral" className="self-start">
           JPG / PNG / WEBP · Máx. {MAX_IMAGE_MB} MB
-        </span>
+        </Badge>
       </div>
 
       <div className="flex flex-col items-start gap-6 md:flex-row md:items-center">
@@ -207,9 +208,7 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
           {selectedFile && !isUploading && (
             <div className="flex flex-col gap-3 rounded border border-border-subtle bg-surface-overlay p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-2 text-body-sm">
-                <span className="rounded border border-volt bg-surface-base px-1.5 py-0.5 font-heading text-label-caps uppercase text-volt">
-                  Vista previa
-                </span>
+                <Badge variant="info">Vista previa</Badge>
                 <span className="truncate text-text-secondary">{selectedFile.name}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -231,9 +230,7 @@ export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectio
             >
               <div className="flex items-center justify-between text-body-sm">
                 <div className="flex items-center gap-2">
-                  <span className="rounded border border-volt bg-surface-base px-1.5 py-0.5 font-heading text-label-caps uppercase text-volt">
-                    Subiendo
-                  </span>
+                  <Badge variant="info">Subiendo</Badge>
                   <span className="truncate text-text-secondary">{selectedFile?.name}</span>
                 </div>
                 <span className="font-heading font-bold tabular-nums text-volt">

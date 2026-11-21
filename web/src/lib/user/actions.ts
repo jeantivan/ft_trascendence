@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
-import { auth, signOut } from "@/auth";
+import { signOut } from "@/auth";
+import { isRecentAuth } from "@/lib/auth/recent-auth";
 import { UserAlreadyExistsError } from "@/lib/auth/user-repository";
 import { requireAuth } from "@/lib/permissions/require-auth";
 import type { UpdatePrivacyInput } from "./schemas";
@@ -10,6 +11,7 @@ import {
   EmailChangeNotAllowedForOAuthError,
   InvalidCurrentPasswordError,
   MissingCurrentPasswordError,
+  RecentAuthRequiredError,
   UserNotFoundError,
   userSettingsService,
 } from "./user-settings-service";
@@ -17,14 +19,6 @@ import {
 export type SettingsActionResult =
   | { success: true; message: string }
   | { success: false; error: string; requiresReauth?: boolean };
-
-const RECENT_AUTH_WINDOW_SECONDS = 5 * 60;
-
-export async function isRecentAuth(nowSeconds = Math.floor(Date.now() / 1000)): Promise<boolean> {
-  const session = await auth();
-  if (typeof session?.authTime !== "number") return false;
-  return nowSeconds - session.authTime <= RECENT_AUTH_WINDOW_SECONDS;
-}
 
 function mapSettingsError(error: unknown): string {
   if (error instanceof ZodError) {
@@ -65,6 +59,13 @@ async function runSettingsAction(
     }
     return result;
   } catch (error) {
+    if (error instanceof RecentAuthRequiredError) {
+      return {
+        success: false,
+        error: "Por seguridad, confirma tu sesión antes de definir tu primera contraseña.",
+        requiresReauth: true,
+      };
+    }
     return { success: false, error: mapSettingsError(error) };
   }
 }
@@ -114,18 +115,15 @@ export async function updatePasswordAction(
       return { success: false, error: "Las contraseñas nuevas no coinciden" };
     }
 
-    const profile = await userSettingsService.getProfile(userId);
-    if (!profile.hasPassword && !(await isRecentAuth())) {
-      return {
-        success: false,
-        error: "Por seguridad, confirma tu sesión antes de definir tu primera contraseña.",
-        requiresReauth: true,
-      };
-    }
+    const [profile, recentAuth] = await Promise.all([
+      userSettingsService.getProfile(userId),
+      isRecentAuth(),
+    ]);
 
     await userSettingsService.updatePassword(userId, {
       currentPassword: currentPassword || undefined,
       newPassword,
+      recentAuth,
     });
     return {
       success: true,

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { DeleteAccountSection } from "@/components/gdpr/DeleteAccountSection";
 import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -54,9 +55,7 @@ function PrivacySwitchRow({
           <span id={id} className="font-heading text-body-md font-semibold text-text-primary">
             {title}
           </span>
-          <span className="rounded border border-border-subtle bg-surface-overlay px-2 py-0.5 font-heading text-label-caps uppercase text-text-muted">
-            {tag}
-          </span>
+          <Badge variant="neutral">{tag}</Badge>
         </div>
         <p id={descriptionId} className="text-body-sm text-text-secondary">
           {description}
@@ -199,15 +198,12 @@ export function PrivacySettingsSection({ profile }: PrivacySettingsSectionProps)
             </p>
           </div>
           <div className="flex flex-col gap-1 sm:items-end">
-            <span
-              className={`inline-flex w-fit items-center gap-1.5 rounded-full border bg-surface-overlay px-3 py-1 font-heading text-label-caps uppercase ${
-                hasHealthConsent
-                  ? "border-rpe-low text-rpe-low"
-                  : "border-volume-alert text-volume-alert"
-              }`}
+            <Badge
+              variant={hasHealthConsent ? "success" : "warning"}
+              className="w-fit gap-1.5 px-3"
             >
               {hasHealthConsent ? "Consentimiento activo" : "No otorgado"}
-            </span>
+            </Badge>
             {hasHealthConsent && profile.healthConsentAt && (
               <span className="text-body-sm tabular-nums text-text-muted">
                 Otorgado el {formatConsentDate(profile.healthConsentAt)} · v

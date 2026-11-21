@@ -1,6 +1,6 @@
 import { SettingsTabs, type SettingsTab } from "@/components/settings/SettingsTabs";
+import { isRecentAuth } from "@/lib/auth/recent-auth";
 import { requireAuth } from "@/lib/permissions/require-auth";
-import { isRecentAuth } from "@/lib/user/actions";
 import { userSettingsService } from "@/lib/user/user-settings-service";
 
 interface SettingsPageProps {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import type { SettingsProfile } from "@/lib/user/user-settings-service";
@@ -54,10 +55,10 @@ export function SettingsTabs({
       <header className="flex flex-col gap-6 border-b border-border-subtle pb-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div className="flex flex-col gap-2">
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border-subtle bg-surface-overlay px-2.5 py-0.5 font-heading text-label-caps uppercase text-session-rodaje">
+            <Badge variant="info" className="w-fit gap-1.5 px-2.5 py-0.5">
               <Icon name="settings" size={13} />
               Preferencias del sistema
-            </span>
+            </Badge>
             <h1 className="font-heading text-headline-lg text-text-primary">Ajustes</h1>
             <p className="max-w-xl text-body-md text-text-secondary">
               Gestiona tu perfil de corredor, credenciales de acceso y privacidad de datos.

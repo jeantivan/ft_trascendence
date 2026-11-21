@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
@@ -88,10 +89,10 @@ export function ProfileCredentialsSection({
               Dirección asociada a tu cuenta y a las notificaciones de StrideSync.
             </p>
           </div>
-          <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-rpe-low bg-surface-overlay px-3 py-1 font-heading text-label-caps uppercase text-rpe-low sm:shrink-0">
+          <Badge variant="success" className="max-w-full gap-1.5 px-3 sm:shrink-0">
             <Icon name="check" size={14} className="shrink-0" />
             <span className="truncate">Actual: {email}</span>
-          </span>
+          </Badge>
         </div>
 
         {!hasPassword ? (
@@ -149,9 +150,9 @@ export function ProfileCredentialsSection({
             </p>
           </div>
           {!hasPassword && (
-            <span className="self-start rounded-full border border-border-strong bg-surface-overlay px-3 py-1 font-heading text-label-caps uppercase text-session-rodaje">
+            <Badge variant="info" className="self-start px-3">
               Cuenta solo-OAuth
-            </span>
+            </Badge>
           )}
         </div>
 

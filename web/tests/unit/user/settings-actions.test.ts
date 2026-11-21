@@ -74,6 +74,7 @@ import {
 import {
   EmailChangeNotAllowedForOAuthError,
   InvalidCurrentPasswordError,
+  RecentAuthRequiredError,
 } from "@/lib/user/user-settings-service";
 
 function makeFormData(entries: Record<string, string>): FormData {
@@ -123,17 +124,26 @@ describe("user settings server actions", () => {
     expect(updatePasswordMock).not.toHaveBeenCalled();
   });
 
-  it("updatePasswordAction exige sesión reciente en cuentas solo-OAuth", async () => {
+  it("updatePasswordAction pasa recentAuth al servicio y devuelve requiresReauth si lanza RecentAuthRequiredError", async () => {
     getProfileMock.mockResolvedValueOnce({ hasPassword: false });
     authMock.mockResolvedValueOnce({ authTime: Math.floor(Date.now() / 1000) - 600 });
+    updatePasswordMock.mockRejectedValueOnce(new RecentAuthRequiredError());
 
     const res = await updatePasswordAction(
       null,
       makeFormData({ newPassword: "Password1!", confirmPassword: "Password1!" })
     );
-    expect(res.success).toBe(false);
-    if (!res.success) expect(res.requiresReauth).toBe(true);
-    expect(updatePasswordMock).not.toHaveBeenCalled();
+    expect(updatePasswordMock).toHaveBeenCalledWith("user-1", {
+      currentPassword: undefined,
+      newPassword: "Password1!",
+      recentAuth: false,
+    });
+    expect(res).toEqual({
+      success: false,
+      error: "Por seguridad, confirma tu sesión antes de definir tu primera contraseña.",
+      requiresReauth: true,
+    });
+    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
   it("reauthenticateAction cierra sesión y redirige a /login con callbackUrl=/settings", async () => {
