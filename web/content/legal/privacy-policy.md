@@ -108,7 +108,7 @@ También registramos las acciones que el Admin realiza sobre cuentas y contenido
 | Mientras eres miembro | Conservamos tus datos activos |
 | Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. Tus Contacts ya aceptados se conservan, con sus mensajes privados y tu estado online. Las solicitudes de Contact pendientes con quienes ya no compartas grupo se cancelan, y mientras no tengas club no puedes solicitar Contacts nuevos. No se borra tu cuenta |
 | Vuelves a un club que dejaste | Recuperas tu historial en ese club. Los Managers vuelven a ver tus sesiones, métricas y RPE, y el Manager que escribió un Feedback vuelve a verlo, siempre que mantengas el consentimiento de datos de salud |
-| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts. Tus mensajes privados no se borran: se conservan sin tu nombre para que la otra persona mantenga el hilo (ver tabla siguiente) |
+| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts. El archivo de tu foto se borra en el mismo momento; si ese borrado falla, se reintenta y se completa en un máximo de 24 horas. Tus mensajes privados no se borran: se conservan sin tu nombre para que la otra persona mantenga el hilo (ver tabla siguiente) |
 | El Admin borra un club | Te avisamos por email con al menos 30 días de antelación y puedes descargar tus datos antes. Después se borran el club, sus sesiones y tu historial de entrenamiento en él. Tu cuenta no se borra |
 | Después de borrar tu cuenta | Los registros técnicos (IP, navegador, accesos) se conservan como máximo 3 meses |
 
@@ -140,7 +140,7 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a legal@stridesync.fit |
 | **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile y datos de salud (RPE y Feedback). Las notificaciones del servicio no dependen de un consentimiento: puedes silenciarlas en Ajustes |
 
-La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
+La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv`, `messages.csv` (tus mensajes) y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
 
 Respondemos **sin dilación indebida y, como máximo, en un mes**. En casos complejos o con muchas solicitudes podemos prorrogarlo **dos meses más**, y te avisaremos del motivo.
 

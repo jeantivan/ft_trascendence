@@ -140,7 +140,7 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a legal@stridesync.fit |
 | **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile y datos de salud (RPE y Feedback). Las notificaciones del servicio no dependen de un consentimiento: puedes silenciarlas en Ajustes |
 
-La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
+La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv`, `messages.csv` (tus mensajes) y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
 
 Respondemos **sin dilación indebida y, como máximo, en un mes**. En casos complejos o con muchas solicitudes podemos prorrogarlo **dos meses más**, y te avisaremos del motivo.
 
