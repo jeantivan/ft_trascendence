@@ -63,13 +63,16 @@ export const withdrawSpotSchema = z.object({
   eventId: idSchema,
 });
 
-// The Manager approves or rejects a pending request, or rejects an approved one to expel
+// The Manager's three actions, one EventRepository operation each (#232):
+// approve (approveSpot) and reject (rejectSpot) a pending request, expel
+// (expelFromEvent) an approved one. Verbs, not states: each operation knows the
+// state it starts from and the one it leaves
 export const reviewSpotSchema = z.object({
   eventId: idSchema,
   // The Athlete whose request is reviewed: spot_requests.user_id in the database,
   // the athleteId of EventManagerView.spotRequests[] that the Manager picked
   athleteId: idSchema,
-  decision: spotRequestStatusSchema.extract(["approved", "rejected"]),
+  action: z.enum(["approve", "reject", "expel"]),
 });
 
 // Health data: the messages are fixed texts, they never repeat what was sent
