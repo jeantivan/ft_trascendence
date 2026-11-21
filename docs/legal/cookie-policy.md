@@ -1,7 +1,5 @@
 # Política de Cookies
 
-> **Borrador para revisión del equipo (sub-issue #73, parte de #8).** Los textos entre `[CORCHETES]` son comprobaciones o decisiones que el equipo debe cerrar antes de publicar; no se han inventado.
-
 > **Proyecto académico de 42.** Los datos identificativos del responsable y de contacto son ficticios y se utilizan exclusivamente para este ejercicio; no identifican a una empresa real responsable de este servicio.
 
 **Última actualización:** 9 de noviembre de 2026
@@ -10,7 +8,7 @@
 
 Una cookie es un pequeño archivo que un sitio web guarda en tu navegador. Sirve para recordar información entre una página y la siguiente, por ejemplo que ya has iniciado sesión.
 
-Esta política explica qué cookies usa **Stride Sync** (en adelante, "la plataforma"), para qué sirven y cómo puedes controlarlas. Complementa la Política de Privacidad.
+Esta política explica qué cookies usa **StrideSync** (en adelante, "la plataforma"), para qué sirven y cómo puedes controlarlas. Complementa la Política de Privacidad.
 
 - **Responsable:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242. Calle De La Trancendencia, 42. 28042 Madrid, España. Teléfono +34 642 42 42 42
 - **Contacto:** legal@stridesync.fit
