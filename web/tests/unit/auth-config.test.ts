@@ -28,6 +28,7 @@ describe("Auth.js Base Configuration and Callbacks", () => {
         id: "user-uuid-123",
         nick: "fastrunner",
         roleGlobal: "user",
+        authTime: expect.any(Number),
       });
     });
 

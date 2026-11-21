@@ -13,6 +13,7 @@ export const updateEmailSchema = z.object({
 export const updatePasswordSchema = z.object({
   newPassword: passwordSchema,
   currentPassword: z.string().optional(),
+  recentAuth: z.boolean(),
 });
 
 export const updatePrivacySchema = z

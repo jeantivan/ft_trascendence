@@ -4,6 +4,7 @@ import {
   EmailChangeNotAllowedForOAuthError,
   InvalidCurrentPasswordError,
   MissingCurrentPasswordError,
+  RecentAuthRequiredError,
   UserNotFoundError,
   UserSettingsService,
 } from "@/lib/user/user-settings-service";
@@ -191,7 +192,7 @@ describe("UserSettingsService", () => {
   });
 
   describe("updatePassword", () => {
-    it("sets first password for solo-OAuth accounts without current password", async () => {
+    it("sets first password for solo-OAuth accounts when recentAuth is true", async () => {
       const user = await repo.createUser({
         email: "oauth@42.com",
         passwordHash: null,
@@ -200,6 +201,7 @@ describe("UserSettingsService", () => {
 
       await service.updatePassword(user.id, {
         newPassword: "nuevaPasswordSegura123",
+        recentAuth: true,
       });
 
       const found = await repo.findById(user.id);
@@ -207,7 +209,25 @@ describe("UserSettingsService", () => {
       expect(found?.passwordHash).not.toBe("nuevaPasswordSegura123"); // must be hashed
     });
 
-    it("updates password when current password matches", async () => {
+    it("throws RecentAuthRequiredError for solo-OAuth accounts when recentAuth is false", async () => {
+      const user = await repo.createUser({
+        email: "oauth@42.com",
+        passwordHash: null,
+        nick: "oauthuser",
+      });
+
+      await expect(
+        service.updatePassword(user.id, {
+          newPassword: "nuevaPasswordSegura123",
+          recentAuth: false,
+        })
+      ).rejects.toThrow(RecentAuthRequiredError);
+
+      const found = await repo.findById(user.id);
+      expect(found?.passwordHash).toBeNull();
+    });
+
+    it("updates password when current password matches even if recentAuth is false", async () => {
       const currentPassword = "antiguaPassword123";
       const hash = await hashPassword(currentPassword);
       const user = await repo.createUser({
@@ -219,6 +239,7 @@ describe("UserSettingsService", () => {
       await service.updatePassword(user.id, {
         currentPassword,
         newPassword: "nuevaPassword123",
+        recentAuth: false,
       });
 
       const found = await repo.findById(user.id);
@@ -237,6 +258,7 @@ describe("UserSettingsService", () => {
         service.updatePassword(user.id, {
           currentPassword: "wrongPassword123",
           newPassword: "nuevaPassword123",
+          recentAuth: false,
         })
       ).rejects.toThrow(InvalidCurrentPasswordError);
     });
@@ -251,6 +273,7 @@ describe("UserSettingsService", () => {
       await expect(
         service.updatePassword(user.id, {
           newPassword: "short",
+          recentAuth: true,
         })
       ).rejects.toThrow();
     });
