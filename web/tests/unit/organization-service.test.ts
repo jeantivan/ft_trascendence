@@ -227,4 +227,31 @@ describe("OrganizationService", () => {
     ).rejects.toThrow();
     await expect(service.listCatalog()).resolves.toEqual([]);
   });
+
+  describe("leaving and expelling (#150)", () => {
+    function createWithClubExit() {
+      const calls: unknown[][] = [];
+      const clubExit = {
+        leave: async (...args: unknown[]) => void calls.push(["leave", ...args]),
+        expel: async (...args: unknown[]) => void calls.push(["expel", ...args]),
+      };
+      return { service: new OrganizationService(new InMemoryOrganizationRepository(), clubExit), calls };
+    }
+
+    it("leaveClub hands the user and the club to the club exit, ids in lowercase", async () => {
+      const { service, calls } = createWithClubExit();
+
+      await service.leaveClub(MANAGER_ID.toUpperCase(), UNKNOWN_ID.toUpperCase());
+
+      expect(calls).toEqual([["leave", MANAGER_ID, UNKNOWN_ID]]);
+    });
+
+    it("expelMember hands the actor, the club and the target to the club exit, ids in lowercase", async () => {
+      const { service, calls } = createWithClubExit();
+
+      await service.expelMember({ id: ADMIN_ID, role: "admin" }, UNKNOWN_ID.toUpperCase(), MANAGER_ID.toUpperCase());
+
+      expect(calls).toEqual([["expel", { id: ADMIN_ID, role: "admin" }, UNKNOWN_ID, MANAGER_ID]]);
+    });
+  });
 });
