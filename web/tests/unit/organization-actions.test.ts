@@ -17,6 +17,7 @@ import { requireAuth } from "@/lib/permissions/require-auth";
 import {
   AlreadyManagerError,
   AlreadyMemberError,
+  BlockedAccountError,
   LastManagerError,
   MembershipRequestNotFoundError,
   MembershipRequestNotPendingError,
@@ -268,6 +269,7 @@ describe("createOrganizationAction", () => {
     ["a taken name", new OrganizationNameTakenError(), "Ya existe un club con ese nombre"],
     ["an Admin account as Manager", new AdminCannotBeManagerError(), "Ninguna cuenta Admin puede ser Manager de un club"],
     ["a Manager that does not exist", new UserNotFoundError(), "Alguno de los Managers ya no existe"],
+    ["a blocked Manager", new BlockedAccountError(), "Alguno de los Managers tiene la cuenta bloqueada"],
   ])("translates %s into a controlled error", async (_label, error, message) => {
     createOrganization.mockRejectedValue(error);
 
@@ -297,6 +299,7 @@ describe.each([
     assignManager,
     [
       ["an Admin account as Manager", new AdminCannotBeManagerError(), "Ninguna cuenta Admin puede ser Manager de un club"],
+      ["a blocked account", new BlockedAccountError(), "La cuenta está bloqueada y no puede ser Manager de un club"],
       ["a user who is already Manager", new AlreadyManagerError(), "El usuario ya es Manager del club"],
       ["a club whose deletion is scheduled", new OrganizationDeletionAlreadyScheduledError(), "El club tiene el borrado programado"],
     ],
