@@ -58,6 +58,49 @@ describe("Integration: createPrismaExportUserRepository", () => {
     await expect(repository.findProfile("00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
   });
 
+  describe("findAccountData", () => {
+    const at = (day: number) => new Date(`2026-11-${String(day).padStart(2, "0")}T08:00:00.000Z`);
+
+    async function createFixture() {
+      const user = await prisma.user.create({
+        data: {
+          email,
+          nick: "runner",
+          statsPublic: true,
+          showOnline: false,
+          healthConsentAt: at(1),
+          healthConsentVersion: 2,
+        },
+      });
+      const other = await prisma.user.create({ data: { email: otherEmail, nick: "other" } });
+      const org = await prisma.organization.create({ data: { name: orgName, timezone: "Europe/Madrid" } });
+      return { user, other, org };
+    }
+
+    it("devuelve los ajustes y el consentimiento del usuario", async () => {
+      const { user } = await createFixture();
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data).toMatchObject({
+        settings: { statsPublic: true, notificationsEnabled: true, showOnline: false },
+        consents: { healthConsentAt: at(1), healthConsentVersion: 2 },
+      });
+    });
+
+    it("devuelve null en los dos consentimientos si no los dio", async () => {
+      const user = await prisma.user.create({ data: { email } });
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data?.consents).toEqual({ healthConsentAt: null, healthConsentVersion: null });
+    });
+
+    it("devuelve null si el usuario no existe", async () => {
+      await expect(repository.findAccountData("00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
+    });
+  });
+
   describe("findSessions", () => {
     const base = { origin: "template", sessionType: "rodaje" } as const;
 

@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildExportFiles,
+  type ExportAccountSource,
   type ExportProfileSource,
   type ExportSessionSource,
   type ExportUserRepository,
@@ -9,11 +10,21 @@ import {
 
 const NOW = new Date("2026-10-06T11:28:00.000Z");
 
+const emptyAccount: ExportAccountSource = {
+  settings: { statsPublic: false, notificationsEnabled: true, showOnline: true },
+  consents: { healthConsentAt: null, healthConsentVersion: null },
+};
+
 function repositoryWith(
   user: Awaited<ReturnType<ExportUserRepository["findProfile"]>>,
   sessions: ExportSessionSource[] = [],
+  account: ExportAccountSource | null = emptyAccount,
 ): ExportUserRepository {
-  return { findProfile: async () => user, findSessions: async () => sessions };
+  return {
+    findProfile: async () => user,
+    findAccountData: async () => account,
+    findSessions: async () => sessions,
+  };
 }
 
 const session: ExportSessionSource = {
@@ -46,8 +57,8 @@ const athlete: ExportProfileSource = {
   email2faEnabled: true,
 };
 
-async function dataJsonOf(user: ExportProfileSource) {
-  const files = await buildExportFiles(user.id, repositoryWith(user), NOW);
+async function dataJsonOf(user: ExportProfileSource, account: ExportAccountSource = emptyAccount) {
+  const files = await buildExportFiles(user.id, repositoryWith(user, [], account), NOW);
   const dataJson = files?.find((file) => file.name === "data.json");
   return JSON.parse(dataJson!.content);
 }
@@ -66,6 +77,8 @@ describe("buildExportFiles", () => {
         totp_enabled: false,
         email_2fa_enabled: true,
       },
+      settings: { stats_public: false, notifications_enabled: true, show_online: true },
+      consents: { health_consent_at: null, health_consent_version: null },
     });
   });
 
@@ -142,5 +155,18 @@ describe("buildExportFiles", () => {
 
   it("devuelve null si el usuario no existe", async () => {
     expect(await buildExportFiles(athlete.id, repositoryWith(null), NOW)).toBeNull();
+    expect(await buildExportFiles(athlete.id, repositoryWith(athlete, [], null), NOW)).toBeNull();
   });
+
+  it("settings y consents salen con los nombres de la spec; la versión es un entero", async () => {
+    const data = await dataJsonOf(athlete, {
+      ...emptyAccount,
+      settings: { statsPublic: true, notificationsEnabled: false, showOnline: false },
+      consents: { healthConsentAt: new Date("2026-02-01T10:00:00.456Z"), healthConsentVersion: 1 },
+    });
+
+    expect(data.settings).toEqual({ stats_public: true, notifications_enabled: false, show_online: false });
+    expect(data.consents).toEqual({ health_consent_at: "2026-02-01T10:00:00Z", health_consent_version: 1 });
+  });
+
 });

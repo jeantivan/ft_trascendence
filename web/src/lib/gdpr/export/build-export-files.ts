@@ -1,4 +1,7 @@
-import type { SessionOrigin, SessionType } from "@/generated/prisma/client";
+import type {
+  SessionOrigin,
+  SessionType,
+} from "@/generated/prisma/client";
 import { toCsv } from "@/lib/gdpr/export/csv";
 import type { ExportFile } from "@/lib/gdpr/export/write-export-zip";
 
@@ -30,8 +33,18 @@ export type ExportSessionSource = {
   customizesSessionId: string | null;
 };
 
+// The rest of data.json. Nothing of other people is selected: no manager_id, no id, nick or
+// email of a contact, no notification payload (docs/gdpr/export-spec.md, section 3.1).
+export type ExportAccountSource = {
+  settings: { statsPublic: boolean; notificationsEnabled: boolean; showOnline: boolean };
+  consents: { healthConsentAt: Date | null; healthConsentVersion: number | null };
+};
+
 export type ExportUserRepository = {
   findProfile(userId: string): Promise<ExportProfileSource | null>;
+  // Settings, consents and the records tied to the user, read in one transaction so the
+  // blocks agree with each other. null if the user does not exist
+  findAccountData(userId: string): Promise<ExportAccountSource | null>;
   // Sessions of the user: individual ones, those of the groups they belong to, and
   // those of any group where they have a log or where their customized copy comes from
   // (so session_logs.csv and customizes_session_id never point to a missing session),
@@ -44,6 +57,10 @@ function toExportDate(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+function toExportDateOrNull(date: Date | null): string | null {
+  return date === null ? null : toExportDate(date);
+}
+
 export async function buildExportFiles(
   userId: string,
   repository: ExportUserRepository,
@@ -51,6 +68,8 @@ export async function buildExportFiles(
 ): Promise<ExportFile[] | null> {
   const profile = await repository.findProfile(userId);
   if (profile === null) return null;
+  const account = await repository.findAccountData(userId);
+  if (account === null) return null;
   const sessions = await repository.findSessions(userId);
 
   const data = {
@@ -64,6 +83,15 @@ export async function buildExportFiles(
       login_methods: [...(profile.hasPassword ? ["password"] : []), ...profile.providers],
       totp_enabled: profile.totpEnabled,
       email_2fa_enabled: profile.email2faEnabled,
+    },
+    settings: {
+      stats_public: account.settings.statsPublic,
+      notifications_enabled: account.settings.notificationsEnabled,
+      show_online: account.settings.showOnline,
+    },
+    consents: {
+      health_consent_at: toExportDateOrNull(account.consents.healthConsentAt),
+      health_consent_version: account.consents.healthConsentVersion,
     },
   };
   return [

@@ -35,6 +35,36 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
       };
     },
 
+    async findAccountData(userId) {
+      // RepeatableRead: every query sees the same snapshot, so a club left halfway
+      // through the export cannot show up in memberships but not in groups
+      const [user] =
+        await db.$transaction(
+          [
+            db.user.findUnique({
+              where: { id: userId },
+              select: {
+                statsPublic: true,
+                notificationsEnabled: true,
+                showOnline: true,
+                healthConsentAt: true,
+                healthConsentVersion: true,
+              },
+            }),
+          ],
+          { isolationLevel: "RepeatableRead" },
+        );
+      if (user === null) return null;
+      return {
+        settings: {
+          statsPublic: user.statsPublic,
+          notificationsEnabled: user.notificationsEnabled,
+          showOnline: user.showOnline,
+        },
+        consents: { healthConsentAt: user.healthConsentAt, healthConsentVersion: user.healthConsentVersion },
+      };
+    },
+
     async findSessions(userId) {
       return db.trainingSession.findMany({
         where: {
