@@ -298,6 +298,7 @@ describe.each([
     [
       ["an Admin account as Manager", new AdminCannotBeManagerError(), "Ninguna cuenta Admin puede ser Manager de un club"],
       ["a user who is already Manager", new AlreadyManagerError(), "El usuario ya es Manager del club"],
+      ["a club whose deletion is scheduled", new OrganizationDeletionAlreadyScheduledError(), "El club tiene el borrado programado"],
     ],
   ],
   [

@@ -19,6 +19,8 @@ import {
   type OrganizationRepository,
   type OrganizationSummary,
   type ScheduleDeletionResult,
+  DAY_MS,
+  DELETION_NOTICE_DAYS,
 } from "@/lib/org/organization-repository";
 import {
   MEMBERSHIP_ACCEPTED,
@@ -187,8 +189,10 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     const club = this.clubs.get(orgId);
     if (!club) throw new OrganizationNotFoundError();
     if (club.deleteAt !== null) throw new OrganizationDeletionAlreadyScheduledError();
-    const deleteAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const deleteAt = new Date(now.getTime() + DELETION_NOTICE_DAYS * DAY_MS);
     club.deleteAt = deleteAt;
+    // The fake has no user emails, so it never has anyone to mail; the service's email path is
+    // tested with the service's own mail sender
     return { orgId, orgName: club.data.name, deleteAt, memberEmails: [] };
   }
 
@@ -221,6 +225,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     this.assertUserCanJoin(userId);
     const club = this.clubs.get(orgId);
     if (!club) throw new OrganizationNotFoundError();
+    if (club.deleteAt !== null) throw new OrganizationDeletionAlreadyScheduledError();
     if (club.members.has(userId)) throw new AlreadyMemberError();
     const pending = [...this.requests.values()].some(
       (request) => request.orgId === orgId && request.userId === userId && request.status === "pending",

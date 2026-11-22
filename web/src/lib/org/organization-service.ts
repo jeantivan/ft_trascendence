@@ -16,6 +16,7 @@ import {
   type OrganizationRepository,
   type OrganizationSummary,
   type ScheduleDeletionResult,
+  DELETION_NOTICE_DAYS,
 } from "./organization-repository";
 import { PrismaClubExit } from "./club-exit";
 import { createOrganizationSchema, normalizeId, updateOrganizationSchema } from "./schemas";
@@ -130,7 +131,7 @@ export class OrganizationService {
     const subject = `Aviso de borrado del club ${result.orgName}`;
     const text =
       `Hola,\n\n` +
-      `El administrador de StrideSync ha programado el borrado del club "${result.orgName}" para el ${deleteDate} (con 30 días de antelación).\n` +
+      `El administrador de StrideSync ha programado el borrado del club "${result.orgName}" para el ${deleteDate} (UTC), con ${DELETION_NOTICE_DAYS} días de antelación.\n` +
       `Hasta esa fecha puedes descargar tus datos desde tu cuenta.\n`;
 
     const deliveries = await Promise.allSettled(

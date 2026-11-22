@@ -257,17 +257,23 @@ async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): 
   if (users.some((user) => user.is_admin)) throw new AdminCannotBeManagerError();
 }
 
-// Role changes lock the target user, then the club: the order account deletion uses
-// (delete-account.ts), so the two cannot wait on each other. Whatever is read about the
-// membership or the other Managers must be read after this, in a new statement.
-// The user row is taken FOR NO KEY UPDATE, not FOR UPDATE: deleting the last Manager of a club
-// notifies every Admin, and the notification's foreign key needs a KEY SHARE lock on the Admin's
-// row. With FOR UPDATE, an Admin being assigned here (rejected only after its row is locked: row held, waiting for the club the deletion
-// already holds) and that deletion would wait for each other (40P01). FOR NO KEY UPDATE does not
-// conflict with KEY SHARE, and still conflicts with the FOR UPDATE of the user's own deletion.
-// Returns whether the user is an Admin account, read under the lock.
-const DELETION_NOTICE_DAYS = 30;
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DELETION_NOTICE_DAYS = 30;
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Scheduling or cancelling a deletion notifies every member, and each notification's foreign key
+// needs a KEY SHARE lock on the member's row. A concurrent account deletion holds that row FOR
+// UPDATE and then waits for the club, so taking the club first here ends in a deadlock (40P01).
+// So the members' rows go first, in id order, then the club (the same order as lockUserThenClub).
+// FOR NO KEY UPDATE for the reason given there.
+// Known limit: someone who joins between this read and the club lock is not locked; if that user
+// deletes their account at that very moment the deadlock can still happen.
+async function lockMemberUsers(tx: Prisma.TransactionClient, orgId: string): Promise<void> {
+  const members = await tx.membership.findMany({ where: { orgId }, select: { userId: true } });
+  if (members.length === 0) return;
+  await tx.$queryRaw`
+    SELECT id FROM users WHERE id = ANY(${members.map((m) => m.userId)}::uuid[])
+    ORDER BY id FOR NO KEY UPDATE`;
+}
 
 async function lockOrganization(
   tx: Prisma.TransactionClient,
@@ -279,6 +285,15 @@ async function lockOrganization(
   return clubs[0];
 }
 
+// Role changes lock the target user, then the club: the order account deletion uses
+// (delete-account.ts), so the two cannot wait on each other. Whatever is read about the
+// membership or the other Managers must be read after this, in a new statement.
+// The user row is taken FOR NO KEY UPDATE, not FOR UPDATE: deleting the last Manager of a club
+// notifies every Admin, and the notification's foreign key needs a KEY SHARE lock on the Admin's
+// row. With FOR UPDATE, an Admin being assigned here (rejected only after its row is locked: row held, waiting for the club the deletion
+// already holds) and that deletion would wait for each other (40P01). FOR NO KEY UPDATE does not
+// conflict with KEY SHARE, and still conflicts with the FOR UPDATE of the user's own deletion.
+// Returns whether the user is an Admin account, read under the lock.
 async function lockUserThenClub(
   tx: Prisma.TransactionClient,
   orgId: string,
@@ -481,8 +496,13 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
       return await this.db.$transaction(
         async (tx) => {
           await assertUserCanJoin(tx, userId);
-          const club = await tx.organization.findUnique({ where: { id: orgId }, select: { id: true } });
+          const club = await tx.organization.findUnique({ where: { id: orgId }, select: { deleteAt: true } });
           if (!club) throw new OrganizationNotFoundError();
+          // Known limit: deleteAt is read without locking the club. Locking it here and then
+          // notifying the Managers (KEY SHARE on their user rows) is the organizations -> users
+          // order that deadlocks with account deletion. A request created in the instant
+          // scheduleDeletion commits survives its revocation; the purge removes it with the club
+          if (club.deleteAt !== null) throw new OrganizationDeletionAlreadyScheduledError();
           const member = await tx.membership.findUnique({
             where: { userId_orgId: { userId, orgId } },
             select: { userId: true },
@@ -633,6 +653,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     orgId = normalizeId(orgId);
     return this.db.$transaction(
       async (tx) => {
+        await lockMemberUsers(tx, orgId);
         const club = await lockOrganization(tx, orgId);
         if (club.delete_at !== null) {
           throw new OrganizationDeletionAlreadyScheduledError();
@@ -683,6 +704,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     orgId = normalizeId(orgId);
     await this.db.$transaction(
       async (tx) => {
+        await lockMemberUsers(tx, orgId);
         const club = await lockOrganization(tx, orgId);
         if (club.delete_at === null || club.delete_at <= now) {
           throw new OrganizationDeletionNotScheduledError();

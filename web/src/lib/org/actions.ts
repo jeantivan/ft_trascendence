@@ -190,8 +190,9 @@ export async function removeManagerAction(
 }
 
 // Expected errors of assigning or removing a Manager; anything else propagates.
-// Shared, but not all reachable from both: assign throws AdminCannotBeManagerError and
-// AlreadyManagerError, remove throws NotManagerError and LastManagerError
+// Shared, but not all reachable from both: assign throws AdminCannotBeManagerError,
+// AlreadyManagerError and OrganizationDeletionAlreadyScheduledError (a new member during the
+// notice period), remove throws NotManagerError and LastManagerError
 function managerErrorResult(error: unknown): ManagerActionResult {
   if (error instanceof AdminCannotBeManagerError) {
     return { success: false, error: "Ninguna cuenta Admin puede ser Manager de un club" };
@@ -210,6 +211,9 @@ function managerErrorResult(error: unknown): ManagerActionResult {
   }
   if (error instanceof OrganizationNotFoundError) {
     return { success: false, error: "El club ya no existe" };
+  }
+  if (error instanceof OrganizationDeletionAlreadyScheduledError) {
+    return { success: false, error: "El club tiene el borrado programado" };
   }
   throw error;
 }

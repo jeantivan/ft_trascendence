@@ -300,4 +300,31 @@ describe("Organization deletion (Postgres)", () => {
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toBeInstanceOf(OrganizationDeletionAlreadyScheduledError);
   });
+
+  // Both lock the members' rows first, then the club; with the club first they deadlock (40P01)
+  it.each(["scheduleDeletion", "cancelDeletion"] as const)(
+    "%s and a member's account deletion at the same time both finish, with no deadlock",
+    async (operation) => {
+      const admin = await createUser("admin");
+      for (let round = 0; round < 10; round++) {
+        const manager = await createUser();
+        const athlete = await createUser();
+        const orgId = await createClubWithMembers({
+          managers: [manager.id],
+          athletes: [athlete.id],
+          deleteAt: operation === "cancelDeletion" ? new Date(Date.now() + 86_400_000) : null,
+        });
+        const code = await issueDeleteCode(prisma, athlete.id);
+
+        const results = await Promise.allSettled([
+          repository[operation](admin.id, orgId),
+          deleteAccountWithOtp(athlete.id, code, prisma),
+        ]);
+
+        for (const result of results) {
+          if (result.status === "rejected") throw result.reason;
+        }
+      }
+    },
+  );
 });
