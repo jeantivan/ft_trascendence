@@ -1,6 +1,6 @@
 /**
- * Escala de Borg Modificada (Borg CR-10) para esfuerzo percibido (RPE 1-10)
- * y orientación fisiológica (suave 4-5, duro 7-9 según CONTEXT.md).
+ * Modified Borg scale (Borg CR-10) for Rating of Perceived Exertion (RPE 1-10)
+ * and physiological guidance (easy runs 4-5, hard sessions 7-9 per CONTEXT.md).
  */
 export const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 

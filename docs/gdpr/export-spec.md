@@ -155,7 +155,7 @@ uuid-1,true,7,10200,3600,2026-10-01T07:30:00Z,,148,175
 uuid-2,false,5,,600,2026-10-02T18:15:00Z,time_constraints,,
 ```
 
-`incompletion_reason`, `avg_heart_rate_bpm` y `max_heart_rate_bpm` salen de `session_logs.extra` (esquema cerrado `SessionLogExtraSchema` de `#141`, sin texto libre).
+`incompletion_reason`, `avg_heart_rate_bpm` y `max_heart_rate_bpm` salen de `session_logs.extra` (esquema cerrado `sessionLogExtraSchema` de `#141`, sin texto libre).
 
 Tras la purga de datos de salud (`#131`), `rpe`, `avg_heart_rate_bpm` y `max_heart_rate_bpm` quedan vacíos en las filas purgadas: la celda sale vacía (ni `0` ni `null`) y el resto de columnas no cambia.
 

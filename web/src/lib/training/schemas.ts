@@ -57,7 +57,7 @@ export type TrainingTemplateInput = z.infer<typeof trainingTemplateSchema>;
 export type NormalizedTemplateSessionInput =
   TrainingTemplateInput["sessions"][number];
 
-export const IncompletionReasonEnum = z.enum([
+export const incompletionReasonSchema = z.enum([
   "time_constraints",
   "schedule_conflict",
   "route_unavailable",
@@ -65,13 +65,13 @@ export const IncompletionReasonEnum = z.enum([
   "other",
 ]);
 
-export type IncompletionReason = z.infer<typeof IncompletionReasonEnum>;
+export type IncompletionReason = z.infer<typeof incompletionReasonSchema>;
 
 const heartRateBpmSchema = z.number().int().min(30).max(250).optional();
 
-export const SessionLogExtraSchema = z
+export const sessionLogExtraSchema = z
   .object({
-    incompletion_reason: IncompletionReasonEnum.optional(),
+    incompletion_reason: incompletionReasonSchema.optional(),
     avg_heart_rate_bpm: heartRateBpmSchema,
     max_heart_rate_bpm: heartRateBpmSchema,
   })
@@ -87,12 +87,13 @@ export const SessionLogExtraSchema = z
     },
   );
 
-export type SessionLogExtra = z.infer<typeof SessionLogExtraSchema>;
+export type SessionLogExtra = z.infer<typeof sessionLogExtraSchema>;
 
 function isRpeValue(value: number): value is RpeValue {
   return Number.isInteger(value) && value >= 1 && value <= 10;
 }
 
+// Type guard narrows inferred type from number to RpeValue
 export const rpeSchema = z.number().int().min(1).max(10).refine(isRpeValue);
 
 export const sessionLogSchema = z
@@ -101,8 +102,16 @@ export const sessionLogSchema = z
     rpe: rpeSchema.nullable().default(null),
     distanceM: optionalPositiveInt(POSTGRES_INT_MAX),
     durationS: optionalPositiveInt(MAX_DURATION_SECONDS),
-    extra: SessionLogExtraSchema.nullable().default(null),
+    extra: sessionLogExtraSchema.nullable().default(null),
   })
-  .strict();
+  .strict()
+  .refine(
+    (log) => !(log.completed && log.extra?.incompletion_reason !== undefined),
+    {
+      message:
+        "Una sesión completada no puede incluir un motivo de no finalización",
+      path: ["extra", "incompletion_reason"],
+    },
+  );
 
 export type SessionLogInput = z.infer<typeof sessionLogSchema>;
