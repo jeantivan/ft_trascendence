@@ -20,12 +20,8 @@ const testUser = {
 };
 const OTHER_USER_ID = "00000000-0000-0000-0000-000000000002";
 
-// Needs a real Postgres (LISTEN/NOTIFY): skipped locally without DATABASE_URL_TEST (#83),
-// but CI must always run it, so a missing test database fails there.
-const hasDatabase = Boolean(process.env.DATABASE_URL_TEST);
-if (!hasDatabase && process.env.CI) {
-  throw new Error("DATABASE_URL_TEST is required in CI for the realtime integration test");
-}
+// Needs a real Postgres (LISTEN/NOTIFY): the .db.test.ts name lets vitest.config.mts
+// skip it without DATABASE_URL_TEST and fail in CI without it (#83).
 
 async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, expected: string) {
   const decoder = new TextDecoder();
@@ -40,7 +36,7 @@ async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, expect
   return received;
 }
 
-describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
+describe("Integration: realtime events", () => {
   beforeEach(() => {
     vi.mocked(requireApiAuth).mockResolvedValue(testUser);
   });
@@ -87,7 +83,7 @@ describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
     // NOTIFYs arrive in commit order: if the rolled-back one had been sent,
     // it would show up before this one.
     await prisma.$transaction(async (tx) => {
-      await publish(tx, "test", {id: "after" });
+      await publish(tx, "test", { id: "after" });
     });
     const received = await readUntil(reader, '{"id":"after"}');
     expect(received).not.toContain("rolled-back");
@@ -149,7 +145,7 @@ describe.skipIf(!hasDatabase)("Integration: realtime events", () => {
   });
   it("answers 401 without opening a stream when requireApiAuth rejects", async () => {
     vi.mocked(requireApiAuth).mockResolvedValue(
-      Response.json({ error: "Unauthorized" }, {status: 401 }),
+      Response.json({ error: "Unauthorized" }, { status: 401 }),
     );
 
     const response = await GET(new Request("http://localhost/api/events"));
