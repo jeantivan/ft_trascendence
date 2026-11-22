@@ -259,11 +259,12 @@ export function isNameViolation(error: unknown): boolean {
 // deletion's FOR UPDATE, but not with the KEY SHARE that a foreign key check takes (see
 // lockUserThenClub).
 async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): Promise<void> {
-  const users = await tx.$queryRaw<{ id: string; is_admin: boolean }[]>`
-    SELECT id, role_global = 'admin' AS is_admin FROM users
+  const users = await tx.$queryRaw<{ id: string; is_admin: boolean; is_blocked: boolean }[]>`
+    SELECT id, role_global = 'admin' AS is_admin, blocked_at IS NOT NULL AS is_blocked FROM users
     WHERE id = ANY(${userIds}::uuid[]) ORDER BY id FOR NO KEY UPDATE`;
   if (users.length !== userIds.length) throw new UserNotFoundError();
   if (users.some((user) => user.is_admin)) throw new AdminCannotBeManagerError();
+  if (users.some((user) => user.is_blocked)) throw new BlockedAccountError();
 }
 
 export const DELETION_NOTICE_DAYS = 30;
@@ -302,17 +303,18 @@ async function lockOrganization(
 // row. With FOR UPDATE, an Admin being assigned here (rejected only after its row is locked: row held, waiting for the club the deletion
 // already holds) and that deletion would wait for each other (40P01). FOR NO KEY UPDATE does not
 // conflict with KEY SHARE, and still conflicts with the FOR UPDATE of the user's own deletion.
-// Returns whether the user is an Admin account, read under the lock.
+// Returns whether the user is an Admin account and whether it is blocked, read under the lock.
 async function lockUserThenClub(
   tx: Prisma.TransactionClient,
   orgId: string,
   userId: string,
-): Promise<{ isAdmin: boolean; clubDeleteAt: Date | null }> {
-  const users = await tx.$queryRaw<{ is_admin: boolean }[]>`
-    SELECT role_global = 'admin' AS is_admin FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+): Promise<{ isAdmin: boolean; isBlocked: boolean; clubDeleteAt: Date | null }> {
+  const users = await tx.$queryRaw<{ is_admin: boolean; is_blocked: boolean }[]>`
+    SELECT role_global = 'admin' AS is_admin, blocked_at IS NOT NULL AS is_blocked
+    FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
   if (users.length === 0) throw new UserNotFoundError();
   const club = await lockOrganization(tx, orgId);
-  return { isAdmin: users[0].is_admin, clubDeleteAt: club.delete_at };
+  return { isAdmin: users[0].is_admin, isBlocked: users[0].is_blocked, clubDeleteAt: club.delete_at };
 }
 
 // The partial unique index on (org_id, user_id) WHERE status = 'pending' (exported for its test)
@@ -416,8 +418,9 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     userId = normalizeId(userId);
     await this.db.$transaction(
       async (tx) => {
-        const { isAdmin, clubDeleteAt } = await lockUserThenClub(tx, orgId, userId);
+        const { isAdmin, isBlocked, clubDeleteAt } = await lockUserThenClub(tx, orgId, userId);
         if (isAdmin) throw new AdminCannotBeManagerError();
+        if (isBlocked) throw new BlockedAccountError();
         const membership = await tx.membership.findUnique({
           where: { userId_orgId: { userId, orgId } },
           select: { role: true },
@@ -457,7 +460,8 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
         });
         if (membership?.role !== "manager") throw new NotManagerError();
         const otherManagers = await tx.membership.count({
-          where: { orgId, role: "manager", userId: { not: userId } },
+          // Only active Managers count: a blocked account cannot act as one (#264)
+          where: { orgId, role: "manager", userId: { not: userId }, user: { blockedAt: null } },
         });
         if (otherManagers === 0) throw new LastManagerError();
         await tx.membership.update({

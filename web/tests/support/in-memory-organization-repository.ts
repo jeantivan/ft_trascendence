@@ -3,6 +3,7 @@ import {
   AdminCannotBeManagerError,
   AlreadyManagerError,
   AlreadyMemberError,
+  BlockedAccountError,
   LastManagerError,
   MembershipRequestNotFoundError,
   MembershipRequestNotPendingError,
@@ -128,6 +129,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     // Like the database: a Manager that does not exist stops the creation, nothing is created
     if (managerIds.some((userId) => !this.users.has(userId))) throw new UserNotFoundError();
     if (managerIds.some((userId) => this.admins.has(userId))) throw new AdminCannotBeManagerError();
+    if (managerIds.some((userId) => this.blocked.has(userId))) throw new BlockedAccountError();
     // Like the unique index on organizations.name
     if ([...this.clubs.values()].some((club) => club.data.name === input.name)) {
       throw new OrganizationNameTakenError();
@@ -158,6 +160,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     const members = this.memberRoles(orgId, userId);
     const club = this.clubs.get(orgId);
     if (this.admins.has(userId)) throw new AdminCannotBeManagerError();
+    if (this.blocked.has(userId)) throw new BlockedAccountError();
     if (members.get(userId) === "manager") throw new AlreadyManagerError();
     if (!members.has(userId) && club && club.deleteAt !== null) {
       throw new OrganizationDeletionAlreadyScheduledError();
@@ -170,7 +173,10 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     userId = normalizeId(userId);
     const members = this.memberRoles(orgId, userId);
     if (members.get(userId) !== "manager") throw new NotManagerError();
-    if ((await this.listManagerIds(orgId)).length === 1) throw new LastManagerError();
+    const activeOthers = (await this.listManagerIds(orgId)).filter(
+      (id) => id !== userId && !this.blocked.has(id),
+    );
+    if (activeOthers.length === 0) throw new LastManagerError();
     members.set(userId, "athlete");
   }
 
