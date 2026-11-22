@@ -37,6 +37,15 @@ export class AdminCannotBeManagerError extends Error {
   }
 }
 
+// A blocked account cannot be made Manager. Not UserNotFoundError: the Admin may see that the
+// account exists (blocked is their own action, #102), unlike a user acting on someone else's
+export class BlockedAccountError extends Error {
+  constructor(message = "A blocked account cannot be made Manager of a club") {
+    super(message);
+    this.name = "BlockedAccountError";
+  }
+}
+
 export class AlreadyManagerError extends Error {
   constructor(message = "The user is already a Manager of the club") {
     super(message);
