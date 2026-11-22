@@ -41,7 +41,10 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
           OR: [
             { athleteId: userId },
             { group: { members: { some: { userId } } } },
-            { logs: { some: { athleteId: userId } } },
+            // Group sessions only: another athlete's individual session is never hers
+            { athleteId: null, logs: { some: { athleteId: userId } } },
+            // The group session her customized copy modifies, even if she left the group
+            { customizations: { some: { athleteId: userId } } },
           ],
         },
         select: {

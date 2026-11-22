@@ -55,7 +55,7 @@ describe("toCsv", () => {
     );
   });
 
-  it("entrecomilla el texto que empieza por tabulador o retorno de carro tras neutralizarlo", () => {
+  it("neutraliza el tabulador y entrecomilla el retorno de carro", () => {
     expect(toCsv(["body"], [["\tcmd"]])).toBe("body\r\n'\tcmd\r\n");
     expect(toCsv(["body"], [["\rcmd"]])).toBe('body\r\n"\'\rcmd"\r\n');
   });

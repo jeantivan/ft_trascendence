@@ -1,3 +1,4 @@
+import type { SessionOrigin, SessionType } from "@/generated/prisma/client";
 import { toCsv } from "@/lib/gdpr/export/csv";
 import type { ExportFile } from "@/lib/gdpr/export/write-export-zip";
 
@@ -19,8 +20,8 @@ export type ExportProfileSource = {
 export type ExportSessionSource = {
   id: string;
   orgId: string;
-  origin: "template" | "customized" | "free";
-  sessionType: "rodaje" | "intervalos" | "cuestas" | "tirada_larga" | "fartlek";
+  origin: SessionOrigin;
+  sessionType: SessionType;
   targetDistanceM: number | null;
   targetPaceSPerKm: number | null;
   targetDurationS: number | null;
@@ -32,8 +33,9 @@ export type ExportSessionSource = {
 export type ExportUserRepository = {
   findProfile(userId: string): Promise<ExportProfileSource | null>;
   // Sessions of the user: individual ones, those of the groups they belong to, and
-  // those of any group where they have a log (so session_logs.csv never points to a
-  // missing session), ordered by date
+  // those of any group where they have a log or where their customized copy comes from
+  // (so session_logs.csv and customizes_session_id never point to a missing session),
+  // ordered by date
   findSessions(userId: string): Promise<ExportSessionSource[]>;
 };
 

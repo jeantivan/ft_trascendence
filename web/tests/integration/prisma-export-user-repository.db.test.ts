@@ -141,6 +141,40 @@ describe("Integration: createPrismaExportUserRepository", () => {
       expect(sessions.find((session) => session.id === copy.id)?.customizesSessionId).toBe(groupSession.id);
     });
 
+    it("devuelve la sesión original de su copia aunque haya dejado el grupo", async () => {
+      const { user, org, currentGroup } = await createFixture();
+      const groupSession = await prisma.trainingSession.create({
+        data: { ...base, orgId: org.id, groupId: currentGroup.id, scheduledAt: new Date("2026-11-10T08:00:00.000Z") },
+      });
+      const copy = await prisma.trainingSession.create({
+        data: {
+          orgId: org.id,
+          origin: "customized",
+          sessionType: "rodaje",
+          athleteId: user.id,
+          customizesSessionId: groupSession.id,
+          scheduledAt: new Date("2026-11-10T08:00:00.000Z"),
+        },
+      });
+      await prisma.groupMember.deleteMany({ where: { groupId: currentGroup.id, userId: user.id } });
+
+      const sessions = await repository.findSessions(user.id);
+
+      expect(sessions.map((session) => session.id).sort()).toEqual([groupSession.id, copy.id].sort());
+    });
+
+    it("no devuelve la sesión individual de otro atleta aunque tenga un registro suyo", async () => {
+      const { user, other, org } = await createFixture();
+      const othersSession = await prisma.trainingSession.create({
+        data: { ...base, orgId: org.id, athleteId: other.id, scheduledAt: new Date("2026-11-10T08:00:00.000Z") },
+      });
+      await prisma.sessionLog.create({
+        data: { sessionId: othersSession.id, athleteId: user.id, completed: true, performedAt: new Date("2026-11-10T09:00:00.000Z") },
+      });
+
+      await expect(repository.findSessions(user.id)).resolves.toEqual([]);
+    });
+
     it("devuelve una lista vacía si no tiene sesiones", async () => {
       const { user } = await createFixture();
 
