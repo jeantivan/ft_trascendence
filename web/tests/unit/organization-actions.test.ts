@@ -580,6 +580,15 @@ describe("invitation and request actions", () => {
     });
   });
 
+  it("inviteUserAction and requestToJoinAction answer with a message during the deletion notice period", async () => {
+    inviteUser.mockRejectedValueOnce(new OrganizationDeletionAlreadyScheduledError());
+    requestToJoin.mockRejectedValueOnce(new OrganizationDeletionAlreadyScheduledError());
+    const scheduled = { success: false, error: "El club tiene el borrado programado" };
+
+    await expect(inviteUserAction(ORG_ID, undefined, formWith({ userId: USER_ID }))).resolves.toEqual(scheduled);
+    await expect(requestToJoinAction(ORG_ID)).resolves.toEqual(scheduled);
+  });
+
   it("an unexpected error propagates", async () => {
     answerInvitation.mockRejectedValue(new Error("database down"));
 

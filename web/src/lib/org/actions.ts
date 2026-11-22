@@ -309,6 +309,10 @@ function membershipRequestErrorResult(error: unknown, own: boolean): MembershipR
   if (error instanceof OrganizationNotFoundError) {
     return { success: false, error: "El club ya no existe" };
   }
+  // The notice period of a scheduled deletion accepts no new invitations or requests
+  if (error instanceof OrganizationDeletionAlreadyScheduledError) {
+    return { success: false, error: "El club tiene el borrado programado" };
+  }
   throw error;
 }
 
