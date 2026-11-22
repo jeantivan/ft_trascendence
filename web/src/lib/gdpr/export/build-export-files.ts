@@ -2,6 +2,7 @@ import type {
   MembershipRole,
   SessionOrigin,
   SessionType,
+  SpotRequestStatus,
 } from "@/generated/prisma/client";
 import { toCsv } from "@/lib/gdpr/export/csv";
 import type { ExportFile } from "@/lib/gdpr/export/write-export-zip";
@@ -41,6 +42,16 @@ export type ExportAccountSource = {
   consents: { healthConsentAt: Date | null; healthConsentVersion: number | null };
   memberships: { orgId: string; orgName: string; role: MembershipRole; joinedAt: Date }[];
   groups: { groupId: string; orgId: string; name: string; level: string | null; objective: string | null }[];
+  // Every Event she asked a spot for, whatever the status of the request
+  events: {
+    eventId: string;
+    orgId: string;
+    title: string;
+    location: string;
+    startsAt: Date;
+    yourStatus: SpotRequestStatus;
+    requestedAt: Date;
+  }[];
 };
 
 export type ExportUserRepository = {
@@ -108,6 +119,15 @@ export async function buildExportFiles(
       name: group.name,
       level: group.level,
       objective: group.objective,
+    })),
+    events: account.events.map((event) => ({
+      event_id: event.eventId,
+      org_id: event.orgId,
+      title: event.title,
+      location: event.location,
+      starts_at: toExportDate(event.startsAt),
+      your_status: event.yourStatus,
+      requested_at: toExportDate(event.requestedAt),
     })),
   };
   return [

@@ -15,6 +15,7 @@ const emptyAccount: ExportAccountSource = {
   consents: { healthConsentAt: null, healthConsentVersion: null },
   memberships: [],
   groups: [],
+  events: [],
 };
 
 function repositoryWith(
@@ -83,6 +84,7 @@ describe("buildExportFiles", () => {
       consents: { health_consent_at: null, health_consent_version: null },
       memberships: [],
       groups: [],
+      events: [],
     });
   });
 
@@ -192,6 +194,35 @@ describe("buildExportFiles", () => {
 
     expect(data.groups).toEqual([
       { group_id: "group-1", org_id: "org-1", name: "Grupo maratón", level: null, objective: "maratón" },
+    ]);
+  });
+
+  it("events lleva el estado de su petición y las fechas en UTC", async () => {
+    const data = await dataJsonOf(athlete, {
+      ...emptyAccount,
+      events: [
+        {
+          eventId: "event-1",
+          orgId: "org-1",
+          title: "Rodaje grupal",
+          location: "Retiro",
+          startsAt: new Date("2026-10-05T08:00:00.000Z"),
+          yourStatus: "withdrawn",
+          requestedAt: new Date("2026-10-01T09:00:00.000Z"),
+        },
+      ],
+    });
+
+    expect(data.events).toEqual([
+      {
+        event_id: "event-1",
+        org_id: "org-1",
+        title: "Rodaje grupal",
+        location: "Retiro",
+        starts_at: "2026-10-05T08:00:00Z",
+        your_status: "withdrawn",
+        requested_at: "2026-10-01T09:00:00Z",
+      },
     ]);
   });
 

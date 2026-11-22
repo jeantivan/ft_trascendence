@@ -122,6 +122,35 @@ describe("Integration: createPrismaExportUserRepository", () => {
       expect(data?.consents).toEqual({ healthConsentAt: null, healthConsentVersion: null });
     });
 
+    it("devuelve los Events con plaza pedida en cualquier estado, también cancelados", async () => {
+      const { user, other, org } = await createFixture();
+      const makeEvent = (title: string, day: number, cancelledAt: Date | null = null) =>
+        prisma.event.create({
+          data: { orgId: org.id, title, location: "Retiro", startsAt: at(day), cancelledAt },
+        });
+      const first = await makeEvent("first", 10);
+      const second = await makeEvent("second", 11, at(5));
+      const notRequested = await makeEvent("not-requested", 12);
+      await prisma.spotRequest.create({ data: { eventId: second.id, userId: user.id, status: "withdrawn", createdAt: at(3) } });
+      await prisma.spotRequest.create({ data: { eventId: first.id, userId: user.id, status: "approved", createdAt: at(4) } });
+      await prisma.spotRequest.create({ data: { eventId: notRequested.id, userId: other.id } });
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data?.events).toEqual([
+        {
+          eventId: first.id,
+          orgId: org.id,
+          title: "first",
+          location: "Retiro",
+          startsAt: at(10),
+          yourStatus: "approved",
+          requestedAt: at(4),
+        },
+        expect.objectContaining({ eventId: second.id, yourStatus: "withdrawn", requestedAt: at(3) }),
+      ]);
+    });
+
     it("devuelve null si el usuario no existe", async () => {
       await expect(repository.findAccountData("00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
     });
