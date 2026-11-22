@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { Prisma } from "@/generated/prisma/client";
+import { normalizeId } from "@/lib/org/schemas";
 import {
   trainingTemplateSchema,
   templateSessionSchema,
@@ -38,6 +40,8 @@ export class TrainingService {
     private readonly notifier?: TrainingNotify
   ) {}
 
+  // Re-checked here even when Server Actions call requireOrgRole, so the service enforces
+  // club membership and role independently in unit tests and non-action callers.
   private async assertRole(orgId: string, actorId: string): Promise<"manager" | "athlete"> {
     const role = await this.repo.findRole(orgId, actorId);
     if (!role) {
@@ -51,7 +55,7 @@ export class TrainingService {
     actorId: string,
     templateId: string,
     type: TrainingNotificationType,
-    tx: unknown
+    tx: Prisma.TransactionClient
   ): Promise<void> {
     if (!this.notifier) {
       return;
@@ -71,11 +75,13 @@ export class TrainingService {
   }
 
   async listTemplates(actorId: string, orgId: string): Promise<TrainingTemplateData[]> {
-    const role = await this.assertRole(orgId, actorId);
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
     if (role === "manager") {
-      return this.repo.listForManager(orgId);
+      return this.repo.listForManager(normalizedOrgId);
     }
-    return this.repo.listForAthlete(orgId, actorId);
+    return this.repo.listForAthlete(normalizedOrgId, normalizedActorId);
   }
 
   async getTemplate(
@@ -83,15 +89,24 @@ export class TrainingService {
     orgId: string,
     templateId: string
   ): Promise<TrainingTemplateData> {
-    const role = await this.assertRole(orgId, actorId);
-    const template = await this.repo.findById(templateId);
-    if (!template || template.orgId !== orgId) {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedTemplateId = normalizeId(templateId);
+
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    const template = await this.repo.findById(normalizedTemplateId);
+    if (!template || normalizeId(template.orgId) !== normalizedOrgId) {
       throw new TrainingNotFoundError();
     }
 
     if (role === "athlete") {
-      const visibleTemplates = await this.repo.listForAthlete(orgId, actorId);
-      const isVisible = visibleTemplates.some((t) => t.id === templateId);
+      const visibleTemplates = await this.repo.listForAthlete(
+        normalizedOrgId,
+        normalizedActorId
+      );
+      const isVisible = visibleTemplates.some(
+        (t) => normalizeId(t.id) === normalizedTemplateId
+      );
       if (!isVisible) {
         throw new TrainingNotFoundError();
       }
@@ -105,7 +120,9 @@ export class TrainingService {
     orgId: string,
     input: unknown
   ): Promise<TrainingTemplateData> {
-    const role = await this.assertRole(orgId, actorId);
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
     if (role !== "manager") {
       throw new TrainingForbiddenError();
     }
@@ -118,15 +135,15 @@ export class TrainingService {
 
     return this.repo.create(
       {
-        orgId,
+        orgId: normalizedOrgId,
         name: parseResult.data.name,
-        createdBy: actorId,
+        createdBy: normalizedActorId,
         sessions: parseResult.data.sessions,
       },
       (createdId, tx) =>
         this.notifyOtherManagers(
-          orgId,
-          actorId,
+          normalizedOrgId,
+          normalizedActorId,
           createdId,
           TRAINING_TEMPLATE_CREATED,
           tx
@@ -140,14 +157,13 @@ export class TrainingService {
     templateId: string,
     input: unknown
   ): Promise<TrainingTemplateData> {
-    const role = await this.assertRole(orgId, actorId);
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedTemplateId = normalizeId(templateId);
+
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
     if (role !== "manager") {
       throw new TrainingForbiddenError();
-    }
-
-    const existing = await this.repo.findById(templateId);
-    if (!existing || existing.orgId !== orgId) {
-      throw new TrainingNotFoundError();
     }
 
     const parseResult = updateTrainingTemplateSchema.safeParse(input);
@@ -156,16 +172,18 @@ export class TrainingService {
       throw new TrainingValidationError(message);
     }
 
+    // Existence and org ownership are checked inside repo.update under the row lock (FOR UPDATE).
     return this.repo.update(
-      templateId,
+      normalizedOrgId,
+      normalizedTemplateId,
       {
         name: parseResult.data.name,
         sessions: parseResult.data.sessions,
       },
       (updatedId, tx) =>
         this.notifyOtherManagers(
-          orgId,
-          actorId,
+          normalizedOrgId,
+          normalizedActorId,
           updatedId,
           TRAINING_TEMPLATE_UPDATED,
           tx
@@ -178,20 +196,20 @@ export class TrainingService {
     orgId: string,
     templateId: string
   ): Promise<void> {
-    const role = await this.assertRole(orgId, actorId);
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedTemplateId = normalizeId(templateId);
+
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
     if (role !== "manager") {
       throw new TrainingForbiddenError();
     }
 
-    const existing = await this.repo.findById(templateId);
-    if (!existing || existing.orgId !== orgId) {
-      throw new TrainingNotFoundError();
-    }
-
-    await this.repo.delete(templateId, (deletedId, tx) =>
+    // Existence and org ownership are checked inside repo.delete under the row lock (FOR UPDATE).
+    await this.repo.delete(normalizedOrgId, normalizedTemplateId, (deletedId, tx) =>
       this.notifyOtherManagers(
-        orgId,
-        actorId,
+        normalizedOrgId,
+        normalizedActorId,
         deletedId,
         TRAINING_TEMPLATE_DELETED,
         tx

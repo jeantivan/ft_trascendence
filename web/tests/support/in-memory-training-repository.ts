@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { MembershipRole } from "@/generated/prisma/client";
+import type { MembershipRole, Prisma } from "@/generated/prisma/client";
+import { normalizeId } from "@/lib/org/schemas";
+import { TrainingNotFoundError } from "@/lib/training/errors";
 import type {
   TrainingRepository,
   TrainingTemplateData,
@@ -9,7 +11,9 @@ import type {
   TrainingMutationCallback,
 } from "@/lib/training/types";
 
-export const IN_MEMORY_TX_TOKEN = Symbol("in-memory-tx");
+export const IN_MEMORY_TX_TOKEN = Symbol(
+  "in-memory-tx"
+) as unknown as Prisma.TransactionClient;
 
 export class InMemoryTrainingRepository implements TrainingRepository {
   private templates: Map<string, TrainingTemplateData> = new Map();
@@ -26,46 +30,61 @@ export class InMemoryTrainingRepository implements TrainingRepository {
   }> = [];
 
   addMember(orgId: string, userId: string, role: MembershipRole): void {
-    this.memberships.set(`${orgId}:${userId}`, role);
+    this.memberships.set(`${normalizeId(orgId)}:${normalizeId(userId)}`, role);
   }
 
   addAthleteToGroup(athleteId: string, groupId: string): void {
-    const groups = this.athleteGroups.get(athleteId) ?? new Set();
-    groups.add(groupId);
-    this.athleteGroups.set(athleteId, groups);
+    const normalizedAthleteId = normalizeId(athleteId);
+    const groups = this.athleteGroups.get(normalizedAthleteId) ?? new Set();
+    groups.add(normalizeId(groupId));
+    this.athleteGroups.set(normalizedAthleteId, groups);
   }
 
   assignTemplateToGroup(groupId: string, templateId: string): void {
-    const templates = this.groupTemplates.get(groupId) ?? new Set();
-    templates.add(templateId);
-    this.groupTemplates.set(groupId, templates);
-    const template = this.templates.get(templateId);
+    const normalizedGroupId = normalizeId(groupId);
+    const normalizedTemplateId = normalizeId(templateId);
+    const templates = this.groupTemplates.get(normalizedGroupId) ?? new Set();
+    templates.add(normalizedTemplateId);
+    this.groupTemplates.set(normalizedGroupId, templates);
+    const template = this.templates.get(normalizedTemplateId);
     if (template && template.sessions.length > 0) {
       for (const s of template.sessions) {
         this.copiedSessions.push({
           id: randomUUID(),
-          sourceTemplateId: templateId,
-          groupId,
+          sourceTemplateId: normalizedTemplateId,
+          groupId: normalizedGroupId,
           sessionType: s.sessionType,
           dayOffset: s.dayOffset,
           targetDistanceM: s.targetDistanceM ?? null,
         });
       }
     } else {
-      this.copiedSessions.push({ id: randomUUID(), sourceTemplateId: templateId, groupId });
+      this.copiedSessions.push({
+        id: randomUUID(),
+        sourceTemplateId: normalizedTemplateId,
+        groupId: normalizedGroupId,
+      });
     }
   }
 
   async findRole(orgId: string, userId: string): Promise<MembershipRole | null> {
-    return this.memberships.get(`${orgId}:${userId}`) ?? null;
+    return (
+      this.memberships.get(`${normalizeId(orgId)}:${normalizeId(userId)}`) ??
+      null
+    );
   }
 
-  async findOtherManagerIds(orgId: string, excludeUserId: string): Promise<string[]> {
+  async findOtherManagerIds(
+    orgId: string,
+    excludeUserId: string
+  ): Promise<string[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedExcludeId = normalizeId(excludeUserId);
     const managers: string[] = [];
     for (const [key, role] of this.memberships.entries()) {
       if (role === "manager") {
         const [mOrgId, mUserId] = key.split(":");
-        if (mOrgId === orgId && mUserId !== excludeUserId) {
+        if (mOrgId === normalizedOrgId && mUserId !== normalizedExcludeId) {
           managers.push(mUserId);
         }
       }
@@ -74,7 +93,7 @@ export class InMemoryTrainingRepository implements TrainingRepository {
   }
 
   async findById(id: string): Promise<TrainingTemplateData | null> {
-    const template = this.templates.get(id);
+    const template = this.templates.get(normalizeId(id));
     if (!template) return null;
     return {
       ...template,
@@ -83,20 +102,23 @@ export class InMemoryTrainingRepository implements TrainingRepository {
   }
 
   async listForManager(orgId: string): Promise<TrainingTemplateData[]> {
+    const normalizedOrgId = normalizeId(orgId);
     const list: TrainingTemplateData[] = [];
     for (const template of this.templates.values()) {
-      if (template.orgId === orgId) {
+      if (template.orgId === normalizedOrgId) {
         list.push({
           ...template,
           sessions: [...template.sessions].sort((a, b) => a.position - b.position),
         });
       }
     }
-    return list;
+    return list.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async listForAthlete(orgId: string, athleteId: string): Promise<TrainingTemplateData[]> {
-    const athleteGroups = this.athleteGroups.get(athleteId) ?? new Set();
+    const normalizedOrgId = normalizeId(orgId);
+    const athleteGroups =
+      this.athleteGroups.get(normalizeId(athleteId)) ?? new Set();
     const visibleTemplateIds = new Set<string>();
     for (const groupId of athleteGroups) {
       const templates = this.groupTemplates.get(groupId);
@@ -109,14 +131,17 @@ export class InMemoryTrainingRepository implements TrainingRepository {
 
     const list: TrainingTemplateData[] = [];
     for (const template of this.templates.values()) {
-      if (template.orgId === orgId && visibleTemplateIds.has(template.id)) {
+      if (
+        template.orgId === normalizedOrgId &&
+        visibleTemplateIds.has(template.id)
+      ) {
         list.push({
           ...template,
           sessions: [...template.sessions].sort((a, b) => a.position - b.position),
         });
       }
     }
-    return list;
+    return list.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async create(
@@ -130,9 +155,9 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     }));
     const record: TrainingTemplateData = {
       id,
-      orgId: input.orgId,
+      orgId: normalizeId(input.orgId),
       name: input.name,
-      createdBy: input.createdBy,
+      createdBy: normalizeId(input.createdBy),
       sessions,
     };
     this.templates.set(id, record);
@@ -146,13 +171,16 @@ export class InMemoryTrainingRepository implements TrainingRepository {
   }
 
   async update(
+    orgId: string,
     id: string,
     input: UpdateTrainingTemplateInput,
     afterWrite?: TrainingMutationCallback
   ): Promise<TrainingTemplateData> {
-    const existing = this.templates.get(id);
-    if (!existing) {
-      throw new Error(`Template not found: ${id}`);
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedId = normalizeId(id);
+    const existing = this.templates.get(normalizedId);
+    if (!existing || existing.orgId !== normalizedOrgId) {
+      throw new TrainingNotFoundError();
     }
     const name = input.name ?? existing.name;
     const sessions: TemplateSessionData[] = input.sessions
@@ -164,34 +192,41 @@ export class InMemoryTrainingRepository implements TrainingRepository {
       name,
       sessions,
     };
-    this.templates.set(id, updated);
+    this.templates.set(normalizedId, updated);
     try {
-      await afterWrite?.(id, IN_MEMORY_TX_TOKEN);
+      await afterWrite?.(normalizedId, IN_MEMORY_TX_TOKEN);
     } catch (error) {
-      this.templates.set(id, existing);
+      this.templates.set(normalizedId, existing);
       throw error;
     }
     return { ...updated };
   }
 
-  async delete(id: string, afterWrite?: TrainingMutationCallback): Promise<void> {
-    const existing = this.templates.get(id);
+  async delete(
+    orgId: string,
+    id: string,
+    afterWrite?: TrainingMutationCallback
+  ): Promise<void> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedId = normalizeId(id);
+    const existing = this.templates.get(normalizedId);
+    if (!existing || existing.orgId !== normalizedOrgId) {
+      throw new TrainingNotFoundError();
+    }
     const affectedSessionIndices: number[] = [];
-    this.templates.delete(id);
+    this.templates.delete(normalizedId);
     this.copiedSessions.forEach((session, idx) => {
-      if (session.sourceTemplateId === id) {
+      if (session.sourceTemplateId === normalizedId) {
         affectedSessionIndices.push(idx);
         session.sourceTemplateId = null;
       }
     });
     try {
-      await afterWrite?.(id, IN_MEMORY_TX_TOKEN);
+      await afterWrite?.(normalizedId, IN_MEMORY_TX_TOKEN);
     } catch (error) {
-      if (existing) {
-        this.templates.set(id, existing);
-      }
+      this.templates.set(normalizedId, existing);
       for (const idx of affectedSessionIndices) {
-        this.copiedSessions[idx].sourceTemplateId = id;
+        this.copiedSessions[idx].sourceTemplateId = normalizedId;
       }
       throw error;
     }

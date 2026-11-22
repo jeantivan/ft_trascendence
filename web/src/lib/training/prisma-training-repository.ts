@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { isDbId } from "@/lib/permissions/is-db-id";
+import { normalizeId } from "@/lib/org/schemas";
 import type {
   Prisma,
   PrismaClient,
   MembershipRole,
   SessionType,
 } from "@/generated/prisma/client";
+import { TrainingNotFoundError } from "./errors";
 import type {
   TrainingRepository,
   TrainingTemplateData,
@@ -46,6 +48,24 @@ function toTemplateData(template: PrismaTemplateWithSessions): TrainingTemplateD
   };
 }
 
+// Locks the template row inside the transaction (like a row-level mutex) so concurrent
+// updates or deletes serialize instead of hitting P2002, P2003, or P2025 under READ COMMITTED.
+async function lockTemplateForUpdate(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  id: string
+): Promise<void> {
+  if (!isDbId(orgId) || !isDbId(id)) {
+    throw new TrainingNotFoundError();
+  }
+  const rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+    SELECT id, org_id FROM training_templates WHERE id = ${normalizeId(id)}::uuid FOR UPDATE
+  `;
+  if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
+    throw new TrainingNotFoundError();
+  }
+}
+
 export class PrismaTrainingRepository implements TrainingRepository {
   constructor(private readonly db: PrismaClient = prisma) {}
 
@@ -54,7 +74,12 @@ export class PrismaTrainingRepository implements TrainingRepository {
       return null;
     }
     const membership = await this.db.membership.findUnique({
-      where: { userId_orgId: { userId, orgId } },
+      where: {
+        userId_orgId: {
+          userId: normalizeId(userId),
+          orgId: normalizeId(orgId),
+        },
+      },
       select: { role: true },
     });
     return membership?.role ?? null;
@@ -63,14 +88,17 @@ export class PrismaTrainingRepository implements TrainingRepository {
   async findOtherManagerIds(
     orgId: string,
     excludeUserId: string,
-    tx?: unknown
+    tx?: Prisma.TransactionClient
   ): Promise<string[]> {
-    const client = (tx as Prisma.TransactionClient | undefined) ?? this.db;
+    if (!isDbId(orgId) || !isDbId(excludeUserId)) {
+      return [];
+    }
+    const client = tx ?? this.db;
     const managers = await client.membership.findMany({
       where: {
-        orgId,
+        orgId: normalizeId(orgId),
         role: "manager",
-        userId: { not: excludeUserId },
+        userId: { not: normalizeId(excludeUserId) },
       },
       select: { userId: true },
     });
@@ -82,7 +110,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
       return null;
     }
     const template = await this.db.trainingTemplate.findUnique({
-      where: { id },
+      where: { id: normalizeId(id) },
       include: {
         sessions: {
           orderBy: { position: "asc" },
@@ -95,8 +123,11 @@ export class PrismaTrainingRepository implements TrainingRepository {
   }
 
   async listForManager(orgId: string): Promise<TrainingTemplateData[]> {
+    if (!isDbId(orgId)) {
+      return [];
+    }
     const templates = await this.db.trainingTemplate.findMany({
-      where: { orgId },
+      where: { orgId: normalizeId(orgId) },
       include: {
         sessions: {
           orderBy: { position: "asc" },
@@ -109,15 +140,18 @@ export class PrismaTrainingRepository implements TrainingRepository {
   }
 
   async listForAthlete(orgId: string, athleteId: string): Promise<TrainingTemplateData[]> {
+    if (!isDbId(orgId) || !isDbId(athleteId)) {
+      return [];
+    }
     const templates = await this.db.trainingTemplate.findMany({
       where: {
-        orgId,
+        orgId: normalizeId(orgId),
         copies: {
           some: {
             group: {
               members: {
                 some: {
-                  userId: athleteId,
+                  userId: normalizeId(athleteId),
                 },
               },
             },
@@ -142,9 +176,9 @@ export class PrismaTrainingRepository implements TrainingRepository {
     return await this.db.$transaction(async (tx) => {
       const template = await tx.trainingTemplate.create({
         data: {
-          orgId: input.orgId,
+          orgId: normalizeId(input.orgId),
           name: input.name,
-          createdBy: input.createdBy,
+          createdBy: normalizeId(input.createdBy),
           sessions: {
             create: input.sessions.map((s, index) => ({
               sessionType: s.sessionType,
@@ -163,6 +197,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
         },
       });
 
+      // Notify inside the transaction so a notification error rolls back the created template.
       await afterWrite?.(template.id, tx);
 
       return toTemplateData(template);
@@ -170,18 +205,24 @@ export class PrismaTrainingRepository implements TrainingRepository {
   }
 
   async update(
+    orgId: string,
     id: string,
     input: UpdateTrainingTemplateInput,
     afterWrite?: TrainingMutationCallback
   ): Promise<TrainingTemplateData> {
+    const normalizedId = normalizeId(id);
     return await this.db.$transaction(async (tx) => {
+      await lockTemplateForUpdate(tx, orgId, normalizedId);
+
+      // Replace TemplateSessions (0..n-1) rather than diffing positions; copied TrainingSessions
+      // in groups are independent rows and keep their original values.
       if (input.sessions) {
         await tx.templateSession.deleteMany({
-          where: { templateId: id },
+          where: { templateId: normalizedId },
         });
         await tx.templateSession.createMany({
           data: input.sessions.map((s, index) => ({
-            templateId: id,
+            templateId: normalizedId,
             sessionType: s.sessionType,
             dayOffset: s.dayOffset,
             position: index,
@@ -193,9 +234,9 @@ export class PrismaTrainingRepository implements TrainingRepository {
       }
 
       const updated = await tx.trainingTemplate.update({
-        where: { id },
+        where: { id: normalizedId },
         data: {
-          ...(input.name ? { name: input.name } : {}),
+          ...(input.name !== undefined ? { name: input.name } : {}),
         },
         include: {
           sessions: {
@@ -210,12 +251,19 @@ export class PrismaTrainingRepository implements TrainingRepository {
     });
   }
 
-  async delete(id: string, afterWrite?: TrainingMutationCallback): Promise<void> {
+  async delete(
+    orgId: string,
+    id: string,
+    afterWrite?: TrainingMutationCallback
+  ): Promise<void> {
+    const normalizedId = normalizeId(id);
     await this.db.$transaction(async (tx) => {
+      await lockTemplateForUpdate(tx, orgId, normalizedId);
+      // TemplateSessions cascade-delete; copied TrainingSessions keep sourceTemplateId set to null.
       await tx.trainingTemplate.delete({
-        where: { id },
+        where: { id: normalizedId },
       });
-      await afterWrite?.(id, tx);
+      await afterWrite?.(normalizedId, tx);
     });
   }
 }

@@ -1,4 +1,8 @@
-import type { SessionType, MembershipRole } from "@/generated/prisma/client";
+import type {
+  Prisma,
+  SessionType,
+  MembershipRole,
+} from "@/generated/prisma/client";
 
 export interface TemplateSessionData {
   sessionType: SessionType;
@@ -49,13 +53,14 @@ export interface TrainingNotifyInput {
 }
 
 export type TrainingNotify = (
-  tx: unknown,
+  tx: Prisma.TransactionClient,
   input: TrainingNotifyInput
 ) => Promise<bigint | null>;
 
+// Runs inside the repository's $transaction so notifications commit or roll back atomically with the template write.
 export type TrainingMutationCallback = (
   templateId: string,
-  tx: unknown
+  tx: Prisma.TransactionClient
 ) => Promise<void>;
 
 export interface TrainingRepository {
@@ -63,7 +68,7 @@ export interface TrainingRepository {
   findOtherManagerIds(
     orgId: string,
     excludeUserId: string,
-    tx?: unknown
+    tx?: Prisma.TransactionClient
   ): Promise<string[]>;
   findById(id: string): Promise<TrainingTemplateData | null>;
   listForManager(orgId: string): Promise<TrainingTemplateData[]>;
@@ -73,9 +78,14 @@ export interface TrainingRepository {
     afterWrite?: TrainingMutationCallback
   ): Promise<TrainingTemplateData>;
   update(
+    orgId: string,
     id: string,
     input: UpdateTrainingTemplateInput,
     afterWrite?: TrainingMutationCallback
   ): Promise<TrainingTemplateData>;
-  delete(id: string, afterWrite?: TrainingMutationCallback): Promise<void>;
+  delete(
+    orgId: string,
+    id: string,
+    afterWrite?: TrainingMutationCallback
+  ): Promise<void>;
 }

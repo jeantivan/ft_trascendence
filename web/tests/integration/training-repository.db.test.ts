@@ -2,10 +2,15 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { PrismaTrainingRepository } from "@/lib/training/prisma-training-repository";
-import type { Prisma } from "@/generated/prisma/client";
 import { notify } from "@/lib/notifications/notify";
+import { TrainingNotFoundError } from "@/lib/training/errors";
 import { TrainingService } from "@/lib/training/training-service";
-import { TRAINING_TEMPLATE_CREATED, TRAINING_TEMPLATE_UPDATED, TRAINING_TEMPLATE_DELETED } from "@/lib/training/types";
+import {
+  TRAINING_TEMPLATE_CREATED,
+  TRAINING_TEMPLATE_UPDATED,
+  TRAINING_TEMPLATE_DELETED,
+} from "@/lib/training/types";
+import { runTrainingRepositoryContract } from "../support/training-repository-contract";
 
 const PREFIX = "training-repo-db-";
 
@@ -13,6 +18,7 @@ describe("Integration: PrismaTrainingRepository", () => {
   const repo = new PrismaTrainingRepository(prisma);
 
   let orgId: string;
+  let otherOrgId: string;
   let manager1Id: string;
   let manager2Id: string;
   let athleteId: string;
@@ -23,6 +29,11 @@ describe("Integration: PrismaTrainingRepository", () => {
       data: { name: `${PREFIX}Club`, timezone: "Europe/Madrid" },
     });
     orgId = club.id;
+
+    const otherClub = await prisma.organization.create({
+      data: { name: `${PREFIX}OtherClub`, timezone: "Europe/Madrid" },
+    });
+    otherOrgId = otherClub.id;
 
     const manager1 = await prisma.user.create({
       data: { email: `${PREFIX}mgr1@test.com`, nick: "Manager1" },
@@ -59,7 +70,7 @@ describe("Integration: PrismaTrainingRepository", () => {
 
   afterEach(async () => {
     await prisma.trainingSession.deleteMany({
-      where: { orgId },
+      where: { orgId: { in: [orgId, otherOrgId] } },
     });
     await prisma.organization.deleteMany({
       where: { name: { startsWith: PREFIX } },
@@ -73,81 +84,27 @@ describe("Integration: PrismaTrainingRepository", () => {
     await prisma.$disconnect();
   });
 
-  it("finds role and other managers in database", async () => {
-    const role1 = await repo.findRole(orgId, manager1Id);
-    const roleAth = await repo.findRole(orgId, athleteId);
-    expect(role1).toBe("manager");
-    expect(roleAth).toBe("athlete");
-
-    const otherManagers = await repo.findOtherManagerIds(orgId, manager1Id);
-    expect(otherManagers).toEqual([manager2Id]);
-  });
-
-  it("creates a template with sessions ordered by position in Postgres", async () => {
-    const created = await repo.create({
-      orgId,
-      name: "10K Progression",
-      createdBy: manager1Id,
-      sessions: [
-        { sessionType: "rodaje", dayOffset: 0, targetDistanceM: 5000 },
-        { sessionType: "intervalos", dayOffset: 2, targetDistanceM: 8000 },
-      ],
-    });
-
-    expect(created.id).toBeDefined();
-    expect(created.name).toBe("10K Progression");
-    expect(created.sessions).toHaveLength(2);
-    expect(created.sessions[0].position).toBe(0);
-    expect(created.sessions[1].position).toBe(1);
-
-    const found = await repo.findById(created.id);
-    expect(found).not.toBeNull();
-    expect(found?.sessions[0].sessionType).toBe("rodaje");
-    expect(found?.sessions[1].sessionType).toBe("intervalos");
-  });
-
-  it("lists all templates for manager and only assigned templates for athlete", async () => {
-    const t1 = await repo.create({
-      orgId,
-      name: "Assigned Template",
-      createdBy: manager1Id,
-      sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
-    });
-
-    const t2 = await repo.create({
-      orgId,
-      name: "Unassigned Template",
-      createdBy: manager2Id,
-      sessions: [{ sessionType: "tirada_larga", dayOffset: 6 }],
-    });
-
-    // Manager sees both
-    const managerList = await repo.listForManager(orgId);
-    expect(managerList.map((t) => t.id)).toEqual(
-      expect.arrayContaining([t1.id, t2.id])
-    );
-
-    // Athlete sees 0 before assignment
-    const athleteListBefore = await repo.listForAthlete(orgId, athleteId);
-    expect(athleteListBefore).toHaveLength(0);
-
-    // Assign t1 to athlete's group via a TrainingSession
-    await prisma.trainingSession.create({
-      data: {
-        orgId,
-        groupId,
-        origin: "template",
-        scheduledAt: new Date(),
-        sessionType: "rodaje",
-        sourceTemplateId: t1.id,
-      },
-    });
-
-    // Athlete now sees t1 but not t2
-    const athleteListAfter = await repo.listForAthlete(orgId, athleteId);
-    expect(athleteListAfter).toHaveLength(1);
-    expect(athleteListAfter[0].id).toBe(t1.id);
-  });
+  runTrainingRepositoryContract("Prisma", () => ({
+    repo,
+    orgId,
+    otherOrgId,
+    manager1Id,
+    manager2Id,
+    athleteId,
+    groupId,
+    assignTemplateToGroup: async (targetGroupId, templateId) => {
+      await prisma.trainingSession.create({
+        data: {
+          orgId,
+          groupId: targetGroupId,
+          origin: "template",
+          scheduledAt: new Date(),
+          sessionType: "rodaje",
+          sourceTemplateId: templateId,
+        },
+      });
+    },
+  }));
 
   it("updates template name and replaces sessions in database transaction without altering existing TrainingSession copies", async () => {
     const created = await repo.create({
@@ -170,7 +127,7 @@ describe("Integration: PrismaTrainingRepository", () => {
       },
     });
 
-    const updated = await repo.update(created.id, {
+    const updated = await repo.update(orgId, created.id, {
       name: "Updated Name",
       sessions: [
         { sessionType: "cuestas", dayOffset: 3, targetDistanceM: 10000 },
@@ -199,25 +156,6 @@ describe("Integration: PrismaTrainingRepository", () => {
     expect(await repo.findById("not-a-valid-uuid")).toBeNull();
   });
 
-  it("rolls back database transaction when afterWrite callback throws", async () => {
-    await expect(
-      repo.create(
-        {
-          orgId,
-          name: "Rolled Back Template",
-          createdBy: manager1Id,
-          sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
-        },
-        async () => {
-          throw new Error("Simulated notification failure");
-        }
-      )
-    ).rejects.toThrow("Simulated notification failure");
-
-    const list = await repo.listForManager(orgId);
-    expect(list).toHaveLength(0);
-  });
-
   it("deletes template and cascades sessions while setting sourceTemplateId to null on TrainingSession", async () => {
     const template = await repo.create({
       orgId,
@@ -237,7 +175,7 @@ describe("Integration: PrismaTrainingRepository", () => {
       },
     });
 
-    await repo.delete(template.id);
+    await repo.delete(orgId, template.id);
 
     expect(await repo.findById(template.id)).toBeNull();
 
@@ -256,9 +194,7 @@ describe("Integration: PrismaTrainingRepository", () => {
   });
 
   it("persists notifications in Postgres for other managers on create, update, and delete", async () => {
-    const trainingService = new TrainingService(repo, (tx, input) =>
-      notify(tx as Prisma.TransactionClient, input)
-    );
+    const trainingService = new TrainingService(repo, notify);
 
     const created = await trainingService.createTemplate(manager1Id, orgId, {
       name: "Notify Test",
@@ -290,5 +226,128 @@ describe("Integration: PrismaTrainingRepository", () => {
       where: { userId: { in: [manager1Id, athleteId] } },
     });
     expect(otherUsersNotifications).toHaveLength(0);
+  });
+
+  it("supports uppercase orgId in TrainingService getTemplate and updateTemplate", async () => {
+    const trainingService = new TrainingService(repo, notify);
+    const upperOrgId = orgId.toUpperCase();
+
+    const created = await trainingService.createTemplate(manager1Id, upperOrgId, {
+      name: "Uppercase Service Plan",
+      sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+    });
+
+    const fetched = await trainingService.getTemplate(
+      manager1Id,
+      upperOrgId,
+      created.id
+    );
+    expect(fetched.id).toBe(created.id);
+
+    const updated = await trainingService.updateTemplate(
+      manager1Id,
+      upperOrgId,
+      created.id,
+      { name: "Uppercase Updated" }
+    );
+    expect(updated.name).toBe("Uppercase Updated");
+  });
+
+  it("handles concurrent delete and update without P2003", async () => {
+    for (let i = 0; i < 5; i++) {
+      const created = await repo.create({
+        orgId,
+        name: `Race Delete Update ${i}`,
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      const [deleteResult, updateResult] = await Promise.allSettled([
+        repo.delete(orgId, created.id),
+        repo.update(orgId, created.id, {
+          name: `Updated ${i}`,
+          sessions: [
+            { sessionType: "cuestas", dayOffset: 1 },
+            { sessionType: "fartlek", dayOffset: 3 },
+          ],
+        }),
+      ]);
+
+      expect(deleteResult.status).toBe("fulfilled");
+      if (updateResult.status === "rejected") {
+        expect(updateResult.reason).toBeInstanceOf(TrainingNotFoundError);
+      }
+      expect(await repo.findById(created.id)).toBeNull();
+    }
+  });
+
+  it("serializes concurrent updates without P2002", async () => {
+    for (let i = 0; i < 5; i++) {
+      const created = await repo.create({
+        orgId,
+        name: `Race Updates ${i}`,
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      const [resA, resB] = await Promise.allSettled([
+        repo.update(orgId, created.id, {
+          name: "Winner A",
+          sessions: [
+            { sessionType: "intervalos", dayOffset: 1 },
+            { sessionType: "cuestas", dayOffset: 2 },
+          ],
+        }),
+        repo.update(orgId, created.id, {
+          name: "Winner B",
+          sessions: [
+            { sessionType: "fartlek", dayOffset: 4 },
+            { sessionType: "tirada_larga", dayOffset: 6 },
+          ],
+        }),
+      ]);
+
+      expect(resA.status).toBe("fulfilled");
+      expect(resB.status).toBe("fulfilled");
+
+      const finalTemplate = await repo.findById(created.id);
+      expect(finalTemplate).not.toBeNull();
+      expect(["Winner A", "Winner B"]).toContain(finalTemplate?.name);
+      expect(finalTemplate?.sessions).toHaveLength(2);
+      if (finalTemplate?.name === "Winner A") {
+        expect(finalTemplate.sessions.map((s) => s.sessionType)).toEqual([
+          "intervalos",
+          "cuestas",
+        ]);
+      } else {
+        expect(finalTemplate?.sessions.map((s) => s.sessionType)).toEqual([
+          "fartlek",
+          "tirada_larga",
+        ]);
+      }
+    }
+  });
+
+  it("handles concurrent deletes without P2025", async () => {
+    for (let i = 0; i < 5; i++) {
+      const created = await repo.create({
+        orgId,
+        name: `Race Deletes ${i}`,
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      const results = await Promise.allSettled([
+        repo.delete(orgId, created.id),
+        repo.delete(orgId, created.id),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(TrainingNotFoundError);
+      expect(await repo.findById(created.id)).toBeNull();
+    }
   });
 });

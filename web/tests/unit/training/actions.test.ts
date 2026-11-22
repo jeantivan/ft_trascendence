@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { notFound } from "next/navigation";
+import { notFound, forbidden } from "next/navigation";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import {
@@ -39,6 +39,9 @@ class NextNavigationSignal extends Error {
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(() => {
     throw new NextNavigationSignal("NEXT_NOT_FOUND");
+  }),
+  forbidden: vi.fn(() => {
+    throw new NextNavigationSignal("NEXT_FORBIDDEN");
   }),
 }));
 
@@ -186,6 +189,21 @@ describe("Training Server Actions", () => {
       if (!result.success) {
         expect(result.error).toBeDefined();
       }
+    });
+
+    it("triggers forbidden() (403) if role is downgraded between requireOrgRole and TrainingService", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: ATHLETE_USER,
+        role: "manager",
+      });
+
+      await expect(
+        createTrainingTemplateAction(ORG_A, {
+          name: "Downgraded Role",
+          sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+        })
+      ).rejects.toThrow("NEXT_FORBIDDEN");
+      expect(forbidden).toHaveBeenCalledOnce();
     });
   });
 
