@@ -8,7 +8,7 @@
 2. **Reautenticación:** el servidor envía un código OTP por email, el mismo mecanismo que el borrado de cuenta (caduca en 10 minutos, 5 intentos).
 3. Con el OTP correcto se crea la exportación. **Solo puede haber una activa por usuario**: si ya existe una no caducada, se rechaza la petición con ese motivo.
 4. El ZIP se genera en el servidor y se guarda con un nombre no adivinable en un **volumen local privado de Docker** (sin almacenamiento externo, según la decisión de infraestructura del ticket #06). NGINX **no** expone esa carpeta: el ZIP solo sale por el endpoint autenticado de descarga (sección 2).
-5. El servidor envía un email con el enlace de descarga. El email **no contiene datos**, solo el enlace y la fecha de caducidad.
+5. El servidor envía un email con el enlace de descarga. El email **no contiene datos**, solo el enlace y la fecha de caducidad. Si el email no se puede enviar, la exportación pasa a `failed` y se borra el ZIP (nadie tendría el token). Si el proceso muere entre `ready` y el email, al arrancar la exportación también pasa a `failed`.
 6. El enlace caduca a los **7 días**. Al caducar se borra el ZIP del disco y el registro de la exportación.
 7. Si el usuario borra su cuenta, se borran de inmediato el ZIP pendiente y el registro de la exportación.
 
@@ -46,6 +46,15 @@ Comprueba que el `export_id` pertenece al usuario de la sesión (`404` si no).
 
 Requiere sesión iniciada del **mismo usuario** además del token del enlace. El servidor comprueba sesión, pertenencia y fecha de caducidad antes de leer el fichero del volumen. Devuelve el ZIP (`application/zip`). Responde `404` si caducó o no es suyo.
 
+Enlace: `<origen público>/api/gdpr/export/{export_id}/download?token=<token>`. El origen sale de las cabeceras `x-forwarded-host` y `x-forwarded-proto` que pone NGINX.
+
+Contrato del token:
+
+- 32 bytes aleatorios en base64url (43 caracteres). Se genera al pasar a `ready` y solo existe en memoria y en el email: la base de datos guarda únicamente su SHA-256 (hex, `token_hash`).
+- Se compara con `timingSafeEqual`. No sirve solo: sin sesión del mismo usuario responde `401`.
+- Respuestas uniformes: `404` si el id no es un UUID, no existe, no es suyo, no está `ready`, caducó, falta el token o este no coincide, o el fichero no está.
+- Cabeceras: `Content-Type: application/zip`, `Content-Disposition: attachment; filename="my-data.zip"`, `Content-Length`, `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`. El ZIP se sirve en streaming.
+
 Los logs y errores de estas rutas llevan solo `export_id`, nunca el contenido del ZIP.
 
 ## 3. Contenido del ZIP
@@ -61,8 +70,8 @@ export.zip
 
 Convenciones:
 - **Fechas:** ISO 8601 en UTC (`2026-10-01T07:00:00Z`).
-- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180. Valor ausente = celda vacía.
-- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todos los campos de texto libre.
+- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180, fin de línea CRLF. Valor ausente = celda vacía.
+- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todas las celdas de texto (los números y booleanos no se tocan).
 - **JSON:** `null` para valores ausentes. Claves en `snake_case`, igual que las columnas de la base de datos.
 
 ### 3.1 `data.json`
@@ -124,13 +133,13 @@ Convenciones:
 | `feedback_received` | `feedback` donde `athlete_id` = usuario | **Sin** `manager_id` ni nombre del Manager. El usuario sabe que lo escribió un Manager de ese Event |
 | `contacts` | `contacts` donde el usuario es `user_a` o `user_b` | **Sin** id, nick ni email del otro. Solo estado, quién lo pidió y fecha |
 | `notifications` | `notifications` del usuario | Sin `payload` (solo ids, y no aportan nada al usuario) |
-| `access_log` | `audit_log` donde `subject_id` = usuario | Fecha, acción, recurso y **rol** del actor (`manager` o `admin`). **Sin** `actor_id`. El evento `account_deleted` **no se incluye** (acordado con Rebeca en #34). Especificado, **aún no implementado**: lo implementará #36 |
+| `access_log` | `audit_log` donde `subject_id` = usuario | Fecha, acción, recurso y **rol** del actor (`manager` o `admin`). **Sin** `actor_id`. No se incluyen los eventos propios del usuario (`consent_given`, `consent_withdrawn`, `account_deleted`; acordado con Rebeca en #34 y aplicado en `listAccessesToUser`) |
 
 El `access_log` cubre el derecho a saber quién ha accedido a tus datos (art. 15.1.c). Solo existe 12 meses (Privacy Policy, sección 7).
 
 ### 3.2 `sessions.csv`
 
-Sesiones individuales del usuario (`athlete_id` = usuario) y sesiones de grupo de los grupos a los que pertenece.
+Sesiones individuales del usuario (`athlete_id` = usuario), sesiones de grupo de los grupos a los que pertenece y sesiones de grupos que ya no son suyos si tiene un registro (`SessionLog`) en ellas, y la sesión de grupo que modifica una copia personalizada suya, para que `session_logs.csv` y `customizes_session_id` nunca apunten a una sesión que falte. Una sesión individual de otro atleta nunca se incluye, aunque tenga un registro suyo.
 
 ```
 session_id,org_id,origin,session_type,target_distance_m,target_pace_s_per_km,target_duration_s,scheduled_at,group_id,customizes_session_id
@@ -172,7 +181,8 @@ Usuario: athlete@example.com
 CONTENIDO:
 - data.json: perfil, ajustes, consentimientos, clubes, grupos, eventos,
   feedback recibido, contactos, notificaciones y registro de accesos
-- sessions.csv: sesiones (tipo, objetivo)
+- sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de
+  grupos que dejaste si registraste la sesión), una fila por sesión
 - session_logs.csv: resultados (completada, RPE, distancia, duración)
 - messages.csv: los mensajes que escribiste (los que borraste
   aparecen con la fecha de borrado si aún los conservamos)

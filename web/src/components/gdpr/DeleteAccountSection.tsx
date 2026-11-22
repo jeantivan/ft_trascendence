@@ -13,6 +13,11 @@ const CODE_LENGTH = 6;
 // retryAfterSeconds when it refuses
 const COOLDOWN_SECONDS = 60;
 
+function formatCooldown(seconds: number): string {
+  if (seconds > 60) return `${Math.ceil(seconds / 60)} min`;
+  return `${seconds} s`;
+}
+
 type RequestFeedback = { kind: "sent" } | { kind: "error"; message: string };
 
 // Drop-in section for Ajustes > Privacidad: it needs no props and no route of its own
@@ -57,7 +62,7 @@ export function DeleteAccountSection() {
 
       <div className="flex flex-col gap-2">
         <Button onClick={requestCode} disabled={busy || cooldown > 0}>
-          {isRequesting ? "Enviando…" : cooldown > 0 ? `Reenviar en ${cooldown} s` : "Enviar código"}
+          {isRequesting ? "Enviando…" : cooldown > 0 ? `Reenviar en ${formatCooldown(cooldown)}` : "Enviar código"}
         </Button>
         {feedback?.kind === "sent" && (
           <Alert variant="info">Te hemos enviado un código a tu correo. Caduca en 10 minutos.</Alert>

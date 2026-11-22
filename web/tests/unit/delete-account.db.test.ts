@@ -167,6 +167,50 @@ describe("deleteAccountWithOtp", { timeout: 30_000 }, () => {
     }
   });
 
+  describe("ZIP de exportación", () => {
+    // A DataExport row plus its ZIP on disk, named exports/<id>.zip as generateExport does
+    async function seedExport(userId: string): Promise<string> {
+      const row = await db.dataExport.create({ data: { userId } });
+      await mkdir(path.join(uploadsDir, "exports"), { recursive: true });
+      await writeFile(path.join(uploadsDir, "exports", `${row.id}.zip`), "zip");
+      return row.id;
+    }
+
+    it("borra el ZIP de la cuenta y deja el de otro usuario", async () => {
+      const leavingExport = await seedExport(LEAVING_ID);
+      const stayingExport = await seedExport(STAYING_ID);
+
+      expect(await deleteWithFreshOtp(LEAVING_ID, db, db, uploadsDir)).toEqual({ deleted: true });
+
+      expect(await db.dataExport.count({ where: { userId: LEAVING_ID } })).toBe(0);
+      expect(existsSync(path.join(uploadsDir, "exports", `${leavingExport}.zip`))).toBe(false);
+      expect(existsSync(path.join(uploadsDir, "exports", `${stayingExport}.zip`))).toBe(true);
+    });
+
+    it("borra también el .tmp de una exportación que aún se está generando", async () => {
+      const row = await db.dataExport.create({ data: { userId: LEAVING_ID } });
+      await mkdir(path.join(uploadsDir, "exports"), { recursive: true });
+      await writeFile(path.join(uploadsDir, "exports", `${row.id}.zip.tmp`), "half");
+
+      expect(await deleteWithFreshOtp(LEAVING_ID, db, db, uploadsDir)).toEqual({ deleted: true });
+
+      expect(existsSync(path.join(uploadsDir, "exports", `${row.id}.zip.tmp`))).toBe(false);
+    });
+
+    it("con un código incorrecto no toca el ZIP ni la fila", async () => {
+      await seedOtp(LEAVING_ID, "111111");
+      const exportId = await seedExport(LEAVING_ID);
+
+      expect(await deleteAccountWithOtp(LEAVING_ID, "222222", db, uploadsDir)).toEqual({
+        deleted: false,
+        reason: "invalid_code",
+      });
+
+      expect(existsSync(path.join(uploadsDir, "exports", `${exportId}.zip`))).toBe(true);
+      expect(await db.dataExport.count({ where: { userId: LEAVING_ID } })).toBe(1);
+    });
+  });
+
   describe("archivos de avatar", () => {
     it("borra los archivos de la cuenta tras el borrado y no deja filas", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -233,7 +277,7 @@ describe("deleteAccountWithOtp", { timeout: 30_000 }, () => {
 
       const result = await deleteWithFreshOtp(LEAVING_ID, db, db, uploadsDir);
 
-      expect(result).toEqual({ deleted: true, avatarCleanupFailed: 1 });
+      expect(result).toEqual({ deleted: true, fileCleanupFailed: 1 });
       expect(await exists(LEAVING_ID)).toBe(false);
       expect(await db.avatar.count({ where: { ownerId: LEAVING_ID } })).toBe(0);
       // The failure did not stop the other file; the one that failed is still on disk
@@ -241,7 +285,7 @@ describe("deleteAccountWithOtp", { timeout: 30_000 }, () => {
       expect(existsSync(path.join(uploadsDir, "avatars", "stuck"))).toBe(true);
       // Only the count: no path, no email
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith("Account deleted, but 1 avatar file(s) could not be removed");
+      expect(warn).toHaveBeenCalledWith("Account deleted, but 1 avatar or export file(s) could not be removed");
     });
   });
 

@@ -5,13 +5,14 @@ export type LockedAccount = { id: string; roleGlobal: GlobalRole; blockedAt: Dat
 export type LockAccountAndAdminsResult = {
   // null when the account does not exist (any more)
   target: LockedAccount | null;
-  // At least one unblocked Admin other than the target, read after the lock
-  anotherAdminLeft: boolean;
+  // The target is an unblocked Admin and no other unblocked Admin is left, read after the lock.
+  // A blocked Admin does not count, so deleting, blocking or demoting one leaves the number unchanged
+  isLastAdmin: boolean;
 };
 
 // First step of every operation that can leave the system without an unblocked Admin: deleting
-// an account (#158), blocking it (#102), removing its Admin role (#103). The callers apply the
-// rule with the result: if target is an Admin and anotherAdminLeft is false, they refuse.
+// an account (#158), blocking it (#102), removing its Admin role (#103). The rule lives here
+// once: the callers refuse when isLastAdmin is true.
 //
 // ONE statement locks the target row together with every Admin row, ordered by id. One statement
 // in id order means two transactions always take the rows in the same order, so two Admins acting
@@ -39,5 +40,6 @@ export async function lockAccountAndAdmins(
   const anotherAdminLeft = locked.some(
     (row) => row.id !== id && row.roleGlobal === "admin" && row.blockedAt === null,
   );
-  return { target, anotherAdminLeft };
+  const isLastAdmin = target?.roleGlobal === "admin" && target.blockedAt === null && !anotherAdminLeft;
+  return { target, isLastAdmin };
 }

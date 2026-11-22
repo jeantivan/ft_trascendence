@@ -1,14 +1,12 @@
 # Política de Privacidad
 
-> **Borrador para revisión del equipo (sub-issue #26, parte de #8).** Los datos del responsable, el nombre de la plataforma y el CIF son **ficticios, de ejercicio**. Los textos entre `[CORCHETES]` son datos que el equipo debe confirmar antes de publicar; no se han inventado.
-
 > **Proyecto académico de 42.** Los datos identificativos del responsable y de contacto son ficticios y se utilizan exclusivamente para este ejercicio; no identifican a una empresa real responsable de este servicio.
 
 **Última actualización:** 24 de octubre de 2026
 
 ## 1. Quiénes somos
 
-Esta política describe cómo trata tus datos personales **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Esta política describe cómo trata tus datos personales **StrideSync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
 - **Responsable del tratamiento:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242. Calle De La Trancendencia, 42. 28042 Madrid, España. Teléfono +34 642 42 42 42
 - **Contacto de privacidad:** legal@stridesync.fit
@@ -110,8 +108,8 @@ También registramos las acciones que el Admin realiza sobre cuentas y contenido
 | Mientras eres miembro | Conservamos tus datos activos |
 | Abandonas un club | Conservamos tus datos de ese club (sesiones, RPE, Feedback) mientras mantengas tu cuenta, y solo tú los ves. Dejas de recibir invitaciones de ese club. Tus Contacts ya aceptados se conservan, con sus mensajes privados y tu estado online. Las solicitudes de Contact pendientes con quienes ya no compartas grupo se cancelan, y mientras no tengas club no puedes solicitar Contacts nuevos. No se borra tu cuenta |
 | Vuelves a un club que dejaste | Recuperas tu historial en ese club. Los Managers vuelven a ver tus sesiones, métricas y RPE, y el Manager que escribió un Feedback vuelve a verlo, siempre que mantengas el consentimiento de datos de salud |
-| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts. Tus mensajes privados no se borran: se conservan sin tu nombre para que la otra persona mantenga el hilo (ver tabla siguiente) |
-| El Admin borra un club | Te avisamos por email con al menos 30 días de antelación y puedes descargar tus datos antes. Después se borran el club, sus sesiones y tu historial de entrenamiento en él. Tu cuenta no se borra |
+| Borras tu cuenta | Se borran de inmediato tu perfil, tus sesiones y resultados, el Feedback que recibiste y tus Contacts. El archivo de tu foto se borra en el mismo momento; si ese borrado falla, se reintenta y se completa en un máximo de 24 horas. Tus mensajes privados no se borran: se conservan sin tu nombre para que la otra persona mantenga el hilo (ver tabla siguiente) |
+| El Admin borra un club | Te avisamos con al menos 30 días de antelación, por email (la fecha va en UTC) y con una notificación en la app que recibes aunque tengas las notificaciones desactivadas, y puedes descargar tus datos antes. Si el Admin cancela el borrado, te lo notificamos igual. Durante ese plazo el club no acepta solicitudes ni invitaciones nuevas. Después se borran el club, sus sesiones y tu historial de entrenamiento en él. Tu cuenta no se borra |
 | Después de borrar tu cuenta | Los registros técnicos (IP, navegador, accesos) se conservan como máximo 3 meses |
 
 ### Qué se conserva al borrar tu cuenta
@@ -142,7 +140,7 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 | **Oposición** (art. 21) | Puedes oponerte a los tratamientos basados en interés legítimo (sección 3). Escríbenos a legal@stridesync.fit |
 | **Retirar un consentimiento** | Ajustes > Privacidad: estadísticas de Club Profile y datos de salud (RPE y Feedback). Las notificaciones del servicio no dependen de un consentimiento: puedes silenciarlas en Ajustes |
 
-La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv` y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
+La descarga incluye `data.json`, `sessions.csv`, `session_logs.csv`, `messages.csv` (tus mensajes) y un `README.txt`. No incluye contraseñas, tokens ni secretos de autenticación. Si necesitas más datos de los que incluye la descarga, escríbenos.
 
 Respondemos **sin dilación indebida y, como máximo, en un mes**. En casos complejos o con muchas solicitudes podemos prorrogarlo **dos meses más**, y te avisaremos del motivo.
 

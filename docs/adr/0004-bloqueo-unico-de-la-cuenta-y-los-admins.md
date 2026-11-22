@@ -11,8 +11,8 @@ Borrar una cuenta, bloquearla (#102) o quitarle el rol Admin (#103) toman, en **
 ## Consequences
 
 - **Cada borrado, bloqueo o cambio de rol bloquea todas las filas de Admin hasta el commit.** Es un coste por operación, aceptado mientras haya pocos Admins. La espera cuenta contra el timeout de la transacción (5 s por defecto).
-- **Los flujos de #102, #103 y #104 deben usar `lockAccountAndAdmins`** y aplicar la regla con su resultado; no deben contar Admins por su cuenta.
+- **Los flujos de #102, #103 y #104 deben usar `lockAccountAndAdmins`** y rechazar cuando devuelve `isLastAdmin`: la regla se calcula ahí, una sola vez; no deben contar Admins por su cuenta.
 - **El orden de bloqueo es: users, después organizations, después conversations.** Cualquier flujo nuevo que bloquee varias tablas debe respetarlo.
-- **Afecta solo a** `delete-account.ts` (los dos caminos de borrado) y a los tests de concurrencia del #122 y del #148 (`organization-repository.db.test.ts`); no hay más código que escriba `roleGlobal` o `blockedAt` todavía.
+- **Afecta a** `delete-account.ts` (los dos caminos de borrado), a `web/src/lib/admin/accounts.ts` (bloquear desde el panel, #102, que escribe `blockedAt`) y a los tests de concurrencia del #122 y del #148 (`organization-repository.db.test.ts`). Todavía no hay más código que escriba `roleGlobal` (lo hará el #103).
 - **En los tests con gate (`LockHarness`), la operación que llega segunda espera en `FROM users`, no en `FROM organizations`:** el borrado ya tiene las filas Admin cuando llega al club, y `assignManager`/`removeManager` sobre un Admin hacen cola detrás en `users`. Mientras dura la observación, el borrado retiene las filas Admin de la base compartida y los demás archivos de test que borran cuentas esperan; por eso la espera observada debe ser la primera que se produzca (milisegundos), no una que no llegue y agote los 8 s (#235).
 - **Reabrir esta decisión** si el número de Admins crece o aparece un caso concreto de contención.

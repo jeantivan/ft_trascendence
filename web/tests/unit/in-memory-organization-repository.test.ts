@@ -20,5 +20,7 @@ runOrganizationRepositoryContract("in memory", () => {
         return id;
       }),
     addAthlete: async (orgId, userId) => repo.addAthlete(orgId, userId),
+    blockUser: async (userId) => repo.block(userId),
+    sent: () => repo.sent,
   };
 });

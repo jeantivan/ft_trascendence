@@ -1,9 +1,13 @@
 import { z } from "zod";
 // enums.ts, not client.ts: only the values, no database client, so forms can import it too
 import { SpotRequestStatus } from "@/generated/prisma/enums";
+// Every id here: z.guid() that comes out in lower case. Postgres compares uuids
+// case-insensitively, JavaScript strings do not, so the in-memory EventRepository
+// would not find an id sent in upper case. The same rule as the club's ids
+import { idSchema } from "@/lib/org/schemas";
 
 // The id of the linked Session, or null for an Event without one
-const sessionIdSchema = z.guid().nullable();
+const sessionIdSchema = idSchema.nullable();
 
 export const createEventSchema = z.object({
   title: z
@@ -29,13 +33,13 @@ export const createEventSchema = z.object({
 // sessionId again without the default: a missing one would be ambiguous
 // (keep the Session or unlink it?), so the form sends an id or null
 export const updateEventSchema = createEventSchema.extend({
-  eventId: z.guid(),
+  eventId: idSchema,
   sessionId: sessionIdSchema,
 });
 
 // The server sets cancelledAt to now; there is no action to undo it
 export const cancelEventSchema = z.object({
-  eventId: z.guid(),
+  eventId: idSchema,
 });
 
 // From the Prisma enum: a new state in the database reaches the schema by itself
@@ -43,29 +47,32 @@ export const spotRequestStatusSchema = z.enum(SpotRequestStatus);
 
 // Spot Request transitions. Checked and applied by EventRepository (#147) in the
 // transaction; Zod only checks the shape of each action:
-//   Athlete  no row or withdrawn  -> pending
-//   Athlete  pending or approved  -> withdrawn
-//   Manager  pending              -> approved or rejected
-//   Manager  approved             -> rejected (expels the Athlete)
+//   Athlete  no row or withdrawn  -> pending              requestSpot
+//   Athlete  pending or approved  -> withdrawn            withdrawSpot
+//   Manager  pending              -> approved or rejected approveSpot, rejectSpot
+//   Manager  approved             -> rejected             expelFromEvent
 // rejected is final for that Event. Once the Event is cancelled or has started,
 // no transition is allowed.
 
 // The Athlete who asks or withdraws comes from the session, never from the client
 export const requestSpotSchema = z.object({
-  eventId: z.guid(),
+  eventId: idSchema,
 });
 
 export const withdrawSpotSchema = z.object({
-  eventId: z.guid(),
+  eventId: idSchema,
 });
 
-// The Manager approves or rejects a pending request, or rejects an approved one to expel
+// The Manager's three actions, one EventRepository operation each (#232):
+// approve (approveSpot) and reject (rejectSpot) a pending request, expel
+// (expelFromEvent) an approved one. Verbs, not states: each operation knows the
+// state it starts from and the one it leaves
 export const reviewSpotSchema = z.object({
-  eventId: z.guid(),
+  eventId: idSchema,
   // The Athlete whose request is reviewed: spot_requests.user_id in the database,
   // the athleteId of EventManagerView.spotRequests[] that the Manager picked
-  athleteId: z.guid(),
-  decision: spotRequestStatusSchema.extract(["approved", "rejected"]),
+  athleteId: idSchema,
+  action: z.enum(["approve", "reject", "expel"]),
 });
 
 // Health data: the messages are fixed texts, they never repeat what was sent
@@ -80,21 +87,21 @@ const feedbackBodySchema = z
 // not cancelled, the Athlete was approved and has health consent. At most one
 // Feedback per Event, Athlete and Manager (the unique constraint comes in Fase 3)
 export const createFeedbackSchema = z.object({
-  eventId: z.guid(),
+  eventId: idSchema,
   // The Athlete who receives it
-  athleteId: z.guid(),
+  athleteId: idSchema,
   body: feedbackBodySchema,
 });
 
 // Only the body changes: moving a Feedback to another Event or Athlete is not an edit.
 // The service checks the same conditions as creating, health consent included
 export const updateFeedbackSchema = z.object({
-  feedbackId: z.guid(),
+  feedbackId: idSchema,
   body: feedbackBodySchema,
 });
 
 export const deleteFeedbackSchema = z.object({
-  feedbackId: z.guid(),
+  feedbackId: idSchema,
 });
 
 // What each schema returns once valid (trimmed texts), for #147 and the Server Actions

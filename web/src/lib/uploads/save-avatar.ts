@@ -6,10 +6,11 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ImageCheck } from "@/lib/uploads/check-image";
 
-// The extension of an accepted image: "png" | "jpg" | "webp"
+// The extension of an accepted image: "png" | "jpg" | "webp". The upload route only
+// passes "webp" since #223 (it stores the re-encoded image, never the original).
 type ImageExtension = Extract<ImageCheck, { ok: true }>["extension"];
 
-// Returns the path relative to uploadsDir (what Avatar.path stores), e.g. avatars/<uuid>.png
+// Returns the path relative to uploadsDir (what Avatar.path stores), e.g. avatars/<uuid>.webp
 export async function saveAvatar(
   bytes: Uint8Array,
   extension: ImageExtension,

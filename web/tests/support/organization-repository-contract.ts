@@ -2,13 +2,25 @@ import { describe, expect, it } from "vitest";
 import {
   AdminCannotBeManagerError,
   AlreadyManagerError,
+  AlreadyMemberError,
   LastManagerError,
+  MembershipRequestNotFoundError,
+  MembershipRequestNotPendingError,
+  RequestAlreadyPendingError,
   NotManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   OrganizationNameTakenError,
   OrganizationNotFoundError,
   type OrganizationRepository,
   UserNotFoundError,
 } from "@/lib/org/organization-repository";
+import {
+  MEMBERSHIP_ACCEPTED,
+  MEMBERSHIP_INVITATION_CREATED,
+  MEMBERSHIP_REQUEST_CREATED,
+} from "@/lib/org/membership-notifier";
+import type { NotifyInput } from "@/lib/notifications/notify";
 
 // A valid id that no club and no user has
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
@@ -32,6 +44,10 @@ export interface OrganizationFixture {
   createAdmins(count: number): Promise<string[]>;
   // Makes an existing user an athlete member of an existing club
   addAthlete(orgId: string, userId: string): Promise<void>;
+  // Blocks an existing user
+  blockUser(userId: string): Promise<void>;
+  // The notifications the repository has sent so far (read from a fake notify())
+  sent(): NotifyInput[];
 }
 
 let clubCount = 0;
@@ -65,6 +81,7 @@ export function runOrganizationRepositoryContract(
         id,
         name: data.name,
         description: data.description,
+        deleteAt: null,
         memberCount: 3,
       });
     });
@@ -87,7 +104,7 @@ export function runOrganizationRepositoryContract(
 
       const club = (await repo.listCatalog()).find((c) => c.id === id);
 
-      expect(Object.keys(club ?? {}).sort()).toEqual(["description", "id", "memberCount", "name"]);
+      expect(Object.keys(club ?? {}).sort()).toEqual(["deleteAt", "description", "id", "memberCount", "name"]);
     });
 
     it("findById returns the club's record with its time zone", async () => {
@@ -100,6 +117,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: data.description,
         timezone: data.timezone,
+        deleteAt: null,
       });
     });
 
@@ -121,6 +139,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: null,
         timezone: "Europe/London",
+        deleteAt: null,
       });
       await expect(repo.findById(id)).resolves.toEqual(updated);
     });
@@ -150,6 +169,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: data.description,
         timezone: data.timezone,
+        deleteAt: null,
       });
       await expect(repo.findById(created.id)).resolves.toEqual(created);
     });
@@ -355,5 +375,292 @@ export function runOrganizationRepositoryContract(
         expect(await repo.listManagerIds(UNKNOWN_ID)).toEqual([]);
       });
     }
+
+    // Invitations and requests to join a club
+    describe("membership requests", () => {
+      async function setup() {
+        const fixture = createFixture();
+        const { repo, createClub, createUsers, addAthlete } = fixture;
+        const orgId = await createClub(newClub({ members: 0 }));
+        const [managerId, otherManagerId, userId, memberId] = await createUsers(4);
+        await repo.assignManager(managerId, orgId, managerId);
+        await repo.assignManager(managerId, orgId, otherManagerId);
+        await addAthlete(orgId, memberId);
+        return { ...fixture, orgId, managerId, otherManagerId, userId, memberId };
+      }
+
+      const memberCount = async (repo: OrganizationRepository, orgId: string) =>
+        (await repo.listCatalog()).find((club) => club.id === orgId)?.memberCount;
+
+      it("inviteUser creates a pending invite by the Manager and notifies only the invitee", async () => {
+        const { repo, sent, orgId, managerId, userId } = await setup();
+
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+
+        expect(invitation).toMatchObject({ orgId, userId, kind: "invite", status: "pending", createdBy: managerId });
+        expect(sent()).toEqual([
+          { userId, type: MEMBERSHIP_INVITATION_CREATED, payload: { orgId, requestId: invitation.id } },
+        ]);
+        expect(await repo.listPendingRequests(orgId)).toEqual([]);
+      });
+
+      it("requestToJoin creates a pending request and notifies every Manager", async () => {
+        const { repo, sent, orgId, managerId, otherManagerId, userId } = await setup();
+
+        const request = await repo.requestToJoin(userId, orgId);
+
+        expect(request).toMatchObject({ orgId, userId, kind: "request", status: "pending", createdBy: userId });
+        expect(sent().map((n) => n.userId).sort()).toEqual([managerId, otherManagerId].sort());
+        expect(sent().every((n) => n.type === MEMBERSHIP_REQUEST_CREATED)).toBe(true);
+        expect((await repo.listPendingRequests(orgId)).map((r) => r.id)).toEqual([request.id]);
+      });
+
+      for (const operation of ["inviteUser", "requestToJoin"] as const) {
+        const call = (repo: OrganizationRepository, managerId: string, orgId: string, userId: string) =>
+          operation === "inviteUser" ? repo.inviteUser(managerId, orgId, userId) : repo.requestToJoin(userId, orgId);
+
+        it(`${operation} throws AlreadyMemberError for a member and creates nothing`, async () => {
+          const { repo, sent, orgId, managerId, memberId } = await setup();
+
+          await expect(call(repo, managerId, orgId, memberId)).rejects.toBeInstanceOf(AlreadyMemberError);
+          expect(sent()).toEqual([]);
+        });
+
+        it(`${operation} throws RequestAlreadyPendingError if one is pending, of either kind`, async () => {
+          const { repo, sent, orgId, managerId, userId } = await setup();
+          await repo.inviteUser(managerId, orgId, userId);
+          const before = sent().length;
+
+          await expect(call(repo, managerId, orgId, userId)).rejects.toBeInstanceOf(RequestAlreadyPendingError);
+          expect(sent()).toHaveLength(before);
+        });
+
+        it(`${operation} throws OrganizationDeletionAlreadyScheduledError during the deletion notice and creates nothing`, async () => {
+          const { repo, sent, orgId, managerId, userId } = await setup();
+          await repo.scheduleDeletion(managerId, orgId);
+          const before = sent().length;
+
+          await expect(call(repo, managerId, orgId, userId)).rejects.toBeInstanceOf(
+            OrganizationDeletionAlreadyScheduledError,
+          );
+          expect(sent()).toHaveLength(before);
+          expect(await repo.listPendingRequests(orgId)).toEqual([]);
+        });
+
+        it(`${operation} treats a blocked user like a missing one`, async () => {
+          const { repo, blockUser, orgId, managerId, userId } = await setup();
+          await blockUser(userId);
+
+          await expect(call(repo, managerId, orgId, userId)).rejects.toBeInstanceOf(UserNotFoundError);
+          await expect(call(repo, managerId, orgId, UNKNOWN_ID)).rejects.toBeInstanceOf(UserNotFoundError);
+        });
+
+        it(`${operation} throws OrganizationNotFoundError if the club does not exist`, async () => {
+          const { repo, managerId, userId } = await setup();
+
+          await expect(call(repo, managerId, UNKNOWN_ID, userId)).rejects.toBeInstanceOf(
+            OrganizationNotFoundError,
+          );
+        });
+
+        it(`${operation} allows a new one after the previous was rejected`, async () => {
+          const { repo, orgId, managerId, userId } = await setup();
+          const first = await call(repo, managerId, orgId, userId);
+          if (first.kind === "invite") await repo.answerInvitation(userId, first.id, false);
+          else await repo.reviewRequest(orgId, first.id, false);
+
+          const second = await call(repo, managerId, orgId, userId);
+
+          expect(second.id).not.toBe(first.id);
+          expect(second.status).toBe("pending");
+        });
+      }
+
+      it("reviewRequest(approve) throws UserNotFoundError for a user blocked after asking, and leaves it pending", async () => {
+        const { repo, blockUser, orgId, userId } = await setup();
+        const request = await repo.requestToJoin(userId, orgId);
+        const before = await memberCount(repo, orgId);
+        await blockUser(userId);
+
+        await expect(repo.reviewRequest(orgId, request.id, true)).rejects.toBeInstanceOf(UserNotFoundError);
+
+        expect(await memberCount(repo, orgId)).toBe(before);
+        expect((await repo.listPendingRequests(orgId)).map((r) => r.id)).toEqual([request.id]);
+      });
+
+      it("answerInvitation(accept) throws UserNotFoundError for a user blocked after being invited", async () => {
+        const { repo, blockUser, orgId, managerId, userId } = await setup();
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        const before = await memberCount(repo, orgId);
+        await blockUser(userId);
+
+        await expect(repo.answerInvitation(userId, invitation.id, true)).rejects.toBeInstanceOf(UserNotFoundError);
+
+        expect(await memberCount(repo, orgId)).toBe(before);
+      });
+
+      it("answerInvitation(accept) makes the user an athlete and notifies the Manager who invited", async () => {
+        const { repo, sent, orgId, managerId, userId } = await setup();
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        const before = await memberCount(repo, orgId);
+
+        await repo.answerInvitation(userId, invitation.id, true);
+
+        expect(await memberCount(repo, orgId)).toBe((before ?? 0) + 1);
+        expect(sent().at(-1)).toEqual({
+          userId: managerId,
+          type: MEMBERSHIP_ACCEPTED,
+          payload: { orgId, requestId: invitation.id, userId },
+        });
+        await expect(repo.inviteUser(managerId, orgId, userId)).rejects.toBeInstanceOf(AlreadyMemberError);
+      });
+
+      it("answerInvitation(reject) joins nobody and notifies nobody", async () => {
+        const { repo, sent, orgId, managerId, userId } = await setup();
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        const before = { count: await memberCount(repo, orgId), sent: sent().length };
+
+        await repo.answerInvitation(userId, invitation.id, false);
+
+        expect(await memberCount(repo, orgId)).toBe(before.count);
+        expect(sent()).toHaveLength(before.sent);
+      });
+
+      it("reviewRequest(approve) makes the user an athlete and notifies them; reject does neither", async () => {
+        const { repo, sent, orgId, userId, createUsers } = await setup();
+        const [otherUser] = await createUsers(1);
+        const approved = await repo.requestToJoin(userId, orgId);
+        const rejected = await repo.requestToJoin(otherUser, orgId);
+        const before = await memberCount(repo, orgId);
+        const sentBefore = sent().length;
+
+        await repo.reviewRequest(orgId, approved.id, true);
+        await repo.reviewRequest(orgId, rejected.id, false);
+
+        expect(await memberCount(repo, orgId)).toBe((before ?? 0) + 1);
+        expect(sent().slice(sentBefore)).toEqual([
+          { userId, type: MEMBERSHIP_ACCEPTED, payload: { orgId, requestId: approved.id, userId } },
+        ]);
+        expect(await repo.listPendingRequests(orgId)).toEqual([]);
+      });
+
+      it("a second decision on the same request throws MembershipRequestNotPendingError", async () => {
+        const { repo, orgId, userId } = await setup();
+        const request = await repo.requestToJoin(userId, orgId);
+        await repo.reviewRequest(orgId, request.id, true);
+
+        await expect(repo.reviewRequest(orgId, request.id, false)).rejects.toBeInstanceOf(
+          MembershipRequestNotPendingError,
+        );
+        await expect(repo.withdrawRequest(userId, request.id)).rejects.toBeInstanceOf(
+          MembershipRequestNotPendingError,
+        );
+      });
+
+      it("a request that is not the caller's is not found, same as one that does not exist", async () => {
+        const { repo, orgId, managerId, userId, createClub, createUsers } = await setup();
+        const [stranger] = await createUsers(1);
+        const otherClub = await createClub(newClub({ members: 0 }));
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        const request = await repo.requestToJoin(stranger, orgId);
+
+        // Wrong user, wrong club, wrong kind, and unknown id
+        await expect(repo.answerInvitation(stranger, invitation.id, true)).rejects.toBeInstanceOf(MembershipRequestNotFoundError);
+        await expect(repo.revokeInvitation(otherClub, invitation.id)).rejects.toBeInstanceOf(MembershipRequestNotFoundError);
+        await expect(repo.reviewRequest(orgId, invitation.id, true)).rejects.toBeInstanceOf(MembershipRequestNotFoundError);
+        await expect(repo.answerInvitation(stranger, request.id, true)).rejects.toBeInstanceOf(MembershipRequestNotFoundError);
+        await expect(repo.withdrawRequest(userId, request.id)).rejects.toBeInstanceOf(MembershipRequestNotFoundError);
+        await expect(repo.reviewRequest(orgId, UNKNOWN_ID, true)).rejects.toBeInstanceOf(MembershipRequestNotFoundError);
+        // None of that decided anything
+        expect(await repo.listPendingRequests(orgId)).toHaveLength(1);
+      });
+
+      it("revokeInvitation and withdrawRequest end the pending row without notifying", async () => {
+        const { repo, sent, orgId, managerId, userId, createUsers } = await setup();
+        const [other] = await createUsers(1);
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        const request = await repo.requestToJoin(other, orgId);
+        const sentBefore = sent().length;
+
+        await repo.revokeInvitation(orgId, invitation.id);
+        await repo.withdrawRequest(other, request.id);
+
+        expect(sent()).toHaveLength(sentBefore);
+        expect(await repo.listPendingRequests(orgId)).toEqual([]);
+        await expect(repo.answerInvitation(userId, invitation.id, true)).rejects.toBeInstanceOf(MembershipRequestNotPendingError);
+      });
+
+      it("accepting after joining by another way throws AlreadyMemberError and leaves the invitation pending", async () => {
+        const { repo, addAthlete, orgId, managerId, userId } = await setup();
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        await addAthlete(orgId, userId);
+
+        await expect(repo.answerInvitation(userId, invitation.id, true)).rejects.toBeInstanceOf(AlreadyMemberError);
+        await repo.revokeInvitation(orgId, invitation.id);
+      });
+
+      it("listPendingRequests returns the club's pending requests oldest first", async () => {
+        const { repo, orgId, userId, createUsers } = await setup();
+        const [second] = await createUsers(1);
+        const first = await repo.requestToJoin(userId, orgId);
+        const last = await repo.requestToJoin(second, orgId);
+
+        expect((await repo.listPendingRequests(orgId)).map((r) => r.id)).toEqual([first.id, last.id]);
+      });
+    });
+
+    // Scheduled deletion (#217): both implementations count 30 days from `now`
+    describe("scheduled deletion", () => {
+      async function setup() {
+        const fixture = createFixture();
+        const orgId = await fixture.createClub(newClub({ members: 0 }));
+        const [adminId] = await fixture.createUsers(1);
+        return { ...fixture, orgId, adminId };
+      }
+
+      it("scheduleDeletion sets deleteAt 30 days after now and returns the club name", async () => {
+        const { repo, orgId, adminId } = await setup();
+        const now = new Date("2026-01-01T10:00:00Z");
+
+        const result = await repo.scheduleDeletion(adminId, orgId, now);
+
+        expect(result.orgId).toBe(orgId);
+        expect(result.deleteAt).toEqual(new Date("2026-01-31T10:00:00Z"));
+      });
+
+      it("scheduleDeletion throws OrganizationDeletionAlreadyScheduledError the second time", async () => {
+        const { repo, orgId, adminId } = await setup();
+        await repo.scheduleDeletion(adminId, orgId);
+
+        await expect(repo.scheduleDeletion(adminId, orgId)).rejects.toBeInstanceOf(
+          OrganizationDeletionAlreadyScheduledError,
+        );
+      });
+
+      it("scheduleDeletion throws OrganizationNotFoundError for a missing club", async () => {
+        const { repo, adminId } = await setup();
+
+        await expect(repo.scheduleDeletion(adminId, UNKNOWN_ID)).rejects.toBeInstanceOf(
+          OrganizationNotFoundError,
+        );
+      });
+
+      it("cancelDeletion clears the schedule, so it can be scheduled again", async () => {
+        const { repo, orgId, adminId } = await setup();
+        await repo.scheduleDeletion(adminId, orgId);
+
+        await repo.cancelDeletion(adminId, orgId);
+
+        await expect(repo.scheduleDeletion(adminId, orgId)).resolves.toMatchObject({ orgId });
+      });
+
+      it("cancelDeletion throws OrganizationDeletionNotScheduledError if nothing is scheduled", async () => {
+        const { repo, orgId, adminId } = await setup();
+
+        await expect(repo.cancelDeletion(adminId, orgId)).rejects.toBeInstanceOf(
+          OrganizationDeletionNotScheduledError,
+        );
+      });
+    });
   });
 }

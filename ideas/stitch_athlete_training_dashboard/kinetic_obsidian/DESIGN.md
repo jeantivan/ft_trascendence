@@ -16,7 +16,7 @@ colors:
   outline: '#8e9379'
   outline-variant: '#444933'
   surface-tint: '#abd600'
-  primary: '#ffffff'
+  primary: '#CCFF00'
   on-primary: '#283500'
   primary-container: '#c3f400'
   on-primary-container: '#556d00'
@@ -249,6 +249,7 @@ The shape system adopts a confident, refined athletic profile using level 2 roun
   - *Example (Intervalos):* Background `rgba(255, 51, 102, 0.12)`, border `#FF3366`, text `#FF3366`.
 - **RPE Rating Badges (1–10):** Fixed-width circular or rounded-pill tags featuring a high-visibility numeric indicator. RPE 1–3 green, 4–6 yellow/amber, 7–8 orange, 9–10 red.
 - **Volume Alert Component:** Inline notification badge combining a warning icon, high-chroma Amber `#FFB800` accent, and crisp percentage label (+12% vs. semana anterior).
+- **Semantic Status Badges (`success`, `info`, `warning`, `destructive`, `neutral`):** Pill-shaped `label-caps` tags reusing the badge silhouette with semantic tokens: `success` (`#10B981`), `info` (`#00F0FF`), `warning` (`#FFB800`), `destructive` (`#EF4444`) with 12% alpha fill and matching border, and `neutral` (`#1E2638` surface, `#374563` border, `#94A3B8` text).
 
 ### Performance Cards & Session Blocks
 - **Session Card:** Elevated container (`#131923`) featuring a left vertical kinetic status spine (4px solid color denoting Session Type). Includes athlete status indicator (Completed icon vs. Pending), scheduled date/time, and target distance.

@@ -224,17 +224,23 @@ describe("Events Zod schemas", () => {
     const valid = {
       eventId: EVENT_ID,
       athleteId: "00000000-0000-4000-8000-000000000024",
-      decision: "approved",
+      action: "approve",
     };
 
-    it("accepts approving or rejecting a Spot Request", () => {
+    it("accepts the Manager's three actions: approve, reject and expel", () => {
       expect(reviewSpotSchema.safeParse(valid).success).toBe(true);
-      expect(reviewSpotSchema.safeParse({ ...valid, decision: "rejected" }).success).toBe(true);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "reject" }).success).toBe(true);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "expel" }).success).toBe(true);
     });
 
-    it("rejects any other decision: the Manager only approves or rejects", () => {
-      expect(reviewSpotSchema.safeParse({ ...valid, decision: "pending" }).success).toBe(false);
-      expect(reviewSpotSchema.safeParse({ ...valid, decision: "withdrawn" }).success).toBe(false);
+    it("rejects any other action, also a state name instead of an action", () => {
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "withdraw" }).success).toBe(false);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "approved" }).success).toBe(false);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "rejected" }).success).toBe(false);
+    });
+
+    it("rejects a request without action", () => {
+      expect(reviewSpotSchema.safeParse({ eventId: EVENT_ID, athleteId: valid.athleteId }).success).toBe(false);
     });
 
     it("rejects a malformed athleteId", () => {
@@ -316,6 +322,46 @@ describe("Events Zod schemas", () => {
         feedbackId: FEEDBACK_ID,
       });
       expect(deleteFeedbackSchema.safeParse({ feedbackId: "abc" }).success).toBe(false);
+    });
+  });
+
+  // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent in
+  // upper case comes out in lower case, as with org/schemas.ts (normalizeId), so the
+  // in-memory EventRepository finds it too (review of #241)
+  describe("ids", () => {
+    const UPPER = "ABCDEF00-0000-4000-8000-0000000000AB";
+    const LOWER = "abcdef00-0000-4000-8000-0000000000ab";
+
+    it.each([
+      ["createEventSchema sessionId", () => createEventSchema.parse({ ...validEvent, sessionId: UPPER }).sessionId],
+      ["updateEventSchema eventId", () => updateEventSchema.parse({ ...validEvent, eventId: UPPER }).eventId],
+      [
+        "updateEventSchema sessionId",
+        () => updateEventSchema.parse({ ...validEvent, eventId: EVENT_ID, sessionId: UPPER }).sessionId,
+      ],
+      ["cancelEventSchema eventId", () => cancelEventSchema.parse({ eventId: UPPER }).eventId],
+      ["requestSpotSchema eventId", () => requestSpotSchema.parse({ eventId: UPPER }).eventId],
+      ["withdrawSpotSchema eventId", () => withdrawSpotSchema.parse({ eventId: UPPER }).eventId],
+      [
+        "reviewSpotSchema eventId",
+        () => reviewSpotSchema.parse({ eventId: UPPER, athleteId: EVENT_ID, action: "approve" }).eventId,
+      ],
+      [
+        "reviewSpotSchema athleteId",
+        () => reviewSpotSchema.parse({ eventId: EVENT_ID, athleteId: UPPER, action: "approve" }).athleteId,
+      ],
+      [
+        "createFeedbackSchema eventId",
+        () => createFeedbackSchema.parse({ eventId: UPPER, athleteId: EVENT_ID, body: "Bien" }).eventId,
+      ],
+      [
+        "createFeedbackSchema athleteId",
+        () => createFeedbackSchema.parse({ eventId: EVENT_ID, athleteId: UPPER, body: "Bien" }).athleteId,
+      ],
+      ["updateFeedbackSchema feedbackId", () => updateFeedbackSchema.parse({ feedbackId: UPPER, body: "Bien" }).feedbackId],
+      ["deleteFeedbackSchema feedbackId", () => deleteFeedbackSchema.parse({ feedbackId: UPPER }).feedbackId],
+    ] as const)("%s comes out in lower case", (_field, read) => {
+      expect(read()).toBe(LOWER);
     });
   });
 });

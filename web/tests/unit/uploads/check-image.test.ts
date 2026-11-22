@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { checkImage } from "@/lib/uploads/check-image";
 
 // Written here, not imported, so changing the limit in the code breaks this test
-const TWO_MB = 2 * 1024 * 1024;
+const EIGHT_MB = 8 * 1024 * 1024;
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
@@ -64,12 +64,12 @@ describe("checkImage", () => {
     });
   });
 
-  it("accepts exactly 2 MB", () => {
-    expect(checkImage(fileStartingWith(PNG_SIGNATURE, TWO_MB)).ok).toBe(true);
+  it("accepts exactly 8 MB", () => {
+    expect(checkImage(fileStartingWith(PNG_SIGNATURE, EIGHT_MB)).ok).toBe(true);
   });
 
-  it("rejects one byte over 2 MB", () => {
-    expect(checkImage(fileStartingWith(PNG_SIGNATURE, TWO_MB + 1))).toEqual({
+  it("rejects one byte over 8 MB", () => {
+    expect(checkImage(fileStartingWith(PNG_SIGNATURE, EIGHT_MB + 1))).toEqual({
       ok: false,
       reason: "too_large",
     });

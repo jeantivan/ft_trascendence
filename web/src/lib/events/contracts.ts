@@ -25,7 +25,7 @@ export type EventMemberView = {
 export type EventManagerView = Omit<EventMemberView, "mySpotRequest"> & {
   spotRequests: {
     // spot_requests.user_id in the database; the Manager sends it back as the
-    // athleteId of reviewSpotSchema to approve or reject
+    // athleteId of reviewSpotSchema to approve, reject or expel
     athleteId: string;
     nick: string;
     status: SpotRequestStatus;

@@ -1,10 +1,13 @@
 // @vitest-environment node
+import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DELETE, POST } from "@/app/api/upload/route";
 import { requireApiAuth } from "@/lib/permissions/require-api-auth";
+import { MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
 
 // The real requireApiAuth needs NextAuth and the users table: fake it, so these
 // tests only check what the route does with the upload.
@@ -52,6 +55,47 @@ const testUser = {
 };
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+
+// A real one-colour PNG for the tests that get as far as sharp: PNG_BYTES is only a
+// signature, enough for the tests that reject the upload before decoding it.
+// 4 channels for an alpha channel. A copy in a plain ArrayBuffer, which is what File takes.
+async function pngOf(
+  width: number,
+  height: number,
+  background: string | { r: number; g: number; b: number; alpha: number } = "#00ff00",
+  channels: 3 | 4 = 3,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const image = await sharp({ create: { width, height, channels, background } }).png().toBuffer();
+  return new Uint8Array(image);
+}
+
+// Planted in the XMP packet, so the test can look for it in the saved bytes
+const XMP_SECRET = "planted-xmp-secret";
+const XMP_PACKET =
+  '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">' +
+  `<rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/" dc:creator="${XMP_SECRET}"/></rdf:RDF></x:xmpmeta>`;
+
+// Like a phone photo: GPS coordinates in its EXIF, plus an XMP packet
+async function photoWithMetadata(format: "jpeg" | "png" | "webp"): Promise<Uint8Array<ArrayBuffer>> {
+  const image = await sharp({ create: { width: 200, height: 100, channels: 3, background: "#ff0000" } })
+    .withExif({ IFD3: { GPSLatitudeRef: "N", GPSLatitude: "40/1 25/1 0/1" } })
+    .withXmp(XMP_PACKET)
+    .toFormat(format)
+    .toBuffer();
+  // A copy in a plain ArrayBuffer, which is what File takes
+  return new Uint8Array(image);
+}
+
+// A raw byte search that does not use sharp, so sharp is not the only one checking sharp
+function hasBytes(bytes: Uint8Array, text: string): boolean {
+  return Buffer.from(bytes).includes(text, 0, "latin1");
+}
+
+// What the route wrote to disk for the avatar it recorded
+async function savedFile(): Promise<Buffer> {
+  const record = fake.avatarCreate.mock.calls[0][0].data;
+  return readFile(path.join(fake.uploadsDir, record.path));
+}
 
 // A multipart POST like the browser sends. contentLength is only what the header
 // claims: the route must trust it to reject early, and checkImage checks the real size.
@@ -124,7 +168,8 @@ describe("POST /api/upload", () => {
     }
   });
 
-  it("returns 413 when the request says it is far over 2 MB, before reading it", async () => {
+  it("returns 413 for a body at the Next.js proxy's 10 MiB cut, before reading it", async () => {
+    // The proxy passes on only the first 10 MiB: a body that big must never reach formData()
     const tenMb = String(10 * 1024 * 1024);
     const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png"), tenMb));
     expect(response.status).toBe(413);
@@ -182,16 +227,18 @@ describe("POST /api/upload", () => {
     expect(response.status).toBe(415);
   });
 
-  it("saves the image, records it and points User.image at it", async () => {
-    const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")));
+  it("saves the image as WebP, records it and points User.image at it", async () => {
+    const response = await POST(uploadRequest(formWithFile(await pngOf(2, 2), "a.png", "image/png")));
 
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ id: AVATAR_ID, url: `/api/files/${AVATAR_ID}` });
 
+    // The row describes the stored file, not the upload: always a new WebP (#223)
     const record = fake.avatarCreate.mock.calls[0][0].data;
-    expect(record).toMatchObject({ ownerId: testUser.id, mimeType: "image/png", sizeBytes: PNG_BYTES.length });
-    expect(record.path).toMatch(/^avatars\/.+\.png$/);
-    expect(new Uint8Array(await readFile(path.join(fake.uploadsDir, record.path)))).toEqual(PNG_BYTES);
+    const saved = await savedFile();
+    expect(record).toMatchObject({ ownerId: testUser.id, mimeType: "image/webp", sizeBytes: saved.length });
+    expect(record.path).toMatch(/^avatars\/.+\.webp$/);
+    expect((await sharp(saved).metadata()).format).toBe("webp");
 
     expect(fake.userUpdate).toHaveBeenCalledWith({
       where: { id: testUser.id },
@@ -212,7 +259,7 @@ describe("POST /api/upload", () => {
       return { count: 1 };
     });
 
-    const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")));
+    const response = await POST(uploadRequest(formWithFile(await pngOf(2, 2), "a.png", "image/png")));
     expect(response.status).toBe(201);
 
     // Every avatar but the new one, not only older ones: with two uploads at once, the
@@ -237,7 +284,7 @@ describe("POST /api/upload", () => {
   it("removes the saved image when the database write fails", async () => {
     fake.transaction.mockRejectedValue(new Error("database down"));
 
-    await expect(POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")))).rejects.toThrow(
+    await expect(POST(uploadRequest(formWithFile(await pngOf(2, 2), "a.png", "image/png")))).rejects.toThrow(
       "database down",
     );
     // avatars/ was created for the file, which must be gone
@@ -254,7 +301,7 @@ describe("POST /api/upload", () => {
       throw new Error("commit failed");
     });
 
-    await expect(POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")))).rejects.toThrow(
+    await expect(POST(uploadRequest(formWithFile(await pngOf(2, 2), "a.png", "image/png")))).rejects.toThrow(
       "commit failed",
     );
     // The callback did run and found the old avatar...
@@ -272,7 +319,7 @@ describe("POST /api/upload", () => {
     fake.avatarFindMany.mockResolvedValue([OLD_AVATAR, otherOld]);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const response = await POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")));
+    const response = await POST(uploadRequest(formWithFile(await pngOf(2, 2), "a.png", "image/png")));
 
     // The new avatar is saved and in use: the failure is only ours to clean up
     expect(response.status).toBe(201);
@@ -292,12 +339,172 @@ describe("POST /api/upload", () => {
     });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(POST(uploadRequest(formWithFile(PNG_BYTES, "a.png", "image/png")))).rejects.toThrow(
+    await expect(POST(uploadRequest(formWithFile(await pngOf(2, 2), "a.png", "image/png")))).rejects.toThrow(
       "database down",
     );
     // The orphan is reported, so someone can find it
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+// #223: the saved file is a new image, never the bytes that arrived
+describe("POST /api/upload: the saved image", () => {
+  // Each format keeps EXIF and XMP in its own block, with its own name. In PNG the XMP
+  // text can be compressed (iTXt), so its marker is the block's keyword, never compressed.
+  it.each([
+    { format: "jpeg", type: "image/jpeg", exifMarker: "Exif", xmpMarker: XMP_SECRET },
+    { format: "png", type: "image/png", exifMarker: "eXIf", xmpMarker: "XML:com.adobe.xmp" },
+    { format: "webp", type: "image/webp", exifMarker: "EXIF", xmpMarker: "XMP " },
+  ] as const)("saves a $format photo as WebP without its EXIF (GPS) or XMP", async (photoCase) => {
+    const photo = await photoWithMetadata(photoCase.format);
+    // The input really carries what must go: without this the test could pass on nothing
+    const input = await sharp(photo).metadata();
+    expect(input.exif).toBeDefined();
+    expect(input.xmp).toBeDefined();
+    expect(hasBytes(photo, photoCase.exifMarker)).toBe(true);
+    expect(hasBytes(photo, photoCase.xmpMarker)).toBe(true);
+
+    const response = await POST(uploadRequest(formWithFile(photo, `photo.${photoCase.format}`, photoCase.type)));
+    expect(response.status).toBe(201);
+
+    const saved = await savedFile();
+    const output = await sharp(saved).metadata();
+    expect(output.format).toBe("webp");
+    expect(output.exif).toBeUndefined();
+    expect(output.xmp).toBeUndefined();
+    for (const marker of ["Exif", "EXIF", "eXIf", "XMP ", "XML:com.adobe.xmp", "xmpmeta", XMP_SECRET]) {
+      expect(hasBytes(saved, marker), marker).toBe(false);
+    }
+  });
+
+  it("turns the photo upright before dropping its EXIF orientation", async () => {
+    // Orientation 6: the phone was held upright, so the 200 × 100 pixels show a 100 × 200 photo
+    const sideways = await sharp({ create: { width: 200, height: 100, channels: 3, background: "#0000ff" } })
+      .withMetadata({ orientation: 6 })
+      .jpeg()
+      .toBuffer();
+    expect((await sharp(sideways).metadata()).orientation).toBe(6);
+
+    const response = await POST(uploadRequest(formWithFile(new Uint8Array(sideways), "photo.jpg", "image/jpeg")));
+    expect(response.status).toBe(201);
+
+    // Without the tag, nothing would turn it later: the pixels themselves must be upright
+    const output = await sharp(await savedFile()).metadata();
+    expect({ width: output.width, height: output.height }).toEqual({ width: 100, height: 200 });
+    expect(output.orientation).toBeUndefined();
+  });
+
+  // At most 512 × 512 (avatars show at 64 px at most), same proportions, never enlarged
+  it.each([
+    { input: { width: 1024, height: 512 }, saved: { width: 512, height: 256 } },
+    { input: { width: 300, height: 200 }, saved: { width: 300, height: 200 } },
+  ])("saves a $input.width × $input.height image as $saved.width × $saved.height", async ({ input, saved }) => {
+    const image = await pngOf(input.width, input.height);
+
+    const response = await POST(uploadRequest(formWithFile(image, "a.png", "image/png")));
+    expect(response.status).toBe(201);
+
+    const output = await sharp(await savedFile()).metadata();
+    expect({ width: output.width, height: output.height }).toEqual(saved);
+  });
+
+  // The side tests use one row of pixels: tiny files, whatever the length of the other side
+  it("accepts an image 8000 px wide, the largest side allowed", async () => {
+    const response = await POST(uploadRequest(formWithFile(await pngOf(8000, 1), "a.png", "image/png")));
+    expect(response.status).toBe(201);
+  });
+
+  it("accepts a photo of about 5 MB, like a phone's", async () => {
+    // Random pixels do not compress, so the PNG stays about as big as the raw pixels
+    const width = 1300;
+    const height = 1300;
+    const pixels = randomBytes(width * height * 3);
+    const photo = new Uint8Array(await sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer());
+    expect(photo.length).toBeGreaterThan(4 * 1024 * 1024);
+    expect(photo.length).toBeLessThan(8 * 1024 * 1024);
+
+    // The real size, plus room for the form around the file, as a browser would send
+    const contentLength = String(photo.length + 1024);
+    const response = await POST(uploadRequest(formWithFile(photo, "photo.png", "image/png"), contentLength));
+    expect(response.status).toBe(201);
+  });
+
+  // Both sides: a check on the width alone would let a tall image through
+  it.each([
+    { width: 8001, height: 1 },
+    { width: 1, height: 8001 },
+  ])("rejects a $width × $height image with 413 and stores nothing", async ({ width, height }) => {
+    const response = await POST(uploadRequest(formWithFile(await pngOf(width, height), "a.png", "image/png")));
+
+    expect(response.status).toBe(413);
+    // Not "File too large": that one is the 8 MB limit, and this file is a few bytes
+    expect(await response.json()).toEqual({ error: "Image too large" });
+    expect(await readdir(fake.uploadsDir)).toEqual([]);
+    expect(fake.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an 8001 × 8001 image with 413 and stores nothing, though it is far under the size limit", async () => {
+    // One colour compresses to about 200 KB. Its area is over sharp's pixel limit, which
+    // already applies when reading the header: the side check must still get to see it.
+    const image = await pngOf(8001, 8001);
+    expect(image.length).toBeLessThan(MAX_IMAGE_BYTES);
+
+    const response = await POST(uploadRequest(formWithFile(image, "a.png", "image/png")));
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "Image too large" });
+    expect(await readdir(fake.uploadsDir)).toEqual([]);
+    expect(fake.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects with 415 an image that starts like a PNG but cannot be decoded, and stores nothing", async () => {
+    // The signature gets it past checkImage; what follows is not a PNG at all
+    const broken = new Uint8Array([...PNG_BYTES.subarray(0, 8), ...new TextEncoder().encode("not really a png")]);
+
+    const response = await POST(uploadRequest(formWithFile(broken, "a.png", "image/png")));
+
+    // The same answer as any other file that is not a PNG, JPEG or WebP image
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({ error: "Unsupported image type" });
+    expect(await readdir(fake.uploadsDir)).toEqual([]);
+    expect(fake.transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps a transparent PNG transparent", async () => {
+    const transparent = await pngOf(2, 2, { r: 0, g: 0, b: 0, alpha: 0 }, 4);
+
+    const response = await POST(uploadRequest(formWithFile(transparent, "logo.png", "image/png")));
+    expect(response.status).toBe(201);
+
+    const saved = sharp(await savedFile());
+    expect((await saved.metadata()).hasAlpha).toBe(true);
+    // An alpha channel that is all 255 would show as opaque: look at a pixel. In RGBA,
+    // byte 3 is the first pixel's alpha.
+    const pixels = await saved.ensureAlpha().raw().toBuffer();
+    expect(pixels[3]).toBe(0);
+  });
+
+  it("saves only the first frame of an animated WebP", async () => {
+    // Two 10 × 10 frames, red then blue (create's pageHeight alone gives a still image)
+    const frames = [await pngOf(10, 10, "#ff0000"), await pngOf(10, 10, "#0000ff")];
+    const animated = await sharp(frames, { join: { animated: true } })
+      .webp()
+      .toBuffer();
+    expect((await sharp(animated).metadata()).pages).toBe(2);
+
+    const response = await POST(uploadRequest(formWithFile(new Uint8Array(animated), "a.webp", "image/webp")));
+    expect(response.status).toBe(201);
+
+    // A still image has no pages field. 10 × 20 would mean both frames glued in a strip.
+    const saved = sharp(await savedFile());
+    const output = await saved.metadata();
+    expect(output.pages ?? 1).toBe(1);
+    expect({ width: output.width, height: output.height }).toEqual({ width: 10, height: 10 });
+    // Red, so the first frame. Lossy WebP shifts colours a little: ranges, not exact values.
+    const [red, , blue] = await saved.raw().toBuffer();
+    expect(red).toBeGreaterThan(200);
+    expect(blue).toBeLessThan(50);
   });
 });
 

@@ -1,14 +1,12 @@
 # Términos de Servicio
 
-> **BORRADOR INTERNO, NO PUBLICAR (sub-issue #27, parte de #8).** Los textos entre `[CORCHETES]` son decisiones o datos que el equipo debe confirmar antes de publicar; no se han inventado. Este documento no sirve como Términos definitivos mientras queden corchetes. El issue #27 sigue abierto hasta completarlos.
-
 > **Proyecto académico de 42.** Los datos identificativos del responsable y de contacto son ficticios y se utilizan exclusivamente para este ejercicio; no identifican a una empresa real responsable de este servicio.
 
-**Última actualización:** [FECHA DE PUBLICACIÓN]
+**Última actualización:** 24 de octubre de 2026
 
 ## 1. Quiénes somos y qué aceptas
 
-Estos términos regulan el uso de **Stride Sync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
+Estos términos regulan el uso de **StrideSync** (en adelante, "la plataforma"), un servicio para organizar entrenamientos de running en club: grupos por nivel y objetivo, entrenamientos planificados por entrenadores y eventos presenciales.
 
 - **Responsable del servicio:** TRANSCENDENCE RUNNING HUB HOLDING SL, CIF B42424242
 - **Domicilio:** Calle De La Trancendencia, 42. 28042 Madrid, España
@@ -18,9 +16,9 @@ Estos términos regulan el uso de **Stride Sync** (en adelante, "la plataforma")
 
 Al crear una cuenta aceptas estos términos. Si no estás de acuerdo, no uses la plataforma. Antes de crear la cuenta podrás leerlos, guardarlos y aceptarlos de forma expresa.
 
-**Edad mínima:** [EDAD MÍNIMA DE USO: pendiente de decidir; se redacta igual que en la sección 12 de la Política de Privacidad].
+**Edad mínima:** 16 años. Debe coincidir con la sección 12 de la Política de Privacidad.
 
-**Precio:** [SERVICIO GRATUITO O DE PAGO: pendiente de decidir. Si es gratuito, se eliminan las referencias a pagos y reembolsos de este documento].
+**Precio:** el servicio es **gratuito** para todos los usuarios, incluidos los Managers. Nadie cobra por usar la plataforma: ni la plataforma ni los Managers.
 
 ## 2. Tu cuenta
 
@@ -51,7 +49,7 @@ La plataforma tiene tres roles:
 - Cada usuario decide si participa en una sesión o en un Event, y debe tener en cuenta su estado físico.
 - Los entrenamientos y el Feedback que publica un Manager son **observaciones y planificación deportiva, no consejo médico ni diagnóstico**.
 - **Ante dolor, lesión o malestar, para y consulta a un profesional sanitario.** No uses la plataforma como sustituto de una valoración médica.
-- [ROL DE LOS MANAGERS: aclarar si son usuarios o profesionales independientes y no representantes de la plataforma. Pendiente de decidir].
+- Los Managers no son representantes de la plataforma. Son usuarios, igual que los Athletes, y no cobran por sus servicios en la plataforma.
 
 Nada de lo anterior excluye ni limita la responsabilidad que la ley no permite excluir ni limitar (véase la sección 9).
 
@@ -73,7 +71,8 @@ El tratamiento de tus datos personales se rige por la [Política de Privacidad](
 
 | Dato | Finalidad | Fundamento | Plazo |
 |---|---|---|---|
-| Mensajes en chats de Events y mensajes privados, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | [PLAZO: mientras exista la conversación u otro criterio] |
+| Mensajes en chats de Events, sin autor | Que las demás personas mantengan la conversación | Interés legítimo (art. 6.1.f) | Mientras exista el chat del Event; se borran con él |
+| Mensajes privados (DMs), sin autor | Que la otra persona mantenga el hilo de la conversación | Interés legítimo (art. 6.1.f) | Hasta que la otra persona borre la conversación o su cuenta |
 | Events, plantillas de entrenamiento e invitaciones que creaste como Manager, sin autor | Que otros Athletes del club sigan usándolos | Interés legítimo (art. 6.1.f). No contienen tu identidad tras la desvinculación | Mientras el club los mantenga |
 | Feedback que escribiste como Manager, sin tu nombre | Que el Athlete conserve su historial | Ejecución del contrato con el Athlete (art. 6.1.b) | Mientras el Athlete mantenga su cuenta |
 | Registro de auditoría (solo identificadores) | Seguridad y defensa ante reclamaciones | Interés legítimo (art. 6.1.f) y art. 17.3.e | 12 meses |
@@ -90,7 +89,10 @@ Eres responsable de lo que escribes en chats de Events y mensajes privados. No e
 
 ### Cómo denunciar
 
-[QUIÉN PUEDE DENUNCIAR: decisión pendiente del equipo. Hoy solo está previsto que un Manager pueda denunciar. La revisión legal (PR #32) indica que hay que separar dos canales: (a) denuncia por infracción de normas, abierta al menos a Athletes y Managers, y (b) notificación de contenido presuntamente ilícito (art. 16 DSA), abierta a cualquier persona o entidad, aunque no sea miembro del club. Cambiarlo afecta a la matriz de permisos y a la sección 6 de la Política de Privacidad].
+Hay dos canales:
+
+- **Dentro de la plataforma:** cualquier usuario con sesión iniciada puede denunciar contenido que ya puede ver: mensajes del chat de un Event en el que participa, mensajes privados con sus Contacts y perfiles a los que tiene acceso. Antes de registrar la denuncia, la plataforma comprueba en el servidor que tienes acceso a ese contenido.
+- **Por email:** si no tienes cuenta o quieres enviar una notificación legal de contenido presuntamente ilícito (art. 16 DSA), escribe a abuse@stridesync.fit.
 
 Una vez recibida una denuncia, el Admin revisa los mensajes afectados, tanto los del denunciante como los del usuario denunciado, y solo esos.
 
@@ -98,7 +100,7 @@ Una vez recibida una denuncia, el Admin revisa los mensajes afectados, tanto los
 
 ### Quién decide
 
-Las denuncias las revisa una persona: el Admin. [CONFIRMAR con el equipo que hoy no hay filtros ni decisiones automáticas, por ejemplo antispam. Si los hay, declararlos aquí].
+Las denuncias las revisa una persona: el Admin. **La moderación es exclusivamente humana**: no usamos filtros ni algoritmos que detecten, retiren o bloqueen contenido o cuentas de forma automática. El Admin revisa cada denuncia desde su panel y decide si la desestima, retira el contenido o sanciona la cuenta.
 
 ### Medidas posibles
 
@@ -121,24 +123,23 @@ Podemos retrasar o limitar esta comunicación solo si la ley o la seguridad de o
 
 ### Cómo recurrir
 
-Escribe a legal@stridesync.fit indicando la decisión y tus motivos. Una persona revisa tu caso y te responde [PLAZO DE RESPUESTA: pendiente de decidir]. Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
+Escribe a legal@stridesync.fit indicando la decisión y tus motivos. Una persona revisa tu caso y te responde en un máximo de **72 horas laborables** (de lunes a viernes). Un bloqueo no borra tus datos: puedes seguir ejerciendo tus derechos de acceso y supresión descritos en la Política de Privacidad.
 
 ## 9. Disponibilidad y responsabilidad
 
 - La plataforma se ofrece "tal cual". No garantizamos que esté disponible de forma ininterrumpida ni libre de errores. Podemos realizar mantenimiento, que intentaremos avisar con antelación cuando sea posible.
 - **No excluimos ni limitamos** nuestra responsabilidad por daños causados por dolo o negligencia, por incumplimiento de nuestras obligaciones contractuales, ni los derechos que la ley te reconoce como consumidor.
 - Fuera de esos casos, no respondemos de lo que ocurra durante un entrenamiento o un Event por decisiones o conductas de los usuarios.
-- Si el servicio tuviera pagos, el importe a devolver ante una cancelación o un cambio perjudicial se calcula de forma proporcional al periodo no disfrutado [SOLO SI HAY PAGOS: precio, renovación, cancelación y desistimiento, a definir].
 
 ## 10. Cambios en estos términos
 
 Podemos modificarlos por motivos concretos: cambios legales, seguridad, funciones o modelo del servicio. Los cambios no reducen retroactivamente los derechos que ya hayas adquirido.
 
-Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización. [SOLO SI HAY PAGOS: se devuelve la parte proporcional].
+Te avisamos por email con al menos 30 días de antelación, igual que con la Política de Privacidad. Si no estás de acuerdo con un cambio relevante, puedes borrar tu cuenta antes de que entre en vigor, sin penalización.
 
 ## 11. Ley aplicable y jurisdicción
 
-Se respetan las normas imperativas y el foro que corresponda al consumidor. [LEY APLICABLE Y JURISDICCIÓN CONCRETA: pendiente de la decisión de identidad del responsable. Debe coincidir con la autoridad de control indicada en la Política de Privacidad].
+Se respetan las normas imperativas y el foro que corresponda al consumidor. Estos términos se rigen por la ley española y, para cualquier controversia, las partes se someten a los juzgados y tribunales de Madrid, sin perjuicio del foro que corresponda al consumidor. Debe coincidir con la autoridad de control indicada en la Política de Privacidad.
 
 ## 12. Contacto
 
