@@ -277,7 +277,7 @@ describe("deleteAccountWithOtp", { timeout: 30_000 }, () => {
 
       const result = await deleteWithFreshOtp(LEAVING_ID, db, db, uploadsDir);
 
-      expect(result).toEqual({ deleted: true, avatarCleanupFailed: 1 });
+      expect(result).toEqual({ deleted: true, fileCleanupFailed: 1 });
       expect(await exists(LEAVING_ID)).toBe(false);
       expect(await db.avatar.count({ where: { ownerId: LEAVING_ID } })).toBe(0);
       // The failure did not stop the other file; the one that failed is still on disk
@@ -285,7 +285,7 @@ describe("deleteAccountWithOtp", { timeout: 30_000 }, () => {
       expect(existsSync(path.join(uploadsDir, "avatars", "stuck"))).toBe(true);
       // Only the count: no path, no email
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith("Account deleted, but 1 avatar file(s) could not be removed");
+      expect(warn).toHaveBeenCalledWith("Account deleted, but 1 avatar or export file(s) could not be removed");
     });
   });
 

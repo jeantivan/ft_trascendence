@@ -13,12 +13,12 @@ import { notifyAdminsOfClubsWithoutManager } from "@/lib/org/club-without-manage
 export { CLUB_WITHOUT_MANAGER } from "@/lib/org/club-without-manager";
 
 export type DeleteAccountResult =
-  // avatarCleanupFailed is only present when some avatar or export file could not be removed
-  | { deleted: true; avatarCleanupFailed?: number }
+  // fileCleanupFailed is only present when some avatar or export file could not be removed
+  | { deleted: true; fileCleanupFailed?: number }
   | { deleted: false; reason: "invalid_code" | "last_admin" };
 
 export type DeleteAccountAsAdminResult =
-  | { deleted: true; avatarCleanupFailed?: number }
+  | { deleted: true; fileCleanupFailed?: number }
   | { deleted: false; reason: "not_found" | "last_admin" };
 
 // Thrown inside the transaction when the code could not be consumed; caught
@@ -52,7 +52,7 @@ class AccountNotFoundError extends Error {}
 //    The user row is locked before reading them, so no upload can add one in between.
 //    If the code is rejected or the transaction fails, the disk is never touched.
 //    A file that cannot be deleted does not undo the deletion: the result stays
-//    deleted: true (the session must be closed) and carries avatarCleanupFailed.
+//    deleted: true (the session must be closed) and carries fileCleanupFailed.
 //    Known limit: an export still being generated when the account goes can finish writing
 //    its ZIP after this cleanup (generateExport then fails to mark the missing row ready),
 //    and nothing removes it. It is a rare race; the ZIP is never served (no row, no token).
@@ -102,8 +102,8 @@ export async function deleteAccountWithOtp(
   const failed = await deleteAvatarFiles(filePaths, uploadsDir);
   if (failed === 0) return { deleted: true };
   // Only the count: no paths, email, code or error
-  console.warn(`Account deleted, but ${failed} avatar file(s) could not be removed`);
-  return { deleted: true, avatarCleanupFailed: failed };
+  console.warn(`Account deleted, but ${failed} avatar or export file(s) could not be removed`);
+  return { deleted: true, fileCleanupFailed: failed };
 }
 
 // Deletes another person's account for the Admin panel (#104), without OTP. It deletes the
@@ -134,8 +134,8 @@ export async function deleteAccountAsAdmin(
 
   const failed = await deleteAvatarFiles(filePaths, uploadsDir);
   if (failed === 0) return { deleted: true };
-  console.warn(`Account deleted, but ${failed} avatar file(s) could not be removed`);
-  return { deleted: true, avatarCleanupFailed: failed };
+  console.warn(`Account deleted, but ${failed} avatar or export file(s) could not be removed`);
+  return { deleted: true, fileCleanupFailed: failed };
 }
 
 // The part both entries share, inside their transaction. Returns the avatar and export file
@@ -149,10 +149,9 @@ export async function deleteAccountAsAdmin(
 // reading them and notifying them.
 // Lock order: users first, then clubs, then conversations (deleteAccountRows).
 async function deleteLockedAccount(userId: string, tx: Prisma.TransactionClient): Promise<string[]> {
-  const { target, anotherAdminLeft } = await lockAccountAndAdmins(tx, userId);
+  const { target, isLastAdmin } = await lockAccountAndAdmins(tx, userId);
   if (!target) throw new AccountNotFoundError();
-  // A blocked Admin does not count as an unblocked one, so deleting it leaves the number unchanged
-  if (target.roleGlobal === "admin" && target.blockedAt === null && !anotherAdminLeft) throw new LastAdminError();
+  if (isLastAdmin) throw new LastAdminError();
 
   const avatars = await tx.avatar.findMany({ where: { ownerId: userId }, select: { path: true } });
   const exports = await tx.dataExport.findMany({ where: { userId }, select: { id: true } });

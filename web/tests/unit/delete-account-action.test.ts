@@ -41,8 +41,8 @@ describe("deleteAccountAction", () => {
     expect(deleteOrder).toBeLessThan(signOutOrder);
   });
 
-  it("still signs out when the account is deleted but some avatar files were not removed", async () => {
-    vi.mocked(deleteAccountWithOtp).mockResolvedValue({ deleted: true, avatarCleanupFailed: 1 });
+  it("still signs out when the account is deleted but some avatar or export files were not removed", async () => {
+    vi.mocked(deleteAccountWithOtp).mockResolvedValue({ deleted: true, fileCleanupFailed: 1 });
     vi.mocked(signOut).mockRejectedValue(new RedirectSignal());
 
     await expect(deleteAccountAction(null, formWith({ code: "123456" }))).rejects.toBeInstanceOf(RedirectSignal);

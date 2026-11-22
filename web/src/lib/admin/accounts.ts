@@ -135,9 +135,8 @@ async function setBlocked(
 // It also locks for an account that is not an Admin: reading the role without the lock
 // first would race with a role change (#103) between the read and the block
 async function refuseLastAdmin(tx: Prisma.TransactionClient, accountId: string): Promise<"last-admin" | null> {
-  const { target, anotherAdminLeft } = await lockAccountAndAdmins(tx, accountId);
-  const lastAdmin = target?.roleGlobal === "admin" && target.blockedAt === null && !anotherAdminLeft;
-  return lastAdmin ? "last-admin" : null;
+  const { isLastAdmin } = await lockAccountAndAdmins(tx, accountId);
+  return isLastAdmin ? "last-admin" : null;
 }
 
 // The common part of every change the panel makes to an account: change it only
