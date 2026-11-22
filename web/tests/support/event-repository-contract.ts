@@ -20,6 +20,16 @@ const TOMORROW_END = new Date("2030-01-03T00:00:00.000Z");
 // shows cancelledAt comes from the parameter
 const CANCEL_AT = new Date("2030-01-01T12:00:00.000Z");
 const CANCEL_AGAIN_AT = new Date("2030-01-01T15:00:00.000Z");
+// A second request, after NOW and before TOMORROW: a createdAt that changed to
+// this moment would show the request was written again
+const REQUEST_AGAIN_AT = new Date("2030-01-01T12:00:00.000Z");
+// When an approved Athlete withdraws: not NOW, so the test shows the chat's
+// removedAt comes from the parameter
+const WITHDRAW_AT = new Date("2030-01-01T14:00:00.000Z");
+// When the Manager expels an approved Athlete: not NOW either, for the same reason
+const EXPEL_AT = new Date("2030-01-01T16:00:00.000Z");
+// A second expulsion: a removedAt that changed to this moment would show it was written again
+const EXPEL_AGAIN_AT = new Date("2030-01-01T17:00:00.000Z");
 // The actor of the contract's deletions. The Admin is audited, and only Prisma
 // writes audit rows: its tests are in event-repository.db.test.ts
 const MANAGER: DeleteEventActor = { kind: "manager" };
@@ -37,15 +47,19 @@ export interface EventFixture {
   // A new Session of that club; returns its id. A Template Session of the Group
   // has origin "template" and no athleteId
   addSession(orgId: string, session: NewSession): Promise<string>;
-  // A Spot Request of that user in that Event, already in that status. The
-  // interface cannot create one until #232. createdAt fixes the order of the
-  // Manager's list; without it, the moment of the call
+  // A Spot Request of that user in that Event, put straight in that status without
+  // the operations, so a test starts from approved or rejected in one line.
+  // createdAt fixes the order of the Manager's list; without it, the moment of the call
   addSpotRequest(
     eventId: string,
     userId: string,
     status: SpotRequestStatus,
     createdAt?: Date,
   ): Promise<void>;
+  // That user's row in the Event's chat, or null if they have none. The
+  // interface has no read for the chat: that is #126. removedAt set: they can
+  // read the history but no longer write
+  chatParticipant(eventId: string, userId: string): Promise<{ removedAt: Date | null } | null>;
 }
 
 export interface NewSession {
@@ -72,6 +86,53 @@ export function eventIdOf(result: CreateEventResult): string {
   }
   return result.eventId;
 }
+
+// The Spot Request operations, as rows of a table: the same test runs once per
+// row (it.each). run is a function kept in a field, like a function pointer in
+// a C struct. unknown: the test only hands the result to expect. from is the
+// state the request is in before the operation: the one it would change. to is
+// the state the operation leads to. Exported for the lock tests, which only run on Postgres
+export interface SpotOperation {
+  name: string;
+  from: "pending" | "approved" | "withdrawn";
+  to: SpotRequestStatus;
+  run(repo: EventRepository, orgId: string, eventId: string, athleteId: string, now: Date): Promise<unknown>;
+}
+
+export const SPOT_OPERATIONS: SpotOperation[] = [
+  {
+    // From withdrawn: on a pending one, asking again would change nothing
+    name: "requestSpot",
+    from: "withdrawn",
+    to: "pending",
+    run: (repo, orgId, eventId, athleteId, now) => repo.requestSpot(orgId, eventId, athleteId, now),
+  },
+  {
+    name: "withdrawSpot",
+    from: "pending",
+    to: "withdrawn",
+    run: (repo, orgId, eventId, athleteId, now) => repo.withdrawSpot(orgId, eventId, athleteId, now),
+  },
+  {
+    name: "approveSpot",
+    from: "pending",
+    to: "approved",
+    run: (repo, orgId, eventId, athleteId, now) => repo.approveSpot(orgId, eventId, athleteId, now),
+  },
+  {
+    name: "rejectSpot",
+    from: "pending",
+    to: "rejected",
+    run: (repo, orgId, eventId, athleteId, now) => repo.rejectSpot(orgId, eventId, athleteId, now),
+  },
+  {
+    // From approved: what matters is that an admitted Athlete is not expelled
+    name: "expelFromEvent",
+    from: "approved",
+    to: "rejected",
+    run: (repo, orgId, eventId, athleteId, now) => repo.expelFromEvent(orgId, eventId, athleteId, now),
+  },
+];
 
 // Rules every EventRepository must follow
 export function runEventRepositoryContract(name: string, createFixture: () => EventFixture) {
@@ -751,6 +812,515 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       await expect(repo.getEventForMember(orgA, eventId, managerA)).resolves.not.toBeNull();
     });
 
+    // The Spot Requests (#232): checked through what the operation returns and
+    // what the reads show afterwards, never by looking at the table
+    it("requestSpot on a future Event without a request leaves it pending", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it("requestSpot again on a pending request changes nothing", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId, "Ana");
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+
+      // A double click: the same request, a moment later
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      // Still one request, with its first createdAt: its place in the list is kept
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([
+        { athleteId, nick: "Ana", status: "pending", createdAt: NOW },
+      ]);
+    });
+
+    it("requestSpot on an Event of another club is not-found and leaves no request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const athleteB = await addAthlete(orgB);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+
+      // An Athlete of club B who knows the id of an Event of club A
+      const result = await repo.requestSpot(orgB, eventId, athleteB, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      const view = await repo.getEventForManager(orgA, eventId);
+      expect(view?.spotRequests).toEqual([]);
+    });
+
+    it("requestSpot on a cancelled Event is cancelled and leaves no request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // After the cancel and before the start: cancelled is the only reason
+      const result = await repo.requestSpot(orgId, eventId, athleteId, CANCEL_AGAIN_AT);
+
+      expect(result).toEqual({ ok: false, reason: "cancelled" });
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([]);
+    });
+
+    it("requestSpot on an Event that starts right now is started and leaves no request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      // TOMORROW and not later: the limit. Starting at now already counts as started
+      const result = await repo.requestSpot(orgId, eventId, athleteId, TOMORROW);
+
+      expect(result).toEqual({ ok: false, reason: "started" });
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([]);
+    });
+
+    it("requestSpot on an Event cancelled and started is cancelled", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      // Both reasons apply: cancelled comes first in the fixed order
+      await expect(repo.requestSpot(orgId, eventId, athleteId, TOMORROW)).resolves.toEqual({
+        ok: false,
+        reason: "cancelled",
+      });
+    });
+
+    it("withdrawSpot on a pending request leaves it withdrawn", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+
+      // NOW again: withdrawing a pending request stores no time
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+    });
+
+    it("withdrawSpot again on a withdrawn request changes nothing", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+      await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      // A double click on "withdraw"
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+    });
+
+    it("withdrawSpot without a request is no-request and leaves none", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "no-request" });
+      // Nothing created either: no withdrawn row out of nowhere
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBeNull();
+    });
+
+    it("withdrawSpot on an Event of another club is not-found and leaves the request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgA = await createClub();
+      const orgB = await createClub();
+      const managerA = await addManager(orgA);
+      const athleteA = await addAthlete(orgA);
+      const eventId = eventIdOf(await repo.createEvent(orgA, managerA, eventData(), NOW));
+      await repo.requestSpot(orgA, eventId, athleteA, NOW);
+
+      // The request exists, but the call says club B
+      const result = await repo.withdrawSpot(orgB, eventId, athleteA, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      // Read with the real club: still pending
+      const view = await repo.getEventForMember(orgA, eventId, athleteA);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it("requestSpot after withdrawing asks again, as a new request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId, "Ana");
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+      await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      // One row, reused, with the new createdAt: it goes to the end of the Manager's list
+      const view = await repo.getEventForManager(orgId, eventId);
+      expect(view?.spotRequests).toEqual([
+        { athleteId, nick: "Ana", status: "pending", createdAt: REQUEST_AGAIN_AT },
+      ]);
+    });
+
+    // The start of the table tests: an Athlete with a pending request in an
+    // Event of tomorrow. The same for every row, so the Event decides the result
+    async function withPendingRequest() {
+      const fixture = createFixture();
+      const { repo, createClub, addManager, addAthlete } = fixture;
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+      await repo.requestSpot(orgId, eventId, athleteId, NOW);
+      // ...fixture copies every field of the fixture (repo, createClub,
+      // chatParticipant...) into the object returned
+      return { ...fixture, orgId, eventId, athleteId };
+    }
+
+    // The start of a row: its request in the state from of the row
+    async function withRequestIn(from: SpotOperation["from"]) {
+      const start = await withPendingRequest();
+      if (from === "approved") {
+        await start.repo.approveSpot(start.orgId, start.eventId, start.athleteId, NOW);
+      }
+      if (from === "withdrawn") {
+        await start.repo.withdrawSpot(start.orgId, start.eventId, start.athleteId, NOW);
+      }
+      return start;
+    }
+
+    it.each(SPOT_OPERATIONS)("$name on an Event of another club is not-found and changes nothing", async ({ run, from }) => {
+      const { repo, createClub, orgId, eventId, athleteId } = await withRequestIn(from);
+      const otherClub = await createClub();
+
+      const result = await run(repo, otherClub, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      // Read with the real club: still in the state it started in
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe(from);
+    });
+
+    it.each(SPOT_OPERATIONS)("$name of an id no Event has is not-found and changes nothing", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
+
+      const result = await run(repo, orgId, UNKNOWN_ID, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "not-found" });
+      // The Athlete's request in the real Event: still in the state it started in
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe(from);
+    });
+
+    // R4: with the Event cancelled or started, nothing changes, not even a repetition
+    it.each(SPOT_OPERATIONS)("$name on a cancelled Event is cancelled and changes nothing", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      const result = await run(repo, orgId, eventId, athleteId, CANCEL_AGAIN_AT);
+
+      expect(result).toEqual({ ok: false, reason: "cancelled" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe(from);
+    });
+
+    it.each(SPOT_OPERATIONS)("$name on an Event that starts right now is started and changes nothing", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
+
+      const result = await run(repo, orgId, eventId, athleteId, TOMORROW);
+
+      expect(result).toEqual({ ok: false, reason: "started" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe(from);
+    });
+
+    it.each(SPOT_OPERATIONS)("$name on an Event cancelled and started is cancelled, not started", async ({ run, from }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
+      await repo.cancelEvent(orgId, eventId, CANCEL_AT);
+
+      await expect(run(repo, orgId, eventId, athleteId, TOMORROW)).resolves.toEqual({
+        ok: false,
+        reason: "cancelled",
+      });
+    });
+
+    it("approveSpot on a pending request approves it and lets the Athlete into the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("approved");
+      expect(view?.approvedCount).toBe(1);
+      // An active row: they can write in the Event's chat
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
+    });
+
+    it("approveSpot again on an approved request changes nothing", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      // A double click, or two Managers with the same decision
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("approved");
+      expect(view?.approvedCount).toBe(1);
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
+    });
+
+    it("approveSpot without a request is no-request and lets nobody into the chat", async () => {
+      const { repo, createClub, addManager, addAthlete, chatParticipant } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "no-request" });
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("approveSpot on a withdrawn request is status-changed and lets nobody into the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      // The Athlete withdrew while the Manager had the list open
+      await repo.withdrawSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("withdrawSpot on an approved request frees the spot and leaves the chat read-only", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+      expect(view?.approvedCount).toBe(0);
+      // The row stays, with removedAt: they still read the history, as in the DMs (#155)
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: WITHDRAW_AT });
+    });
+
+    it("withdrawSpot on a pending request leaves nobody in the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+
+      await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("approving again after withdrawing makes the same chat row active again", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+      await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+      await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      await repo.approveSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      // removedAt back to null: they write again, and the history is the same row's
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
+    });
+
+    it("rejectSpot on a pending request rejects it and lets nobody into the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+
+      const result = await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("rejectSpot again on a rejected request changes nothing", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+    });
+
+    it("rejectSpot without a request is no-request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      await expect(repo.rejectSpot(orgId, eventId, athleteId, NOW)).resolves.toEqual({
+        ok: false,
+        reason: "no-request",
+      });
+    });
+
+    it("rejectSpot on an approved request is status-changed and never expels", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      // Another Manager approved it while this one had the list open
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("approved");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: null });
+    });
+
+    it("requestSpot on a rejected request is rejected: the rejection is for good", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: false, reason: "rejected" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+    });
+
+    it("withdrawSpot on a rejected request is rejected: withdrawing is no way back in", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      expect(result).toEqual({ ok: false, reason: "rejected" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+    });
+
+    it("approveSpot on a rejected request is status-changed and lets nobody into the chat", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      // Another Manager rejected it while this one had the list open
+      await repo.rejectSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toBeNull();
+    });
+
+    it("requestSpot on an approved request changes nothing and keeps the spot", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.requestSpot(orgId, eventId, athleteId, REQUEST_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("approved");
+    });
+
+    it("expelFromEvent on an approved request rejects it and leaves the chat read-only", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("rejected");
+      expect(view?.approvedCount).toBe(0);
+      // As when withdrawing: the row stays, they read the history but no longer write
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: EXPEL_AT });
+    });
+
+    it("expelFromEvent without a request is no-request", async () => {
+      const { repo, createClub, addManager, addAthlete } = createFixture();
+      const orgId = await createClub();
+      const managerId = await addManager(orgId);
+      const athleteId = await addAthlete(orgId);
+      const eventId = eventIdOf(await repo.createEvent(orgId, managerId, eventData(), NOW));
+
+      await expect(repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT)).resolves.toEqual({
+        ok: false,
+        reason: "no-request",
+      });
+    });
+
+    it("expelFromEvent again on an expelled request changes nothing", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+      await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      // A double click, or another Manager with the same decision
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AGAIN_AT);
+
+      expect(result).toEqual({ ok: true, changed: false });
+      // The moment they left the chat stays the first one
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: EXPEL_AT });
+    });
+
+    it("expelFromEvent on a pending request is status-changed and never rejects", async () => {
+      const { repo, orgId, eventId, athleteId } = await withPendingRequest();
+
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("pending");
+    });
+
+    it("expelFromEvent on a withdrawn request is status-changed and keeps the chat as it was", async () => {
+      const { repo, chatParticipant, orgId, eventId, athleteId } = await withPendingRequest();
+      await repo.approveSpot(orgId, eventId, athleteId, NOW);
+      // The Athlete withdrew while the Manager had the list open
+      await repo.withdrawSpot(orgId, eventId, athleteId, WITHDRAW_AT);
+
+      const result = await repo.expelFromEvent(orgId, eventId, athleteId, EXPEL_AT);
+
+      expect(result).toEqual({ ok: false, reason: "status-changed" });
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe("withdrawn");
+      await expect(chatParticipant(eventId, athleteId)).resolves.toEqual({ removedAt: WITHDRAW_AT });
+    });
+
     // Postgres compares uuids case-insensitively, JavaScript strings do not: an id sent
     // in upper case must work as in lower case in both implementations (review of #241).
     // The ids come from randomUUID or Postgres, so they always have hex letters to change
@@ -822,6 +1392,18 @@ export function runEventRepositoryContract(name: string, createFixture: () => Ev
       });
       await expect(repo.deleteEvent(org, event, MANAGER)).resolves.toEqual({ ok: true });
       await expect(repo.getEventForMember(orgId, eventId, managerId)).resolves.toBeNull();
+    });
+
+    // R9
+    it.each(SPOT_OPERATIONS)("$name takes the club, the Event and the Athlete in upper case", async ({ run, from, to }) => {
+      const { repo, orgId, eventId, athleteId } = await withRequestIn(from);
+
+      const result = await run(repo, orgId.toUpperCase(), eventId.toUpperCase(), athleteId.toUpperCase(), NOW);
+
+      expect(result).toEqual({ ok: true, changed: true });
+      // Read in lower case: the change is on the same request, not on a new one
+      const view = await repo.getEventForMember(orgId, eventId, athleteId);
+      expect(view?.mySpotRequest).toBe(to);
     });
   });
 }

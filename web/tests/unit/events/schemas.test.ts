@@ -224,17 +224,23 @@ describe("Events Zod schemas", () => {
     const valid = {
       eventId: EVENT_ID,
       athleteId: "00000000-0000-4000-8000-000000000024",
-      decision: "approved",
+      action: "approve",
     };
 
-    it("accepts approving or rejecting a Spot Request", () => {
+    it("accepts the Manager's three actions: approve, reject and expel", () => {
       expect(reviewSpotSchema.safeParse(valid).success).toBe(true);
-      expect(reviewSpotSchema.safeParse({ ...valid, decision: "rejected" }).success).toBe(true);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "reject" }).success).toBe(true);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "expel" }).success).toBe(true);
     });
 
-    it("rejects any other decision: the Manager only approves or rejects", () => {
-      expect(reviewSpotSchema.safeParse({ ...valid, decision: "pending" }).success).toBe(false);
-      expect(reviewSpotSchema.safeParse({ ...valid, decision: "withdrawn" }).success).toBe(false);
+    it("rejects any other action, also a state name instead of an action", () => {
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "withdraw" }).success).toBe(false);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "approved" }).success).toBe(false);
+      expect(reviewSpotSchema.safeParse({ ...valid, action: "rejected" }).success).toBe(false);
+    });
+
+    it("rejects a request without action", () => {
+      expect(reviewSpotSchema.safeParse({ eventId: EVENT_ID, athleteId: valid.athleteId }).success).toBe(false);
     });
 
     it("rejects a malformed athleteId", () => {
@@ -338,11 +344,11 @@ describe("Events Zod schemas", () => {
       ["withdrawSpotSchema eventId", () => withdrawSpotSchema.parse({ eventId: UPPER }).eventId],
       [
         "reviewSpotSchema eventId",
-        () => reviewSpotSchema.parse({ eventId: UPPER, athleteId: EVENT_ID, decision: "approved" }).eventId,
+        () => reviewSpotSchema.parse({ eventId: UPPER, athleteId: EVENT_ID, action: "approve" }).eventId,
       ],
       [
         "reviewSpotSchema athleteId",
-        () => reviewSpotSchema.parse({ eventId: EVENT_ID, athleteId: UPPER, decision: "approved" }).athleteId,
+        () => reviewSpotSchema.parse({ eventId: EVENT_ID, athleteId: UPPER, action: "approve" }).athleteId,
       ],
       [
         "createFeedbackSchema eventId",

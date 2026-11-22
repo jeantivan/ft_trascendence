@@ -48,6 +48,53 @@ export type CancelEventResult =
   // startsAt is now or earlier: no Feedback may hang from a cancelled Event
   | { ok: false; reason: "started" };
 
+// The Athlete asks for a spot (#232). changed false: the request was already
+// pending or approved, so a double click is not an error
+export type RequestSpotResult =
+  | { ok: true; changed: boolean }
+  // Does not exist or is from another club
+  | { ok: false; reason: "not-found" }
+  // A cancelled Event takes no requests, not even a repeated one
+  | { ok: false; reason: "cancelled" }
+  // startsAt is now or earlier: too late to ask
+  | { ok: false; reason: "started" }
+  // A rejection is for good for that Event (CONTEXT.md): the UI says so
+  | { ok: false; reason: "rejected" };
+
+// The Athlete withdraws their Spot Request (#232). changed false: it was
+// already withdrawn
+export type WithdrawSpotResult =
+  | { ok: true; changed: boolean }
+  // Does not exist or is from another club. Before no-request, so another
+  // club's Event never shows it exists
+  | { ok: false; reason: "not-found" }
+  // As in RequestSpotResult: with the Event cancelled or started, the spot stays
+  // as it was, not even a repetition passes
+  | { ok: false; reason: "cancelled" }
+  | { ok: false; reason: "started" }
+  // The Athlete never asked: the UI shows no "withdraw" then, but a Server
+  // Action can be called directly
+  | { ok: false; reason: "no-request" }
+  // Rejected stays rejected: withdrawing it would open a way to ask again
+  | { ok: false; reason: "rejected" };
+
+// The Manager's three actions (#232): approveSpot, rejectSpot and
+// expelFromEvent share it, as they have the same reasons.
+// Known limit (#238): the caller checks the Manager's role before the transaction,
+// as in #251. A Manager who loses the role in between still gets the action done
+export type ReviewSpotResult =
+  | { ok: true; changed: boolean }
+  // Does not exist or is from another club
+  | { ok: false; reason: "not-found" }
+  // With the Event cancelled or started, no spot is reviewed
+  | { ok: false; reason: "cancelled" }
+  | { ok: false; reason: "started" }
+  // No Spot Request: the Athlete deleted their account after the list was loaded
+  | { ok: false; reason: "no-request" }
+  // The request is not in the state the decision starts from: another Manager
+  // or the Athlete got there first. The Server Action turns it into a 409
+  | { ok: false; reason: "status-changed" };
+
 // Who deletes: only the Admin's deletion is audited (Marta, question e of #147:
 // the Privacy Policy, section 7, promises nothing more), so only the Admin carries an id
 export type DeleteEventActor = { kind: "manager" } | { kind: "admin"; adminId: string };
@@ -86,6 +133,52 @@ export interface EventRepository {
   // At any moment, started or cancelled too: no now. Its chat and Spot Requests
   // go with it; its Feedback stays, without the Event
   deleteEvent(orgId: string, eventId: string, actor: DeleteEventActor): Promise<DeleteEventResult>;
+
+  // The Athlete's Spot Request becomes pending. athleteId comes from the session
+  requestSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<RequestSpotResult>;
+
+  // The Athlete's Spot Request becomes withdrawn. The row stays: asking again
+  // reuses it
+  withdrawSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<WithdrawSpotResult>;
+
+  // A pending Spot Request becomes approved, and the Athlete becomes an active
+  // participant of the Event's chat. athleteId is the one the Manager chose
+  // from EventManagerView.spotRequests
+  approveSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult>;
+
+  // A pending Spot Request becomes rejected, for good for that Event. Only from
+  // pending: an approved one is status-changed, so a rejection never expels
+  rejectSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult>;
+
+  // An approved Spot Request becomes rejected, and the Athlete leaves the chat:
+  // the row stays with removedAt, as when withdrawing. Only from approved: a
+  // pending one is status-changed, so an expulsion never rejects a request
+  expelFromEvent(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult>;
 
   // The Events of the club that start in [from, to): from included, to left out,
   // so two weeks in a row never share an Event. Ordered by startsAt, cancelled
@@ -304,6 +397,297 @@ export class PrismaEventRepository implements EventRepository {
         });
       }
       return { ok: true };
+    });
+  }
+
+  // The first step of every Spot Request operation, inside its transaction. It locks
+  // the Event row until the commit, so the operations on one Event go one at a time,
+  // and it reads the row after the lock, so it sees what the one before saved: what
+  // was read before the lock may already be old.
+  // FOR NO KEY UPDATE and not FOR UPDATE: a Feedback pointing at the Event can still
+  // be inserted. null: no such Event in this club.
+  // Every write to spot_requests locks its Event first: here, or withdrawMemberSpots
+  // when someone leaves the club. That is why the updates need no where status (rule 3
+  // of #238): the state read after the lock cannot change before the update. A new
+  // write that skips the lock breaks this
+  private async lockEvent(
+    tx: Prisma.TransactionClient,
+    orgId: string,
+    eventId: string,
+  ): Promise<{ cancelledAt: Date | null; startsAt: Date } | null> {
+    // $queryRaw keeps the column names of Postgres: AS gives them the camelCase ones
+    const rows = await tx.$queryRaw<{ cancelledAt: Date | null; startsAt: Date }[]>`
+      SELECT cancelled_at AS "cancelledAt", starts_at AS "startsAt"
+      FROM events
+      WHERE id = ${eventId}::uuid AND org_id = ${orgId}::uuid
+      FOR NO KEY UPDATE`;
+    return rows[0] ?? null;
+  }
+
+  // Known limit (#238): the caller checks that the Athlete is a member before the
+  // transaction. If leaving the club (#150) commits in between, a pending request of
+  // someone no longer in the club stays. The chat does not let them in: it checks
+  // the membership (Jacobo, answer d of #147)
+  async requestSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<RequestSpotResult> {
+    return this.db.$transaction(async (tx): Promise<RequestSpotResult> => {
+      // The Event first, in the fixed order. An INSERT has no WHERE: the foreign
+      // key only checks the Event exists, not that it is of this club
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // eventId_userId: the name Prisma gives the primary key @@id([eventId, userId])
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing?.status === "rejected") {
+        return { ok: false, reason: "rejected" };
+      }
+      // Already pending or approved: a double click, nothing is written. An
+      // approved Athlete keeps their spot
+      if (existing?.status === "pending" || existing?.status === "approved") {
+        return { ok: true, changed: false };
+      }
+      // createdAt is now and not the default now() of Postgres: the caller
+      // chooses the moment, and the Manager's list orders by it
+      if (existing === null) {
+        await tx.spotRequest.create({
+          data: { eventId, userId: athleteId, status: "pending", createdAt: now },
+        });
+      } else {
+        // Asking again after withdrawing: the same row (the key is (event_id, user_id)),
+        // as a new request that goes to the end of the Manager's list
+        await tx.spotRequest.update({
+          where: { eventId_userId: { eventId, userId: athleteId } },
+          data: { status: "pending", createdAt: now },
+        });
+      }
+      return { ok: true, changed: true };
+    });
+  }
+
+  async withdrawSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<WithdrawSpotResult> {
+    return this.db.$transaction(async (tx): Promise<WithdrawSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // The state before: what to do depends on it
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      if (existing.status === "rejected") {
+        return { ok: false, reason: "rejected" };
+      }
+      // Already withdrawn: a double click, nothing is written
+      if (existing.status === "withdrawn") {
+        return { ok: true, changed: false };
+      }
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "withdrawn" },
+      });
+      // An approved Athlete leaves the chat: the row stays with removedAt, so they
+      // still read the history (#155). updateMany: 0 rows is no error, the result
+      // is the same, no active participant. A pending one was never in it
+      if (existing.status === "approved") {
+        await tx.conversationParticipant.updateMany({
+          where: { userId: athleteId, conversation: { eventId } },
+          data: { removedAt: now },
+        });
+      }
+      return { ok: true, changed: true };
+    });
+  }
+
+  async approveSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    // One transaction: if letting the Athlete into the chat fails, the approval
+    // is undone too, so no approved spot is left without its chat
+    return this.db.$transaction(async (tx): Promise<ReviewSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // Then the Spot Request
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      // Already approved: a double click, or another Manager with the same decision
+      if (existing.status === "approved") {
+        return { ok: true, changed: false };
+      }
+      // Only a pending request is approved: anything else changed since the
+      // Manager loaded the list
+      if (existing.status !== "pending") {
+        return { ok: false, reason: "status-changed" };
+      }
+      // findUnique: event_id is unique in conversations, one chat per Event
+      const chat = await tx.conversation.findUnique({
+        where: { eventId },
+        select: { id: true },
+      });
+      // createEvent creates the Event and its chat together: it should never happen
+      if (chat === null) {
+        throw new Error(`Event ${eventId} has no chat`);
+      }
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "approved" },
+      });
+      // upsert: the row may exist from an earlier approval (they withdrew and came
+      // back). Then it is made active again, keeping the chat history.
+      // Known limit (#238): if the Athlete deletes their account at the same moment,
+      // it can deadlock. The upsert waits for their users row (foreign key), which
+      // the deletion holds, and the deletion's cascade waits for this Spot Request.
+      // Postgres aborts one of them (40P01) and the Manager tries again
+      await tx.conversationParticipant.upsert({
+        where: { conversationId_userId: { conversationId: chat.id, userId: athleteId } },
+        create: { conversationId: chat.id, userId: athleteId, removedAt: null },
+        update: { removedAt: null },
+      });
+      return { ok: true, changed: true };
+    });
+  }
+
+  async rejectSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    return this.db.$transaction(async (tx): Promise<ReviewSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // Then the Spot Request
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      // Already rejected: a double click, or another Manager with the same decision
+      if (existing.status === "rejected") {
+        return { ok: true, changed: false };
+      }
+      // Only a pending request is rejected: an approved one would be an expulsion
+      if (existing.status !== "pending") {
+        return { ok: false, reason: "status-changed" };
+      }
+      // A pending request was never in the chat: nothing to do there
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "rejected" },
+      });
+      return { ok: true, changed: true };
+    });
+  }
+
+  async expelFromEvent(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    return this.db.$transaction(async (tx): Promise<ReviewSpotResult> => {
+      // The Event first, in the fixed order
+      const event = await this.lockEvent(tx, orgId, eventId);
+      if (!event) {
+        return { ok: false, reason: "not-found" };
+      }
+      if (event.cancelledAt !== null) {
+        return { ok: false, reason: "cancelled" };
+      }
+      // Starting at now already counts as started
+      if (event.startsAt <= now) {
+        return { ok: false, reason: "started" };
+      }
+      // Then the Spot Request
+      const existing = await tx.spotRequest.findUnique({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        select: { status: true },
+      });
+      if (existing === null) {
+        return { ok: false, reason: "no-request" };
+      }
+      // Already rejected: a double click, or another Manager with the same decision.
+      // Nothing is written, so removedAt keeps the moment they left
+      if (existing.status === "rejected") {
+        return { ok: true, changed: false };
+      }
+      // Only an approved request is expelled: a pending one would be a rejection,
+      // and a withdrawn one already left by the Athlete's own decision
+      if (existing.status !== "approved") {
+        return { ok: false, reason: "status-changed" };
+      }
+      await tx.spotRequest.update({
+        where: { eventId_userId: { eventId, userId: athleteId } },
+        data: { status: "rejected" },
+      });
+      // As when withdrawing: the row stays, they read the history but no longer
+      // write. updateMany: with no row it is not an error, the result is the same
+      await tx.conversationParticipant.updateMany({
+        where: { userId: athleteId, conversation: { eventId } },
+        data: { removedAt: now },
+      });
+      return { ok: true, changed: true };
     });
   }
 

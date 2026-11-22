@@ -7,7 +7,10 @@ import type {
   DeleteEventResult,
   EventData,
   EventRepository,
+  RequestSpotResult,
+  ReviewSpotResult,
   UpdateEventResult,
+  WithdrawSpotResult,
 } from "@/lib/events/event-repository";
 import { normalizeId } from "@/lib/org/schemas";
 import type { NewSession } from "./event-repository-contract";
@@ -43,6 +46,9 @@ export class InMemoryEventRepository implements EventRepository {
   // Nicks by user id: the only thing of a user the Manager's list shows.
   // null: a user without a nick, as nick is optional in users
   private nicks = new Map<string, string | null>();
+  // Rows of each Event's chat by "eventId/userId", like conversation_participants
+  // (one chat per Event). removedAt set: can read the history, no longer write
+  private chatParticipants = new Map<string, { removedAt: Date | null }>();
 
   // For the tests only: in production the users come from sign-up
   addUser(nick: string | null): string {
@@ -59,7 +65,8 @@ export class InMemoryEventRepository implements EventRepository {
     return id;
   }
 
-  // For the tests only, until #232 gives EventRepository its own operations
+  // For the tests only: puts a Spot Request straight in a status, without the
+  // operations (the fixture's addSpotRequest)
   addSpotRequest(
     eventId: string,
     userId: string,
@@ -67,6 +74,13 @@ export class InMemoryEventRepository implements EventRepository {
     createdAt: Date = new Date(),
   ): void {
     this.spotRequests.set(`${eventId}/${userId}`, { eventId, userId, status, createdAt });
+  }
+
+  // For the tests only: EventRepository has no read for the chat (#126).
+  // A copy, so a test cannot change the stored row by accident
+  chatParticipant(eventId: string, userId: string): { removedAt: Date | null } | null {
+    const row = this.chatParticipants.get(`${eventId}/${userId}`);
+    return row === undefined ? null : { removedAt: row.removedAt };
   }
 
   async createEvent(
@@ -188,6 +202,217 @@ export class InMemoryEventRepository implements EventRepository {
       }
     }
     return { ok: true };
+  }
+
+  async requestSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<RequestSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Same key as addSpotRequest: one Spot Request per user and Event
+    const key = `${eventId}/${athleteId}`;
+    const status = this.spotRequests.get(key)?.status;
+    // A rejection is for good for that Event
+    if (status === "rejected") {
+      return { ok: false, reason: "rejected" };
+    }
+    // Already pending or approved: a double click. Nothing is written, so
+    // createdAt and its place in the Manager's list stay as they were, and an
+    // approved Athlete keeps their spot
+    if (status === "pending" || status === "approved") {
+      return { ok: true, changed: false };
+    }
+    // createdAt is now: the Manager's list orders by it
+    this.spotRequests.set(key, {
+      eventId,
+      userId: athleteId,
+      status: "pending",
+      createdAt: now,
+    });
+    return { ok: true, changed: true };
+  }
+
+  async withdrawSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<WithdrawSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    const request = this.spotRequests.get(`${eventId}/${athleteId}`);
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Rejected stays rejected: withdrawing it would open a way to ask again
+    if (request.status === "rejected") {
+      return { ok: false, reason: "rejected" };
+    }
+    // Already withdrawn: a double click, nothing is written
+    if (request.status === "withdrawn") {
+      return { ok: true, changed: false };
+    }
+    // An approved Athlete leaves the chat, as in Prisma: the row stays with
+    // removedAt. Read before changing status, which is what says it was approved
+    const participant = this.chatParticipants.get(`${eventId}/${athleteId}`);
+    if (request.status === "approved" && participant !== undefined) {
+      participant.removedAt = now;
+    }
+    // get gives a reference to the object in the Map: this changes the stored one
+    request.status = "withdrawn";
+    return { ok: true, changed: true };
+  }
+
+  async approveSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Then the Spot Request
+    const key = `${eventId}/${athleteId}`;
+    const request = this.spotRequests.get(key);
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already approved: a double click, or another Manager with the same decision
+    if (request.status === "approved") {
+      return { ok: true, changed: false };
+    }
+    // Only a pending request is approved
+    if (request.status !== "pending") {
+      return { ok: false, reason: "status-changed" };
+    }
+    request.status = "approved";
+    // set and not get: a new row, or the old one made active again
+    this.chatParticipants.set(key, { removedAt: null });
+    return { ok: true, changed: true };
+  }
+
+  async rejectSpot(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    // Then the Spot Request
+    const request = this.spotRequests.get(`${eventId}/${athleteId}`);
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already rejected: a double click, or another Manager with the same decision
+    if (request.status === "rejected") {
+      return { ok: true, changed: false };
+    }
+    // Only a pending request is rejected: an approved one would be an expulsion
+    if (request.status !== "pending") {
+      return { ok: false, reason: "status-changed" };
+    }
+    // A pending request was never in the chat: nothing to do there
+    request.status = "rejected";
+    return { ok: true, changed: true };
+  }
+
+  async expelFromEvent(
+    orgId: string,
+    eventId: string,
+    athleteId: string,
+    now: Date,
+  ): Promise<ReviewSpotResult> {
+    orgId = normalizeId(orgId);
+    eventId = normalizeId(eventId);
+    athleteId = normalizeId(athleteId);
+    // The Event first, in the fixed order
+    const event = this.findInClub(orgId, eventId);
+    if (!event) {
+      return { ok: false, reason: "not-found" };
+    }
+    if (event.cancelledAt !== null) {
+      return { ok: false, reason: "cancelled" };
+    }
+    // Starting at now already counts as started
+    if (event.startsAt <= now) {
+      return { ok: false, reason: "started" };
+    }
+    const key = `${eventId}/${athleteId}`;
+    const request = this.spotRequests.get(key);
+    if (request === undefined) {
+      return { ok: false, reason: "no-request" };
+    }
+    // Already rejected: nothing is written, removedAt keeps the moment they left
+    if (request.status === "rejected") {
+      return { ok: true, changed: false };
+    }
+    // Only an approved request is expelled
+    if (request.status !== "approved") {
+      return { ok: false, reason: "status-changed" };
+    }
+    request.status = "rejected";
+    // As in Prisma: the row stays with removedAt
+    const participant = this.chatParticipants.get(key);
+    if (participant !== undefined) {
+      participant.removedAt = now;
+    }
+    return { ok: true, changed: true };
   }
 
   async listEvents(
