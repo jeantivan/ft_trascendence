@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   blockAccount,
+  changeGlobalRole,
   deleteAccount,
   unblockAccount,
   updateAccountNick,
@@ -19,12 +20,13 @@ import { prisma } from "@/lib/prisma";
 
 // The list and the account page are drawn again with the database's data after an
 // action that went through, also with changed: false (another Admin got there first,
-// so what the page shows is old), and after a refusal for being the last unblocked Admin
-// (another Admin was blocked after the page was drawn). Not after the other refusals:
+// so what the page shows is old), after a refusal for being the last unblocked Admin
+// (another Admin was blocked after the page was drawn) and after one for being a Manager
+// of a club (named after the page, which lists the clubs, was drawn). Not after the others:
 // nothing changed, and for not-found the account page would turn into a 404 and lose
 // its message
 function redrawPanelIfStale<T extends AccountActionResult | UpdateNickResult>(result: T): T {
-  if (result.ok || result.reason === "last-admin") revalidatePath("/admin/accounts", "layout");
+  if (result.ok || result.reason === "last-admin" || result.reason === "club-manager") revalidatePath("/admin/accounts", "layout");
   return result;
 }
 
@@ -56,6 +58,21 @@ export async function updateAccountNickAction(_prevState: unknown, formData: For
       accountId: textField(formData, "accountId"),
       nick: textField(formData, "nick"),
     }),
+  );
+}
+
+// Two actions, like block and unblock: the form sends only the account, never the role
+export async function makeAdminAction(_prevState: unknown, formData: FormData): Promise<AccountActionResult> {
+  const admin = await requireAdmin();
+  return redrawPanelIfStale(
+    await changeGlobalRole(prisma, { adminId: admin.id, accountId: textField(formData, "accountId"), role: "admin" }),
+  );
+}
+
+export async function removeAdminAction(_prevState: unknown, formData: FormData): Promise<AccountActionResult> {
+  const admin = await requireAdmin();
+  return redrawPanelIfStale(
+    await changeGlobalRole(prisma, { adminId: admin.id, accountId: textField(formData, "accountId"), role: "user" }),
   );
 }
 
