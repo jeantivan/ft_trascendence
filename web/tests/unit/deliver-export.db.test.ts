@@ -50,7 +50,7 @@ describe("deliverExport", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe(EMAIL);
     expect(sent[0].text).toMatch(new RegExp(`${ORIGIN}/api/gdpr/export/${id}/download\\?token=[A-Za-z0-9_-]{43}`));
-    expect(sent[0].text).toContain("2026-11-22");
+    expect(sent[0].text).toContain("22 de noviembre de 2026 a las 12:00 UTC");
     const row = await db.dataExport.findUniqueOrThrow({ where: { id } });
     expect(row.status).toBe("ready");
     expect(row.deliveredAt).toBeInstanceOf(Date);
@@ -63,7 +63,7 @@ describe("deliverExport", () => {
 
     await deliverExport(id, ORIGIN, mailer, db, uploadsDir, NOW);
 
-    expect(sent[0].subject + sent[0].text).not.toMatch(/runner-nick|deliver-export@/);
+    expect(sent[0].subject + sent[0].text).not.toMatch(new RegExp(`runner-nick|deliver-export@|${USER_ID}`));
   });
 
   it("marks the export failed and removes the ZIP when the email cannot be sent", async () => {
