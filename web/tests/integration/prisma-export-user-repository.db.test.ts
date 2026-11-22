@@ -98,6 +98,22 @@ describe("Integration: createPrismaExportUserRepository", () => {
       expect(data?.memberships).toEqual([{ orgId: org.id, orgName, role: "athlete", joinedAt: at(2) }]);
     });
 
+    it("devuelve solo los grupos del usuario", async () => {
+      const { user, other, org } = await createFixture();
+      const mine = await prisma.group.create({
+        data: { orgId: org.id, name: "mine", level: "intermedio", objective: "maratón" },
+      });
+      const notMine = await prisma.group.create({ data: { orgId: org.id, name: "not-mine" } });
+      await prisma.groupMember.create({ data: { groupId: mine.id, userId: user.id } });
+      await prisma.groupMember.create({ data: { groupId: notMine.id, userId: other.id } });
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data?.groups).toEqual([
+        { groupId: mine.id, orgId: org.id, name: "mine", level: "intermedio", objective: "maratón" },
+      ]);
+    });
+
     it("devuelve null en los dos consentimientos si no los dio", async () => {
       const user = await prisma.user.create({ data: { email } });
 

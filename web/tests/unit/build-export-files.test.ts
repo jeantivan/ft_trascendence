@@ -14,6 +14,7 @@ const emptyAccount: ExportAccountSource = {
   settings: { statsPublic: false, notificationsEnabled: true, showOnline: true },
   consents: { healthConsentAt: null, healthConsentVersion: null },
   memberships: [],
+  groups: [],
 };
 
 function repositoryWith(
@@ -81,6 +82,7 @@ describe("buildExportFiles", () => {
       settings: { stats_public: false, notifications_enabled: true, show_online: true },
       consents: { health_consent_at: null, health_consent_version: null },
       memberships: [],
+      groups: [],
     });
   });
 
@@ -179,6 +181,17 @@ describe("buildExportFiles", () => {
 
     expect(data.memberships).toEqual([
       { org_id: "org-1", org_name: "Club Running Madrid", role: "athlete", joined_at: "2026-01-15T00:00:00Z" },
+    ]);
+  });
+
+  it("groups lleva group_id, org_id, name, level y objective, con null para lo ausente", async () => {
+    const data = await dataJsonOf(athlete, {
+      ...emptyAccount,
+      groups: [{ groupId: "group-1", orgId: "org-1", name: "Grupo maratón", level: null, objective: "maratón" }],
+    });
+
+    expect(data.groups).toEqual([
+      { group_id: "group-1", org_id: "org-1", name: "Grupo maratón", level: null, objective: "maratón" },
     ]);
   });
 

@@ -40,6 +40,7 @@ export type ExportAccountSource = {
   settings: { statsPublic: boolean; notificationsEnabled: boolean; showOnline: boolean };
   consents: { healthConsentAt: Date | null; healthConsentVersion: number | null };
   memberships: { orgId: string; orgName: string; role: MembershipRole; joinedAt: Date }[];
+  groups: { groupId: string; orgId: string; name: string; level: string | null; objective: string | null }[];
 };
 
 export type ExportUserRepository = {
@@ -100,6 +101,13 @@ export async function buildExportFiles(
       org_name: membership.orgName,
       role: membership.role,
       joined_at: toExportDate(membership.joinedAt),
+    })),
+    groups: account.groups.map((group) => ({
+      group_id: group.groupId,
+      org_id: group.orgId,
+      name: group.name,
+      level: group.level,
+      objective: group.objective,
     })),
   };
   return [
