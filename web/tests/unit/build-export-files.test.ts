@@ -139,6 +139,7 @@ describe("buildExportFiles", () => {
     }
     // The access log arrives with #168
     expect(readme).not.toContain("registro de accesos");
+    expect(readme).toContain("Datos que escribiste como Manager sobre otras personas");
   });
 
   it("sessions.csv lleva la cabecera de la spec y una fila por sesión, con celdas vacías para lo ausente", async () => {

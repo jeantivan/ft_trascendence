@@ -210,6 +210,8 @@ function buildReadme(email: string, now: Date): string {
     "- Contraseñas, credenciales OAuth ni secretos de autenticación (TOTP)",
     "- Datos de otras personas: del feedback no se incluye quién lo escribió, y de",
     "  los contactos solo el estado, quién lo pidió y la fecha",
+    "- Datos que escribiste como Manager sobre otras personas",
+    "  (Feedback, Events, plantillas)",
     "",
     "Si necesitas más datos de los que incluye la descarga, escribe a",
     "legal@stridesync.fit.",
