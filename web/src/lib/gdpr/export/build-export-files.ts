@@ -72,7 +72,7 @@ export type ExportUserRepository = {
   // ordered by date
   findSessions(userId: string): Promise<ExportSessionSource[]>;
   // Actions a Manager or an Admin took on the user, oldest first. Already shaped for the
-  // export: no actor id, and the dates keep their milliseconds
+  // export: no actor id
   findAccessLog(userId: string): Promise<AccessLogEntry[]>;
 };
 
@@ -157,9 +157,8 @@ export async function buildExportFiles(
       read_at: toExportDateOrNull(notification.readAt),
       created_at: toExportDate(notification.createdAt),
     })),
-    // Dates stay as stored, with milliseconds (docs/gdpr/export-spec.md, section 3.1)
     access_log: accessLog.map((entry) => ({
-      created_at: entry.created_at,
+      created_at: toExportDate(new Date(entry.created_at)),
       action: entry.action,
       resource: entry.resource,
       actor_role: entry.actor_role,

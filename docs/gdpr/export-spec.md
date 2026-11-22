@@ -117,7 +117,7 @@ Convenciones:
     { "id": "123", "type": "spot_approved", "read_at": null, "created_at": "2026-10-01T09:05:00Z" }
   ],
   "access_log": [
-    { "created_at": "2026-10-05T09:10:00.000Z", "action": "read", "resource": "session_log", "actor_role": "manager" }
+    { "created_at": "2026-10-05T09:10:00Z", "action": "read", "resource": "session_log", "actor_role": "manager" }
   ]
 }
 ```

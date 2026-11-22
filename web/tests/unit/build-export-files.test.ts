@@ -132,9 +132,9 @@ describe("buildExportFiles", () => {
     }
   });
 
-  it("access_log lleva solo fecha con milisegundos, acción, recurso y rol, sin quién actuó", async () => {
+  it("access_log lleva solo fecha sin milisegundos, acción, recurso y rol, sin quién actuó", async () => {
     const entry: AccessLogEntry = {
-      created_at: "2026-10-05T09:10:00.000Z",
+      created_at: "2026-10-05T09:10:00.123Z",
       action: "block",
       resource: "user",
       actor_role: "admin",
@@ -142,7 +142,7 @@ describe("buildExportFiles", () => {
 
     const data = await dataJsonOf(athlete, emptyAccount, [entry]);
 
-    expect(data.access_log).toEqual([entry]);
+    expect(data.access_log).toEqual([{ ...entry, created_at: "2026-10-05T09:10:00Z" }]);
     expect(Object.keys(data.access_log[0]).sort()).toEqual(["action", "actor_role", "created_at", "resource"]);
   });
 

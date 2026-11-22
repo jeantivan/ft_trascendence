@@ -76,7 +76,7 @@ describe("generateExport", () => {
       const entries = await readZipEntries(path.join(uploadsDir, `exports/${id}.zip`));
       const data = JSON.parse(entries["data.json"]);
       expect(data.access_log).toEqual([
-        { created_at: "2026-11-01T10:00:00.000Z", action: "read", resource: "profile", actor_role: "manager" },
+        { created_at: "2026-11-01T10:00:00Z", action: "read", resource: "profile", actor_role: "manager" },
       ]);
       expect(await db.auditLog.count({ where: { subjectId: USER_ID } })).toBe(before);
     } finally {
