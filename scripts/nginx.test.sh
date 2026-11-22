@@ -99,23 +99,26 @@ for service in app mailpit; do
   fi
 done
 
-# 7. Body size limit: 5 MB (profile photos, #23)
+# 7. Body size limit: 10 MiB (profile photos up to 8 MiB, #263)
 # The path does not exist on purpose: nginx checks the size before forwarding,
 # so only nginx can answer 413 here; the app answers anything else (e.g. 401, 404)
+# A body over client_max_body_size (10 MiB = 10485760 bytes); the later checks that
+# need nginx's own 413 send it too
+over_limit=11000000
 post_size() {
   head -c "$1" /dev/zero | curl_https -o /dev/null -w '%{http_code}' \
     -X POST --data-binary @- -H 'Content-Type: application/octet-stream' "$url/api/body-size-check"
 }
-code=$(post_size 4000000)
+code=$(post_size 9000000)
 if [ "$code" = "413" ]; then
-  fail "4 MB body rejected with 413"
+  fail "9 MB body rejected with 413"
 elif [ "$code" = "000" ]; then
-  fail "4 MB body: no answer"
+  fail "9 MB body: no answer"
 else
-  pass "4 MB body accepted by nginx (app answered $code)"
+  pass "9 MB body accepted by nginx (app answered $code)"
 fi
-code=$(post_size 6000000)
-if [ "$code" = "413" ]; then pass "6 MB body rejected with 413"; else fail "6 MB body answered $code, expected 413"; fi
+code=$(post_size "$over_limit")
+if [ "$code" = "413" ]; then pass "11 MB body rejected with 413"; else fail "11 MB body answered $code, expected 413"; fi
 
 # 8. The certificate is for localhost and not about to expire.
 # 2592000 s = 30 days, the same window as RENEW_BEFORE in nginx/40-generate-cert.sh
@@ -230,14 +233,14 @@ fi
 # cannot change. On the download route (#165) and on /login it only keeps critical
 # errors. /login because a visitor without a session who opens a link with a token is
 # sent to /login?callbackUrl=<that link> (web/src/auth.config.ts), token included.
-# A body over 5 MB makes nginx write an error line (413), without touching the app.
+# A body over 10 MiB makes nginx write an error line (413), without touching the app.
 # An address over 8 KB (414) is rejected before nginx knows the route: its error line
 # is "info", below the log level, so it only shows if someone lowers that level
 download="/api/gdpr/export/check-$run_id/download"
-head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+head -c "$over_limit" /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
   -H 'Content-Type: application/octet-stream' "$url$download?token=$secret-download"
 # The same with a slash at the end: nginx would otherwise skip the download block
-head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+head -c "$over_limit" /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
   -H 'Content-Type: application/octet-stream' "$url$download/?token=$secret-download"
 # Ids with an encoded character (#202): nginx matches the decoded path, so the
 # download block must take any character in the id. %2F becomes "/", %3F a "?" in
@@ -245,14 +248,14 @@ head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
 encoded_ids="%2Fx %3Fx %0Ax"
 encoded_download() { printf '/api/gdpr/export/check-%s%s/download' "$run_id" "$1"; }
 for id in $encoded_ids; do
-  head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+  head -c "$over_limit" /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
     -H 'Content-Type: application/octet-stream' \
     "$url$(encoded_download "$id")?token=$secret-download"
 done
 # The login redirect, with the token inside callbackUrl, written as the app writes it
 callback="%2Fapi%2Fgdpr%2Fexport%2Fcheck-$run_id%2Fdownload%3Ftoken%3D$secret-login"
 for login in /login /login/; do
-  head -c 6000000 /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
+  head -c "$over_limit" /dev/zero | curl_https -o /dev/null -X POST --data-binary @- \
     -H 'Content-Type: application/octet-stream' "$url$login?callbackUrl=$callback"
 done
 long=$(head -c 9000 /dev/zero | tr '\0' a)
@@ -311,8 +314,8 @@ policy_of() {
 }
 page_policy=$(policy_of "$(curl_https -o /dev/null -D - "$url/login")")
 mailpit_policy=$(policy_of "$(curl_https -o /dev/null -D - "$url/mailpit/")")
-# 6000000 bytes: over client_max_body_size (5 MB), so nginx answers 413 itself
-error_policy=$(policy_of "$(head -c 6000000 /dev/zero | curl_https -o /dev/null -D - -X POST \
+# over_limit (section 7) is over client_max_body_size, so nginx answers 413 itself
+error_policy=$(policy_of "$(head -c "$over_limit" /dev/zero | curl_https -o /dev/null -D - -X POST \
   --data-binary @- -H 'Content-Type: application/octet-stream' "$url/login")")
 if [ "$page_policy" != "strict-origin" ]; then
   fail "a page sends Referrer-Policy '$page_policy', expected exactly one 'strict-origin'"
