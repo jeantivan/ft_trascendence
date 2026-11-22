@@ -63,7 +63,7 @@ describe("deliverExport", () => {
 
     await deliverExport(id, ORIGIN, mailer, db, uploadsDir, NOW);
 
-    expect(sent[0].subject + sent[0].text).not.toMatch(/runner-nick|deliver-export@/);
+    expect(sent[0].subject + sent[0].text).not.toMatch(new RegExp(`runner-nick|deliver-export@|${USER_ID}`));
   });
 
   it("marks the export failed and removes the ZIP when the email cannot be sent", async () => {

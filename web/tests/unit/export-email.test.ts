@@ -18,10 +18,16 @@ describe("buildExportEmail", () => {
     expect(text).toMatch(/sesión iniciada/);
   });
 
-  it("is plain Spanish text with a fixed subject", () => {
+  it("is plain text (no HTML) with a fixed subject", () => {
     const { subject, text } = buildExportEmail(LINK, new Date("2026-11-22T09:05:00.000Z"));
 
     expect(subject).toBe("Tu exportación de datos de StrideSync está lista");
     expect(text).not.toMatch(/<[a-z]+/i);
+  });
+
+  it("puts no user data in the message", () => {
+    const { subject, text } = buildExportEmail(LINK, new Date("2026-11-22T09:05:00.000Z"));
+
+    expect(subject + text).not.toMatch(/runner-nick|@example\.test|99999999-9999-4999-8999-999999999999/);
   });
 });

@@ -1,6 +1,8 @@
 // Email that delivers the export download link (#169). It carries the link and when it
 // expires, nothing else: no user data (docs/gdpr/export-spec.md).
 
+import type { MailMessage } from "@/lib/mail/mail-sender";
+
 const SUBJECT = "Tu exportación de datos de StrideSync está lista";
 
 const EXPIRY_FORMAT = new Intl.DateTimeFormat("es-ES", {
@@ -12,7 +14,7 @@ const EXPIRY_FORMAT = new Intl.DateTimeFormat("es-ES", {
   timeZone: "UTC",
 });
 
-export function buildExportEmail(link: string, expiresAt: Date): { subject: string; text: string } {
+export function buildExportEmail(link: string, expiresAt: Date): Omit<MailMessage, "to"> {
   const text = [
     "Tu exportación de datos de StrideSync está lista.",
     "",
