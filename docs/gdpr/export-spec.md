@@ -150,14 +150,14 @@ uuid-2,uuid-org,free,intervalos,8000,,1800,2026-10-02T18:00:00Z,,
 ### 3.3 `session_logs.csv`
 
 ```
-session_id,completed,rpe,distance_m,duration_s,performed_at,incompletion_reason
-uuid-1,true,7,10200,3600,2026-10-01T07:30:00Z,
-uuid-2,false,5,,600,2026-10-02T18:15:00Z,time_constraints
+session_id,completed,rpe,distance_m,duration_s,performed_at,incompletion_reason,avg_heart_rate_bpm,max_heart_rate_bpm
+uuid-1,true,7,10200,3600,2026-10-01T07:30:00Z,,148,175
+uuid-2,false,5,,600,2026-10-02T18:15:00Z,time_constraints,,
 ```
 
-`incompletion_reason` sale de `session_logs.extra`. Es el único campo que lleva `extra` (enum cerrado, sin texto libre).
+`incompletion_reason`, `avg_heart_rate_bpm` y `max_heart_rate_bpm` salen de `session_logs.extra` (esquema cerrado `sessionLogExtraSchema` de `#141`, sin texto libre).
 
-Tras la purga de datos de salud (#131), `rpe` queda vacío en las filas purgadas: la celda sale vacía (ni `0` ni `null`) y el resto de columnas no cambia.
+Tras la purga de datos de salud (`#131`), `rpe`, `avg_heart_rate_bpm` y `max_heart_rate_bpm` quedan vacíos en las filas purgadas: la celda sale vacía (ni `0` ni `null`) y el resto de columnas no cambia.
 
 ### 3.4 `messages.csv`
 
@@ -197,6 +197,8 @@ CAMPOS:
   - route_unavailable: ruta no disponible
   - equipment_issue: problema de equipamiento
   - other: otro
+- avg_heart_rate_bpm: frecuencia cardíaca media (ppm); vacío si lo borraste
+- max_heart_rate_bpm: frecuencia cardíaca máxima (ppm); vacío si lo borraste
 
 ZONA HORARIA: UTC
 

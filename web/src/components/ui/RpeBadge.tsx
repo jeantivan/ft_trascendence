@@ -1,5 +1,8 @@
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
+import { rpeTierOf, type RpeValue } from "@/lib/training/rpe";
+
+export type { RpeValue };
 
 const base =
   "inline-flex items-center justify-center rounded-full border font-heading text-label-badge tabular-nums";
@@ -18,28 +21,18 @@ const tiers = {
   max: "border-rpe-max bg-rpe-max/12 text-rpe-max",
 };
 
-// A union and not "number": a 0 or an 11 does not compile
-export type RpeValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-
 // No children: the badge always shows its own value
 type Props = Omit<ComponentProps<"span">, "children"> & {
   value: RpeValue;
   shape?: keyof typeof shapes;
 };
 
-function tierOf(value: RpeValue) {
-  if (value <= 3) return tiers.low;
-  if (value <= 6) return tiers.moderate;
-  if (value <= 8) return tiers.hard;
-  return tiers.max;
-}
-
 // Only paints the value it receives: RPE is health data, so no logs or effects here
 export function RpeBadge({ value, shape = "circle", className, ...props }: Props) {
   return (
     <span
       aria-label={`RPE ${value}`}
-      className={cn(base, shapes[shape], tierOf(value), className)}
+      className={cn(base, shapes[shape], tiers[rpeTierOf(value)], className)}
       {...props}
     >
       {value}
