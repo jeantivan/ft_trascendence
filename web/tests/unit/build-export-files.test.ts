@@ -134,6 +134,11 @@ describe("buildExportFiles", () => {
     expect(readme).toContain("2026-10-06 11:28 UTC");
     expect(readme).toContain("athlete@example.com");
     expect(readme).toContain("NO SE INCLUYE");
+    for (const block of ["ajustes", "consentimientos", "feedback recibido", "contactos", "notificaciones"]) {
+      expect(readme).toContain(block);
+    }
+    // The access log arrives with #168
+    expect(readme).not.toContain("registro de accesos");
   });
 
   it("sessions.csv lleva la cabecera de la spec y una fila por sesión, con celdas vacías para lo ausente", async () => {
