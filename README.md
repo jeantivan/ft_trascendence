@@ -1,16 +1,16 @@
 *This project has been created as part of the 42 curriculum by jeanpaul, <login2>.*
 
-# Omnisport Hub
+# StrideSync
 
 ## Description
-Omnisport Hub is a B2B Sports Management SaaS built to centralize administrative, tactical, physical, and medical management for sports teams. It eliminates information fragmentation by providing a secure, real-time, and role-based environment.
+StrideSync is a B2B Sports Management SaaS built to centralize administrative, tactical, and physical management for sports teams. It eliminates information fragmentation by providing a secure, real-time, and role-based environment.
 
 Key Features:
-- **Unified Calendar**: Manage all team events (matches, training, medical) seamlessly.
-- **Advanced Permissions**: Distinct roles for Managers (full access), Staff (segmented writing), and Athletes (read-only).
-- **Real-time Communication**: Staff chat using Server-Sent Events (SSE).
-- **Analytics Dashboard**: Multi-sport performance tracking via dynamic JSONB data models.
-- **File Management**: Tactical and medical document uploads via S3-compatible storage.
+- **Unified Calendar**: Manage all club events and training sessions seamlessly.
+- **Advanced Permissions**: Distinct roles for Admins (platform governance), Managers (club management), and Athletes (training and events).
+- **Real-time Communication**: Event and direct message (DM) chat using Server-Sent Events (SSE).
+- **Analytics Dashboard**: Performance tracking via dynamic JSONB data models.
+- **File Management**: Avatar uploads stored in a private Docker volume.
 
 ## Instructions
 ### Prerequisites
@@ -28,7 +28,7 @@ It creates `.env` with random secrets if it is missing, builds the images and st
 
 Then open **https://localhost:8443**. The certificate is self-signed, so the browser shows a warning the first time: accept it to continue. NGINX only listens on this HTTPS port; there is no plain HTTP access.
 
-From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
+From another computer on the same network, use the IP of the computer that ran `make`: `https://<IP>:8443`. `make` prints that address when it finishes (`scripts/host-ip.sh`). On WSL, or when it cannot find it (for example macOS without `ip`), it prints `<this computer's IP>` instead: look the address up by hand. With a VPN on, it may print the VPN address, which the other computers cannot reach. Only one computer runs `make`; the others just open the address. The certificate is made for `localhost`, so from another computer the warning also says the name does not match: accept it the same way.
 
 In a fresh clone or after `make fclean`, `make` starts with an empty database (all the tables) and one account: the **initial Admin**, `admin@stridesync.local`, with its password in `ADMIN_PASSWORD` in `.env`. It is created on every start if it does not exist yet, and never changed afterwards. Register any other user from the app.
 
@@ -67,7 +67,6 @@ With rootless Docker (as on the 42 campus computers), `make dev` and `make test`
 ## Resources
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Prisma ORM](https://www.prisma.io/)
-- [MinIO](https://min.io/)
 - [Server-Sent Events (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
 
 *AI Usage: AI tools were used during the initial system design phase to help architecture planning (e.g., structuring the Docker topology, deciding on SSE vs WebSockets) and domain modeling.*
@@ -82,22 +81,25 @@ With rootless Docker (as on the 42 campus computers), `make dev` and `make test`
 ## Technical Stack
 - **Frontend/Backend Framework**: Next.js (App Router)
 - **Database**: PostgreSQL (using JSONB for flexible metrics)
-- **Storage**: MinIO (AWS S3 Compatible)
+- **Storage**: Private Docker volume
 - **Proxy/Security**: NGINX with OpenSSL self-signed certificates
 - **Authentication**: NextAuth.js (Auth.js)
 
 ### Justification for Major Choices
 - **Next.js Full-Stack**: Selected to unify the codebase, reducing context switching and deployment complexity while fulfilling both frontend and backend requirements.
-- **MinIO**: Used to mimic enterprise cloud architecture locally, providing a robust solution for the file upload module without relying on local volumes.
 - **SSE + Postgres LISTEN/NOTIFY**: Chosen for real-time features to maintain a strictly HTTP-based stack, avoiding the overhead of maintaining a separate WebSocket server.
 
-## Modules - Needs review.
+## Modules
 - **Web (Major - 2pts)**: Next.js used for both frontend and backend.
 - **User interaction (Major - 2pts)**: Real-time chat via SSE and contact network.
-- **Advanced permissions system (Major - 2pts)**: Role-based access control (Manager, Staff, Athlete).
+- **Advanced permissions system (Major - 2pts)**: Role-based access control (Admin, Manager, Athlete).
 - **Organization system (Major - 2pts)**: Creation and management of sports clubs.
 - **Analytics dashboard (Major - 2pts)**: Dynamic metric visualization.
 - **User Management (Major - 2pts)**: Standard user auth and profiles.
-- **File upload (Minor - 1pt)**: MinIO integration.
+- **File upload (Minor - 1pt)**: Avatar uploads stored in a private Docker volume.
 - **ORM (Minor - 1pt)**: Prisma.
-**Total Target**: 14 points
+- **SSR (Minor - 1pt)**: Server-Side Rendering with Next.js App Router.
+- **Custom Design System (Minor - 1pt)**: Reusable UI component library built on the Kinetic Obsidian design tokens, with no third-party UI libraries. It has 12 components (`Alert`, `Avatar`, `Badge`, `Button`, `Card`, `FormField`, `Icon`, `Input`, `LegalLinks`, `Logo`, `Modal`, `RpeBadge`), documented in `web/src/components/ui/docs/`.
+- **GDPR Compliance (Minor - 1pt)**: User data export and account deletion with OTP verification.
+
+**Total Target**: 17 points (14 points minimum required)

@@ -61,17 +61,26 @@ describe("User settings Zod schemas", () => {
   });
 
   describe("updatePasswordSchema", () => {
-    it("accepts valid new password", () => {
+    it("accepts valid new password with recentAuth", () => {
+      const result = updatePasswordSchema.safeParse({
+        newPassword: "nuevaPasswordSegura123",
+        recentAuth: true,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects missing recentAuth", () => {
       const result = updatePasswordSchema.safeParse({
         newPassword: "nuevaPasswordSegura123",
       });
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
     });
 
     it("accepts optional currentPassword", () => {
       const result = updatePasswordSchema.safeParse({
         newPassword: "nuevaPasswordSegura123",
         currentPassword: "antiguaPassword123",
+        recentAuth: false,
       });
       expect(result.success).toBe(true);
     });
@@ -79,6 +88,7 @@ describe("User settings Zod schemas", () => {
     it("rejects new password shorter than 8 characters", () => {
       const result = updatePasswordSchema.safeParse({
         newPassword: "corta",
+        recentAuth: true,
       });
       expect(result.success).toBe(false);
     });
@@ -86,6 +96,7 @@ describe("User settings Zod schemas", () => {
     it("rejects new password longer than 72 characters", () => {
       const result = updatePasswordSchema.safeParse({
         newPassword: "a".repeat(73),
+        recentAuth: true,
       });
       expect(result.success).toBe(false);
     });
@@ -93,6 +104,7 @@ describe("User settings Zod schemas", () => {
     it("accepts new password of exactly 72 bytes with 2-byte characters", () => {
       const result = updatePasswordSchema.safeParse({
         newPassword: "ñ".repeat(36),
+        recentAuth: true,
       });
       expect(result.success).toBe(true);
     });
@@ -100,6 +112,7 @@ describe("User settings Zod schemas", () => {
     it("rejects new password exceeding 72 bytes even if character count is under 72", () => {
       const result = updatePasswordSchema.safeParse({
         newPassword: "ñ".repeat(36) + "A",
+        recentAuth: true,
       });
       expect(result.success).toBe(false);
     });

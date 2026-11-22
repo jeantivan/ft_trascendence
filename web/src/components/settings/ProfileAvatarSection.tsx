@@ -1,0 +1,261 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Alert } from "@/components/ui/Alert";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { MAX_IMAGE_BYTES } from "@/lib/uploads/check-image";
+
+const MAX_IMAGE_MB = Math.round(MAX_IMAGE_BYTES / (1024 * 1024));
+
+function parseUploadBody(responseText: string): { url?: string; error?: string } | null {
+  try {
+    return JSON.parse(responseText) as { url?: string; error?: string };
+  } catch {
+    return null;
+  }
+}
+
+function mapUploadError(status: number, body: { error?: string } | null): string {
+  if (status === 413) {
+    if (body?.error === "Image too large") {
+      return "La imagen supera el máximo de 8000 px por lado";
+    }
+    return `La imagen supera el tamaño máximo de ${MAX_IMAGE_MB} MB`;
+  }
+  if (status === 415) {
+    return "Formato de imagen no válido o archivo dañado (usa JPG, PNG o WEBP)";
+  }
+  if (status === 401) {
+    return "Tu sesión ha caducado; vuelve a iniciar sesión";
+  }
+  return "No se pudo subir la imagen";
+}
+
+interface ProfileAvatarSectionProps {
+  initialImage: string | null;
+  nick: string;
+}
+
+type AvatarFeedback = {
+  variant: "success" | "error";
+  message: string;
+};
+
+export function ProfileAvatarSection({ initialImage, nick }: ProfileAvatarSectionProps) {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [currentImage, setCurrentImage] = useState<string | null>(initialImage);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [feedback, setFeedback] = useState<AvatarFeedback | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const isUploading = uploadProgress !== null;
+  const busy = isUploading || isRemoving;
+  const displayedImage = previewUrl ?? currentImage;
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setFeedback({
+        variant: "error",
+        message: `La imagen supera el tamaño máximo de ${MAX_IMAGE_MB} MB`,
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setFeedback(null);
+  }
+
+  function handleCancelPreview() {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+  }
+
+  function handleConfirmUpload() {
+    if (!selectedFile) return;
+
+    setUploadProgress(0);
+    setFeedback(null);
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+
+    xhr.upload.onprogress = (progressEvent) => {
+      if (!progressEvent.lengthComputable) return;
+      const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+      setUploadProgress(percent);
+    };
+
+    xhr.onload = () => {
+      setUploadProgress(null);
+      const body = parseUploadBody(xhr.responseText);
+
+      if (xhr.status >= 200 && xhr.status < 300 && body?.url) {
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setCurrentImage(body.url);
+        setFeedback({ variant: "success", message: "Avatar actualizado correctamente" });
+        router.refresh();
+        return;
+      }
+
+      setFeedback({
+        variant: "error",
+        message: mapUploadError(xhr.status, body),
+      });
+    };
+
+    xhr.onerror = () => {
+      setUploadProgress(null);
+      setFeedback({ variant: "error", message: "Error de red al subir la imagen" });
+    };
+
+    xhr.send(formData);
+  }
+
+  async function handleRemoveAvatar() {
+    setIsRemoving(true);
+    setFeedback(null);
+    try {
+      const response = await fetch("/api/upload", { method: "DELETE" });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        setFeedback({
+          variant: "error",
+          message: body.error ?? "No se pudo eliminar el avatar",
+        });
+        return;
+      }
+      setCurrentImage(null);
+      setFeedback({ variant: "success", message: "Avatar eliminado; vuelto al avatar por defecto" });
+      router.refresh();
+    } catch {
+      setFeedback({ variant: "error", message: "Error de red al eliminar el avatar" });
+    } finally {
+      setIsRemoving(false);
+    }
+  }
+
+  return (
+    <Card as="section" aria-labelledby="avatar-section-title" className="flex flex-col gap-6">
+      <div className="flex flex-col justify-between gap-2 border-b border-border-subtle pb-4 sm:flex-row sm:items-start">
+        <div>
+          <h2 id="avatar-section-title" className="font-heading text-headline-md text-text-primary">
+            Avatar
+          </h2>
+          <p className="mt-1 text-body-sm text-text-secondary">
+            Tu imagen visible en tu Club Profile y listas de eventos.
+          </p>
+        </div>
+        <Badge variant="neutral" className="self-start">
+          JPG / PNG / WEBP · Máx. {MAX_IMAGE_MB} MB
+        </Badge>
+      </div>
+
+      <div className="flex flex-col items-start gap-6 md:flex-row md:items-center">
+        <Avatar image={displayedImage} alt={nick} size="lg" className="border border-volt" />
+
+        <div className="flex w-full flex-1 flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleFileChange}
+              disabled={busy}
+              aria-label="Seleccionar imagen de avatar"
+              className="hidden"
+            />
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Seleccionar imagen
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy || currentImage === null || selectedFile !== null}
+              onClick={handleRemoveAvatar}
+            >
+              {isRemoving ? "Eliminando…" : "Eliminar avatar"}
+            </Button>
+          </div>
+
+          {selectedFile && !isUploading && (
+            <div className="flex flex-col gap-3 rounded border border-border-subtle bg-surface-overlay p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2 text-body-sm">
+                <Badge variant="info">Vista previa</Badge>
+                <span className="truncate text-text-secondary">{selectedFile.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" onClick={handleConfirmUpload}>
+                  Subir imagen
+                </Button>
+                <Button variant="ghost" onClick={handleCancelPreview}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {isUploading && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-overlay p-3"
+            >
+              <div className="flex items-center justify-between text-body-sm">
+                <div className="flex items-center gap-2">
+                  <Badge variant="info">Subiendo</Badge>
+                  <span className="truncate text-text-secondary">{selectedFile?.name}</span>
+                </div>
+                <span className="font-heading font-bold tabular-nums text-volt">
+                  {uploadProgress}%
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-valuenow={uploadProgress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Progreso de subida de avatar"
+                className="h-2 w-full overflow-hidden rounded-full border border-border-subtle bg-surface-base"
+              >
+                <div
+                  className="h-full rounded-full bg-volt transition-all"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {feedback && <Alert variant={feedback.variant}>{feedback.message}</Alert>}
+        </div>
+      </div>
+    </Card>
+  );
+}

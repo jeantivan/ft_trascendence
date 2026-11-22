@@ -4,21 +4,36 @@ import {
   AdminCannotBeManagerError,
   OrganizationDeletionAlreadyScheduledError,
   OrganizationDeletionNotScheduledError,
+  AlreadyMemberError,
+  MembershipRequestNotFoundError,
+  MembershipRequestNotPendingError,
   OrganizationNotFoundError,
   organizationRepository,
+  RequestAlreadyPendingError,
+  UserNotFoundError,
+  type MembershipRequestDetail,
   type OrganizationDetail,
   type OrganizationRepository,
   type OrganizationSummary,
   type ScheduleDeletionResult,
 } from "./organization-repository";
+import { PrismaClubExit } from "./club-exit";
 import { createOrganizationSchema, normalizeId, updateOrganizationSchema } from "./schemas";
+
+// What the service needs from PrismaClubExit; a test passes a fake
+type ClubExit = Pick<PrismaClubExit, "leave" | "expel">;
 
 // Defined in the repository (which also throws it); re-exported to keep this import path
 export {
   AdminCannotBeManagerError,
   OrganizationDeletionAlreadyScheduledError,
   OrganizationDeletionNotScheduledError,
+  AlreadyMemberError,
+  MembershipRequestNotFoundError,
+  MembershipRequestNotPendingError,
   OrganizationNotFoundError,
+  RequestAlreadyPendingError,
+  UserNotFoundError,
 };
 
 /**
@@ -30,6 +45,7 @@ export {
 export class OrganizationService {
   constructor(
     private readonly repo: OrganizationRepository = organizationRepository,
+    private readonly clubExit: ClubExit = new PrismaClubExit(),
     private readonly mailSender?: MailSender,
   ) {}
 
@@ -69,6 +85,19 @@ export class OrganizationService {
   // LastManagerError if no other Manager would remain.
   removeManager(adminId: string, orgId: string, userId: string): Promise<void> {
     return this.repo.removeManager(adminId, orgId, userId);
+  }
+
+  // Any member: requireOrgRole(orgId, ORG_ROLES["membership.leave"]) gives the userId. Leaving never
+  // blocks, not even the last Manager (the Admins are warned); NotMemberError if not in the club.
+  leaveClub(userId: string, orgId: string): Promise<void> {
+    return this.clubExit.leave(normalizeId(userId), normalizeId(orgId));
+  }
+
+  // Manager or Admin: requireOrgRole(orgId, ORG_ROLES["member.expel"]) gives the actor and its role.
+  // The expelled user is notified; an Admin's expulsion is audited. NotMemberError if the target
+  // is not in the club, CannotExpelSelfError if it is the actor.
+  expelMember(actor: { id: string; role: "manager" | "admin" }, orgId: string, targetId: string): Promise<void> {
+    return this.clubExit.expel({ ...actor, id: normalizeId(actor.id) }, normalizeId(orgId), normalizeId(targetId));
   }
 
   // Manager only: requireOrgRole(orgId, ORG_ROLES["organization.updateDescription"])
@@ -111,5 +140,44 @@ export class OrganizationService {
     if (failed > 0) {
       console.warn(`Organization deletion scheduled, but ${failed} notice email(s) failed`);
     }
+  }
+
+  // Invitations and requests to join (#149). The service receives a userId: finding someone by
+  // email is the UI's job (#152).
+
+  // Manager only: requireOrgRole(orgId, ORG_ROLES["invitation.manage"]) gives the managerId
+  inviteUser(managerId: string, orgId: string, userId: string): Promise<MembershipRequestDetail> {
+    return this.repo.inviteUser(managerId, orgId, userId);
+  }
+
+  // Manager only: requireOrgRole(orgId, ORG_ROLES["invitation.manage"])
+  revokeInvitation(orgId: string, requestId: string): Promise<void> {
+    return this.repo.revokeInvitation(orgId, requestId);
+  }
+
+  // Any signed-in user who is not a member: requireAuth(), not requireOrgRole (they are not in the club)
+  requestToJoin(userId: string, orgId: string): Promise<MembershipRequestDetail> {
+    return this.repo.requestToJoin(userId, orgId);
+  }
+
+  // Signed-in user, for their own request: requireAuth()
+  withdrawRequest(userId: string, requestId: string): Promise<void> {
+    return this.repo.withdrawRequest(userId, requestId);
+  }
+
+  // Signed-in user, for their own invitation: requireAuth(). Accepting makes them an athlete.
+  answerInvitation(userId: string, requestId: string, accept: boolean): Promise<void> {
+    return this.repo.answerInvitation(userId, requestId, accept);
+  }
+
+  // Manager only: requireOrgRole(orgId, ORG_ROLES["membershipRequest.review"]). Approving makes
+  // the user an athlete.
+  reviewRequest(orgId: string, requestId: string, approve: boolean): Promise<void> {
+    return this.repo.reviewRequest(orgId, requestId, approve);
+  }
+
+  // Manager only: requireOrgRole(orgId, ORG_ROLES["membershipRequest.review"])
+  listPendingRequests(orgId: string): Promise<MembershipRequestDetail[]> {
+    return this.repo.listPendingRequests(orgId);
   }
 }

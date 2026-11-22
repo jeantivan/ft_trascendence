@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { blockAccountAction, unblockAccountAction, updateAccountNickAction } from "@/lib/admin/actions";
-import { blockAccount, unblockAccount, updateAccountNick } from "@/lib/admin/accounts";
+import { blockAccountAction, deleteAccountAction, unblockAccountAction, updateAccountNickAction } from "@/lib/admin/actions";
+import { blockAccount, deleteAccount, unblockAccount, updateAccountNick } from "@/lib/admin/accounts";
 import { requireAdmin } from "@/lib/permissions/require-admin";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 vi.mock("@/lib/permissions/require-admin", () => ({ requireAdmin: vi.fn() }));
 vi.mock("@/lib/admin/accounts", () => ({
   blockAccount: vi.fn(),
+  deleteAccount: vi.fn(),
   unblockAccount: vi.fn(),
   updateAccountNick: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 // requireAdmin ends by throwing (redirect or forbidden) when it does not let you in
 class ForbiddenSignal extends Error {}
@@ -41,6 +44,33 @@ describe("Admin account actions", () => {
 
     expect(result).toEqual({ ok: true, changed: true });
     expect(blockAccount).toHaveBeenCalledWith(prisma, { adminId: "admin-from-session", accountId: ACCOUNT_ID });
+  });
+
+  // The account page no longer exists: back to the list, which says it was deleted
+  it("delete: deletes with the session Admin, redraws the panel and goes back to the list with a notice", async () => {
+    vi.mocked(deleteAccount).mockResolvedValue({ ok: true, changed: true });
+
+    await deleteAccountAction(null, formWith({ accountId: ACCOUNT_ID, adminId: "someone-else" }));
+
+    expect(deleteAccount).toHaveBeenCalledWith(prisma, { adminId: "admin-from-session", accountId: ACCOUNT_ID });
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/accounts", "layout");
+    expect(redirect).toHaveBeenCalledWith("/admin/accounts?deleted=1");
+  });
+
+  // Refused: stay on the account page with the reason. Same redraw rule as blocking:
+  // last-admin means the page is old; not-found would turn the page into a 404 and lose the message
+  it.each([
+    ["self", false],
+    ["not-found", false],
+    ["last-admin", true],
+  ] as const)("delete refused (%s) gives the reason, stays on the page, redraws: %s", async (reason, redraws) => {
+    vi.mocked(deleteAccount).mockResolvedValue({ ok: false, reason });
+
+    const result = await deleteAccountAction(null, formWith({ accountId: ACCOUNT_ID }));
+
+    expect(result).toEqual({ ok: false, reason });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(vi.mocked(revalidatePath).mock.calls.length > 0).toBe(redraws);
   });
 
   it("block: an adminId sent in the form is ignored", async () => {
@@ -85,6 +115,7 @@ describe("Admin account actions", () => {
     ["block", () => blockAccountAction(null, formWith({ accountId: ACCOUNT_ID })), blockAccount],
     ["unblock", () => unblockAccountAction(null, formWith({ accountId: ACCOUNT_ID })), unblockAccount],
     ["nick", () => updateAccountNickAction(null, formWith({ accountId: ACCOUNT_ID, nick: "X1" })), updateAccountNick],
+    ["delete", () => deleteAccountAction(null, formWith({ accountId: ACCOUNT_ID })), deleteAccount],
   ] as const)("%s: someone who is not an Admin stops at requireAdmin and changes nothing", async (_, action, service) => {
     vi.mocked(requireAdmin).mockRejectedValue(new ForbiddenSignal());
 
@@ -119,10 +150,10 @@ describe("Admin account actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/admin/accounts", "layout");
   });
 
-  // Refused for being an Admin: the account may have been made Admin after the page
-  // was drawn, so the page shows an old role and a button that no longer applies
-  it("block refused because the account is an Admin redraws the panel", async () => {
-    vi.mocked(blockAccount).mockResolvedValue({ ok: false, reason: "admin" });
+  // Refused for being the last unblocked Admin: another Admin was blocked after the
+  // page was drawn, so the panel shows an old state
+  it("block refused because the account is the last unblocked Admin redraws the panel", async () => {
+    vi.mocked(blockAccount).mockResolvedValue({ ok: false, reason: "last-admin" });
 
     await blockAccountAction(null, formWith({ accountId: ACCOUNT_ID }));
 

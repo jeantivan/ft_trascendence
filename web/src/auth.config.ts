@@ -39,12 +39,16 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         token.id = user.id;
         token.nick = user.nick;
+        token.authTime = Math.floor(Date.now() / 1000);
         // Informational only for UI; server permissions must check the DB (see AGENTS.md)
         token.roleGlobal = user.roleGlobal;
       }
       return token;
     },
     session({ session, token }) {
+      if (typeof token.authTime === "number") {
+        session.authTime = token.authTime;
+      }
       if (session.user && token.id) {
         session.user.id = String(token.id);
         session.user.nick = typeof token.nick === "string" ? token.nick : undefined;

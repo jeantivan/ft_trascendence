@@ -24,7 +24,8 @@ START_FAILED_HINT = echo "--- Last lines of migrate:"; $(COMPOSE) logs --no-log-
 # is not enough, it turns into sha256:... once make test rebuilds that image.
 # The address asks compose for the host port nginx really publishes (8443 inside
 # the container, see docker-compose.yml): it already applied the quotes, comments
-# and shell variables of HTTPS_PORT. 8443 if it cannot tell.
+# and shell variables of HTTPS_PORT. 8443 if it cannot tell. The IP for another
+# computer comes from scripts/host-ip.sh (#211); the placeholder if it gives none.
 # Then the initial Admin (#213): its email and where its password is, never which.
 # The email comes from compose too, for the same reason as the port.
 all: env
@@ -35,7 +36,8 @@ all: env
 	$(COMPOSE) up --build -d || { $(START_FAILED_HINT); exit 1; }
 	@port=$$($(COMPOSE) port nginx 8443 2>/dev/null | head -n1 | sed 's/.*://'); \
 	[ -n "$$port" ] || port=8443; \
-	echo "App: https://localhost:$$port (from another computer: https://<this computer's IP>:$$port)"
+	ip=$$(sh scripts/host-ip.sh); \
+	echo "App: https://localhost:$$port (from another computer: https://$${ip:-<this computer's IP>}:$$port)"
 	@email=$$($(COMPOSE) config 2>/dev/null | sed -n 's/^ *ADMIN_EMAIL: *//p' | head -n1); \
 	echo "Admin: $${email:-see ADMIN_EMAIL in .env} (password: ADMIN_PASSWORD in .env). Demo data: make seed"
 

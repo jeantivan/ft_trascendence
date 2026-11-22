@@ -48,6 +48,15 @@ export class EmailChangeNotAllowedForOAuthError extends Error {
   }
 }
 
+export class RecentAuthRequiredError extends Error {
+  constructor(
+    message = "Recent authentication is required to set the first password"
+  ) {
+    super(message);
+    this.name = "RecentAuthRequiredError";
+  }
+}
+
 export interface SettingsProfile {
   id: string;
   email: string;
@@ -152,6 +161,10 @@ export class UserSettingsService {
   async updatePassword(userId: string, input: UpdatePasswordInput): Promise<void> {
     const validated = updatePasswordSchema.parse(input);
     const user = await this.getActiveUser(userId);
+
+    if (user.passwordHash === null && !validated.recentAuth) {
+      throw new RecentAuthRequiredError();
+    }
 
     await this.verifyCurrentPasswordIfRequired(user, validated.currentPassword);
 

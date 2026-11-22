@@ -6,6 +6,11 @@ import {
   OrganizationNotFoundError,
   OrganizationService,
 } from "@/lib/org/organization-service";
+import {
+  AlreadyMemberError,
+  MembershipRequestNotPendingError,
+  RequestAlreadyPendingError,
+} from "@/lib/org/organization-service";
 import { LastManagerError, UserNotFoundError } from "@/lib/org/organization-repository";
 import type { MailMessage, MailSender } from "@/lib/mail/mail-sender";
 import { InMemoryOrganizationRepository } from "../support/in-memory-organization-repository";
@@ -30,7 +35,7 @@ const NEW_CLUB = {
 
 function createService(mailSender?: MailSender) {
   const repo = new InMemoryOrganizationRepository();
-  return { service: new OrganizationService(repo, mailSender), repo };
+  return { service: new OrganizationService(repo, undefined, mailSender), repo };
 }
 
 describe("OrganizationService", () => {
@@ -300,5 +305,90 @@ describe("OrganizationService", () => {
 
     await service.cancelDeletion(ADMIN_ID, orgId);
     await expect(service.getOrganization(orgId)).resolves.toMatchObject({ deleteAt: null });
+  });
+
+  describe("leaving and expelling (#150)", () => {
+    function createWithClubExit() {
+      const calls: unknown[][] = [];
+      const clubExit = {
+        leave: async (...args: unknown[]) => void calls.push(["leave", ...args]),
+        expel: async (...args: unknown[]) => void calls.push(["expel", ...args]),
+      };
+      return { service: new OrganizationService(new InMemoryOrganizationRepository(), clubExit), calls };
+    }
+
+    it("leaveClub hands the user and the club to the club exit, ids in lowercase", async () => {
+      const { service, calls } = createWithClubExit();
+
+      await service.leaveClub(MANAGER_ID.toUpperCase(), UNKNOWN_ID.toUpperCase());
+
+      expect(calls).toEqual([["leave", MANAGER_ID, UNKNOWN_ID]]);
+    });
+
+    it("expelMember hands the actor, the club and the target to the club exit, ids in lowercase", async () => {
+      const { service, calls } = createWithClubExit();
+
+      await service.expelMember({ id: ADMIN_ID, role: "admin" }, UNKNOWN_ID.toUpperCase(), MANAGER_ID.toUpperCase());
+
+      expect(calls).toEqual([["expel", { id: ADMIN_ID, role: "admin" }, UNKNOWN_ID, MANAGER_ID]]);
+    });
+  });
+});
+
+describe("OrganizationService invitations and requests", () => {
+  const USER_ID = "00000000-0000-4000-8000-000000000003";
+
+  function createClub() {
+    const { service, repo } = createService();
+    repo.addUser(MANAGER_ID);
+    repo.addUser(USER_ID);
+    const orgId = repo.add({ ...CLUB, members: 0 });
+    return { service, repo, orgId };
+  }
+
+  it("a Manager invites, the user accepts and becomes a member", async () => {
+    const { service, repo, orgId } = createClub();
+    await repo.assignManager(MANAGER_ID, orgId, MANAGER_ID);
+
+    const invitation = await service.inviteUser(MANAGER_ID, orgId, USER_ID);
+    await service.answerInvitation(USER_ID, invitation.id, true);
+
+    await expect(service.inviteUser(MANAGER_ID, orgId, USER_ID)).rejects.toBeInstanceOf(AlreadyMemberError);
+    expect(repo.sent.map((n) => n.type)).toEqual(["membership_invitation_created", "membership_accepted"]);
+  });
+
+  it("a user requests, the Manager approves, and a second decision gets MembershipRequestNotPendingError", async () => {
+    const { service, repo, orgId } = createClub();
+    await repo.assignManager(MANAGER_ID, orgId, MANAGER_ID);
+
+    const request = await service.requestToJoin(USER_ID, orgId);
+    await expect(service.listPendingRequests(orgId)).resolves.toHaveLength(1);
+    await service.reviewRequest(orgId, request.id, true);
+
+    await expect(service.reviewRequest(orgId, request.id, false)).rejects.toBeInstanceOf(
+      MembershipRequestNotPendingError,
+    );
+    await expect(service.listPendingRequests(orgId)).resolves.toEqual([]);
+  });
+
+  it("a second request while one is pending gets RequestAlreadyPendingError, and withdrawing frees it", async () => {
+    const { service, orgId } = createClub();
+
+    const request = await service.requestToJoin(USER_ID, orgId);
+    await expect(service.requestToJoin(USER_ID, orgId)).rejects.toBeInstanceOf(RequestAlreadyPendingError);
+    await service.withdrawRequest(USER_ID, request.id);
+
+    await expect(service.requestToJoin(USER_ID, orgId)).resolves.toMatchObject({ status: "pending" });
+  });
+
+  it("revokeInvitation ends a pending invitation", async () => {
+    const { service, orgId } = createClub();
+    const invitation = await service.inviteUser(MANAGER_ID, orgId, USER_ID);
+
+    await service.revokeInvitation(orgId, invitation.id);
+
+    await expect(service.answerInvitation(USER_ID, invitation.id, true)).rejects.toBeInstanceOf(
+      MembershipRequestNotPendingError,
+    );
   });
 });
