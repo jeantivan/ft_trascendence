@@ -52,6 +52,8 @@ export type ExportAccountSource = {
     yourStatus: SpotRequestStatus;
     requestedAt: Date;
   }[];
+  // eventId is null if the Event was deleted: the Athlete keeps the Feedback
+  feedbackReceived: { id: string; eventId: string | null; body: string; createdAt: Date }[];
 };
 
 export type ExportUserRepository = {
@@ -128,6 +130,12 @@ export async function buildExportFiles(
       starts_at: toExportDate(event.startsAt),
       your_status: event.yourStatus,
       requested_at: toExportDate(event.requestedAt),
+    })),
+    feedback_received: account.feedbackReceived.map((feedback) => ({
+      id: feedback.id,
+      event_id: feedback.eventId,
+      body: feedback.body,
+      created_at: toExportDate(feedback.createdAt),
     })),
   };
   return [

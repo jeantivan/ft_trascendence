@@ -16,6 +16,7 @@ const emptyAccount: ExportAccountSource = {
   memberships: [],
   groups: [],
   events: [],
+  feedbackReceived: [],
 };
 
 function repositoryWith(
@@ -85,6 +86,7 @@ describe("buildExportFiles", () => {
       memberships: [],
       groups: [],
       events: [],
+      feedback_received: [],
     });
   });
 
@@ -224,6 +226,22 @@ describe("buildExportFiles", () => {
         requested_at: "2026-10-01T09:00:00Z",
       },
     ]);
+  });
+
+  it("feedback_received no lleva manager y admite un Event borrado (event_id null)", async () => {
+    const data = await dataJsonOf(athlete, {
+      ...emptyAccount,
+      feedbackReceived: [
+        { id: "fb-1", eventId: "event-1", body: "Buen ritmo hoy", createdAt: new Date("2026-10-05T09:00:00.000Z") },
+        { id: "fb-2", eventId: null, body: "Sigue así", createdAt: new Date("2026-10-06T09:00:00.000Z") },
+      ],
+    });
+
+    expect(data.feedback_received).toEqual([
+      { id: "fb-1", event_id: "event-1", body: "Buen ritmo hoy", created_at: "2026-10-05T09:00:00Z" },
+      { id: "fb-2", event_id: null, body: "Sigue así", created_at: "2026-10-06T09:00:00Z" },
+    ]);
+    expect(JSON.stringify(data)).not.toContain("manager");
   });
 
 });

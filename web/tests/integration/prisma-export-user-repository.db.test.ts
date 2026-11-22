@@ -151,6 +151,29 @@ describe("Integration: createPrismaExportUserRepository", () => {
       ]);
     });
 
+    it("devuelve el Feedback recibido sin manager, también el de un Event borrado", async () => {
+      const { user, other, org } = await createFixture();
+      const event = await prisma.event.create({
+        data: { orgId: org.id, title: "run", location: "Retiro", startsAt: at(10) },
+      });
+      const received = await prisma.feedback.create({
+        data: { eventId: event.id, athleteId: user.id, managerId: other.id, body: "Buen ritmo", createdAt: at(11) },
+      });
+      const orphan = await prisma.feedback.create({
+        data: { eventId: event.id, athleteId: user.id, managerId: other.id, body: "Sigue así", createdAt: at(12) },
+      });
+      await prisma.feedback.create({ data: { athleteId: other.id, managerId: user.id, body: "Not hers" } });
+      await prisma.event.delete({ where: { id: event.id } });
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data?.feedbackReceived).toEqual([
+        { id: received.id, eventId: null, body: "Buen ritmo", createdAt: at(11) },
+        { id: orphan.id, eventId: null, body: "Sigue así", createdAt: at(12) },
+      ]);
+      expect(JSON.stringify(data)).not.toContain(other.id);
+    });
+
     it("devuelve null si el usuario no existe", async () => {
       await expect(repository.findAccountData("00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
     });
