@@ -22,10 +22,14 @@ const invalid = "border-rpe-max focus:border-rpe-max focus-visible:outline-rpe-m
 
 export function Select({ className, children, placeholder, options, ...props }: SelectProps) {
   const isInvalid = props["aria-invalid"] === true || props["aria-invalid"] === "true";
+  const selectProps =
+    placeholder && props.value === undefined && props.defaultValue === undefined
+      ? { ...props, defaultValue: "" }
+      : props;
 
   return (
     <div className="flex w-full items-center">
-      <select className={cn(base, isInvalid ? invalid : normal, className)} {...props}>
+      <select className={cn(base, isInvalid ? invalid : normal, className)} {...selectProps}>
         {placeholder && (
           <option value="" disabled>
             {placeholder}

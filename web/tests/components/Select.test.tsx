@@ -79,19 +79,37 @@ describe("Select", () => {
     expect(container.querySelector("svg")).toHaveClass("peer-disabled:opacity-50");
   });
 
-  it("renders a disabled empty placeholder option and muted styling class when provided", () => {
+  it("renders and selects the disabled empty placeholder option when no value or defaultValue is passed", () => {
     render(
-      <Select aria-label="Club" placeholder="Elige un club" defaultValue="">
+      <Select aria-label="Club" placeholder="Elige un club">
         <option value="demo">Club Demo</option>
       </Select>
     );
 
     const select = screen.getByRole("combobox");
-    const placeholderOption = screen.getByRole("option", { name: "Elige un club" });
+    const placeholderOption = screen.getByRole("option", { name: "Elige un club" }) as HTMLOptionElement;
     expect(placeholderOption).toHaveAttribute("value", "");
     expect(placeholderOption).toBeDisabled();
+    expect(placeholderOption.selected).toBe(true);
     expect(select).toHaveValue("");
     expect(select).toHaveClass('has-[option[value=""]:checked]:text-text-muted');
+  });
+
+  it("does not override an explicit defaultValue or value when placeholder is provided", () => {
+    const { rerender } = render(
+      <Select aria-label="Club" placeholder="Elige un club" defaultValue="demo">
+        <option value="demo">Club Demo</option>
+      </Select>
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("demo");
+
+    rerender(
+      <Select aria-label="Club" placeholder="Elige un club" value="other" onChange={() => {}}>
+        <option value="demo">Club Demo</option>
+        <option value="other">Other Club</option>
+      </Select>
+    );
+    expect(screen.getByRole("combobox")).toHaveValue("other");
   });
 
   it("renders options from an options array including disabled items", () => {
