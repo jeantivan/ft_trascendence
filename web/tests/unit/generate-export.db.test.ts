@@ -54,6 +54,36 @@ describe("generateExport", () => {
     expect(Object.keys(entries).sort()).toEqual(["README.txt", "data.json", "sessions.csv"]);
   });
 
+  it("puts the accesses by third parties in data.json and does not log the export itself", async () => {
+    const actorId = "88888888-8888-4888-8888-888888888889";
+    await db.auditLog.create({
+      data: {
+        actorId,
+        actorRole: "manager",
+        subjectId: USER_ID,
+        action: "read",
+        resource: "profile",
+        createdAt: new Date("2026-11-01T10:00:00.000Z"),
+      },
+    });
+    const { id } = await db.dataExport.create({ data: { userId: USER_ID } });
+    const before = await db.auditLog.count({ where: { subjectId: USER_ID } });
+
+    try {
+      const result = await generateExport(id, db, uploadsDir, NOW);
+
+      expect(result.ready).toBe(true);
+      const entries = await readZipEntries(path.join(uploadsDir, `exports/${id}.zip`));
+      const data = JSON.parse(entries["data.json"]);
+      expect(data.access_log).toEqual([
+        { created_at: "2026-11-01T10:00:00.000Z", action: "read", resource: "profile", actor_role: "manager" },
+      ]);
+      expect(await db.auditLog.count({ where: { subjectId: USER_ID } })).toBe(before);
+    } finally {
+      await db.auditLog.deleteMany({ where: { actorId } });
+    }
+  });
+
   it("marks the export failed and leaves no file when the ZIP cannot be written", async () => {
     const { id } = await db.dataExport.create({ data: { userId: USER_ID } });
     // A regular file where the exports folder should be: creating the folder fails

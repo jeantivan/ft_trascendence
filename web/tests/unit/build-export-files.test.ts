@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import type { AccessLogEntry } from "@/lib/gdpr/audit";
 import {
   buildExportFiles,
   type ExportAccountSource,
@@ -25,11 +26,13 @@ function repositoryWith(
   user: Awaited<ReturnType<ExportUserRepository["findProfile"]>>,
   sessions: ExportSessionSource[] = [],
   account: ExportAccountSource | null = emptyAccount,
+  accessLog: AccessLogEntry[] = [],
 ): ExportUserRepository {
   return {
     findProfile: async () => user,
     findAccountData: async () => account,
     findSessions: async () => sessions,
+    findAccessLog: async () => accessLog,
   };
 }
 
@@ -63,8 +66,12 @@ const athlete: ExportProfileSource = {
   email2faEnabled: true,
 };
 
-async function dataJsonOf(user: ExportProfileSource, account: ExportAccountSource = emptyAccount) {
-  const files = await buildExportFiles(user.id, repositoryWith(user, [], account), NOW);
+async function dataJsonOf(
+  user: ExportProfileSource,
+  account: ExportAccountSource = emptyAccount,
+  accessLog: AccessLogEntry[] = [],
+) {
+  const files = await buildExportFiles(user.id, repositoryWith(user, [], account, accessLog), NOW);
   const dataJson = files?.find((file) => file.name === "data.json");
   return JSON.parse(dataJson!.content);
 }
@@ -91,6 +98,7 @@ describe("buildExportFiles", () => {
       feedback_received: [],
       contacts: [],
       notifications: [],
+      access_log: [],
     });
   });
 
@@ -124,6 +132,20 @@ describe("buildExportFiles", () => {
     }
   });
 
+  it("access_log lleva solo fecha con milisegundos, acción, recurso y rol, sin quién actuó", async () => {
+    const entry: AccessLogEntry = {
+      created_at: "2026-10-05T09:10:00.000Z",
+      action: "block",
+      resource: "user",
+      actor_role: "admin",
+    };
+
+    const data = await dataJsonOf(athlete, emptyAccount, [entry]);
+
+    expect(data.access_log).toEqual([entry]);
+    expect(Object.keys(data.access_log[0]).sort()).toEqual(["action", "actor_role", "created_at", "resource"]);
+  });
+
   it("incluye un README.txt que dice qué contiene el ZIP y qué no", async () => {
     const files = await buildExportFiles(athlete.id, repositoryWith(athlete), NOW);
 
@@ -134,11 +156,16 @@ describe("buildExportFiles", () => {
     expect(readme).toContain("2026-10-06 11:28 UTC");
     expect(readme).toContain("athlete@example.com");
     expect(readme).toContain("NO SE INCLUYE");
-    for (const block of ["ajustes", "consentimientos", "feedback recibido", "contactos", "notificaciones"]) {
+    for (const block of [
+      "ajustes",
+      "consentimientos",
+      "feedback recibido",
+      "contactos",
+      "notificaciones",
+      "registro de accesos",
+    ]) {
       expect(readme).toContain(block);
     }
-    // The access log arrives with #168
-    expect(readme).not.toContain("registro de accesos");
     expect(readme).toContain("Datos que escribiste como Manager sobre otras personas");
   });
 

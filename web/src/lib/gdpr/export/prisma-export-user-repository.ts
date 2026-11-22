@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import { listAccessesToUser } from "@/lib/gdpr/audit";
 import { prisma } from "@/lib/prisma";
 import type { ExportUserRepository } from "@/lib/gdpr/export/build-export-files";
 
@@ -162,6 +163,10 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
         },
         orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
       });
+    },
+
+    async findAccessLog(userId) {
+      return listAccessesToUser(db, userId);
     },
   };
 }
