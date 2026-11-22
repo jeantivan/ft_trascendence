@@ -1,4 +1,5 @@
 import type {
+  MembershipRole,
   SessionOrigin,
   SessionType,
 } from "@/generated/prisma/client";
@@ -38,6 +39,7 @@ export type ExportSessionSource = {
 export type ExportAccountSource = {
   settings: { statsPublic: boolean; notificationsEnabled: boolean; showOnline: boolean };
   consents: { healthConsentAt: Date | null; healthConsentVersion: number | null };
+  memberships: { orgId: string; orgName: string; role: MembershipRole; joinedAt: Date }[];
 };
 
 export type ExportUserRepository = {
@@ -93,6 +95,12 @@ export async function buildExportFiles(
       health_consent_at: toExportDateOrNull(account.consents.healthConsentAt),
       health_consent_version: account.consents.healthConsentVersion,
     },
+    memberships: account.memberships.map((membership) => ({
+      org_id: membership.orgId,
+      org_name: membership.orgName,
+      role: membership.role,
+      joined_at: toExportDate(membership.joinedAt),
+    })),
   };
   return [
     { name: "data.json", content: JSON.stringify(data, null, 2) },

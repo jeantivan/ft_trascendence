@@ -88,6 +88,16 @@ describe("Integration: createPrismaExportUserRepository", () => {
       });
     });
 
+    it("devuelve los clubes del usuario con el nombre y su rol", async () => {
+      const { user, other, org } = await createFixture();
+      await prisma.membership.create({ data: { userId: user.id, orgId: org.id, role: "athlete", joinedAt: at(2) } });
+      await prisma.membership.create({ data: { userId: other.id, orgId: org.id, role: "manager" } });
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data?.memberships).toEqual([{ orgId: org.id, orgName, role: "athlete", joinedAt: at(2) }]);
+    });
+
     it("devuelve null en los dos consentimientos si no los dio", async () => {
       const user = await prisma.user.create({ data: { email } });
 

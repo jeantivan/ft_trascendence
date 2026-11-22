@@ -13,6 +13,7 @@ const NOW = new Date("2026-10-06T11:28:00.000Z");
 const emptyAccount: ExportAccountSource = {
   settings: { statsPublic: false, notificationsEnabled: true, showOnline: true },
   consents: { healthConsentAt: null, healthConsentVersion: null },
+  memberships: [],
 };
 
 function repositoryWith(
@@ -79,6 +80,7 @@ describe("buildExportFiles", () => {
       },
       settings: { stats_public: false, notifications_enabled: true, show_online: true },
       consents: { health_consent_at: null, health_consent_version: null },
+      memberships: [],
     });
   });
 
@@ -167,6 +169,17 @@ describe("buildExportFiles", () => {
 
     expect(data.settings).toEqual({ stats_public: true, notifications_enabled: false, show_online: false });
     expect(data.consents).toEqual({ health_consent_at: "2026-02-01T10:00:00Z", health_consent_version: 1 });
+  });
+
+  it("memberships lleva org_id, org_name, role y joined_at en UTC", async () => {
+    const data = await dataJsonOf(athlete, {
+      ...emptyAccount,
+      memberships: [{ orgId: "org-1", orgName: "Club Running Madrid", role: "athlete", joinedAt: new Date("2026-01-15T00:00:00.000Z") }],
+    });
+
+    expect(data.memberships).toEqual([
+      { org_id: "org-1", org_name: "Club Running Madrid", role: "athlete", joined_at: "2026-01-15T00:00:00Z" },
+    ]);
   });
 
 });
