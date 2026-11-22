@@ -198,6 +198,25 @@ describe("Integration: createPrismaExportUserRepository", () => {
       await prisma.user.deleteMany({ where: { email: "export-user-repository-fourth@example.com" } });
     });
 
+    it("devuelve las notificaciones del usuario sin payload y con id bigint", async () => {
+      const { user, other } = await createFixture();
+      const first = await prisma.notification.create({
+        data: { userId: user.id, type: "spot_approved", payload: { eventId: "secret-payload" }, createdAt: at(3) },
+      });
+      const second = await prisma.notification.create({
+        data: { userId: user.id, type: "spot_rejected", payload: {}, readAt: at(5), createdAt: at(4) },
+      });
+      await prisma.notification.create({ data: { userId: other.id, type: "not_hers", payload: {} } });
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data?.notifications).toEqual([
+        { id: first.id, type: "spot_approved", readAt: null, createdAt: at(3) },
+        { id: second.id, type: "spot_rejected", readAt: at(5), createdAt: at(4) },
+      ]);
+      expect(typeof data?.notifications[0].id).toBe("bigint");
+    });
+
     it("devuelve null si el usuario no existe", async () => {
       await expect(repository.findAccountData("00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
     });

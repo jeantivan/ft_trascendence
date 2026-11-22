@@ -18,6 +18,7 @@ const emptyAccount: ExportAccountSource = {
   events: [],
   feedbackReceived: [],
   contacts: [],
+  notifications: [],
 };
 
 function repositoryWith(
@@ -89,6 +90,7 @@ describe("buildExportFiles", () => {
       events: [],
       feedback_received: [],
       contacts: [],
+      notifications: [],
     });
   });
 
@@ -261,4 +263,18 @@ describe("buildExportFiles", () => {
     ]);
   });
 
+  it("notifications serializa el id bigint como string y no lleva payload", async () => {
+    const data = await dataJsonOf(athlete, {
+      ...emptyAccount,
+      notifications: [
+        { id: BigInt(123), type: "spot_approved", readAt: null, createdAt: new Date("2026-10-01T09:05:00.000Z") },
+        { id: BigInt("9007199254740993"), type: "spot_rejected", readAt: new Date("2026-10-02T10:00:00.000Z"), createdAt: new Date("2026-10-01T09:06:00.000Z") },
+      ],
+    });
+
+    expect(data.notifications).toEqual([
+      { id: "123", type: "spot_approved", read_at: null, created_at: "2026-10-01T09:05:00Z" },
+      { id: "9007199254740993", type: "spot_rejected", read_at: "2026-10-02T10:00:00Z", created_at: "2026-10-01T09:06:00Z" },
+    ]);
+  });
 });

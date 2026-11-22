@@ -56,6 +56,8 @@ export type ExportAccountSource = {
   // eventId is null if the Event was deleted: the Athlete keeps the Feedback
   feedbackReceived: { id: string; eventId: string | null; body: string; createdAt: Date }[];
   contacts: { status: ContactStatus; requestedByYou: boolean; createdAt: Date }[];
+  // The id is a bigserial: it goes out as a string because JSON.stringify rejects bigint
+  notifications: { id: bigint; type: string; readAt: Date | null; createdAt: Date }[];
 };
 
 export type ExportUserRepository = {
@@ -143,6 +145,12 @@ export async function buildExportFiles(
       status: contact.status,
       requested_by_you: contact.requestedByYou,
       created_at: toExportDate(contact.createdAt),
+    })),
+    notifications: account.notifications.map((notification) => ({
+      id: notification.id.toString(),
+      type: notification.type,
+      read_at: toExportDateOrNull(notification.readAt),
+      created_at: toExportDate(notification.createdAt),
     })),
   };
   return [
