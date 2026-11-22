@@ -1,4 +1,5 @@
 import type {
+  ContactStatus,
   MembershipRole,
   SessionOrigin,
   SessionType,
@@ -54,6 +55,7 @@ export type ExportAccountSource = {
   }[];
   // eventId is null if the Event was deleted: the Athlete keeps the Feedback
   feedbackReceived: { id: string; eventId: string | null; body: string; createdAt: Date }[];
+  contacts: { status: ContactStatus; requestedByYou: boolean; createdAt: Date }[];
 };
 
 export type ExportUserRepository = {
@@ -136,6 +138,11 @@ export async function buildExportFiles(
       event_id: feedback.eventId,
       body: feedback.body,
       created_at: toExportDate(feedback.createdAt),
+    })),
+    contacts: account.contacts.map((contact) => ({
+      status: contact.status,
+      requested_by_you: contact.requestedByYou,
+      created_at: toExportDate(contact.createdAt),
     })),
   };
   return [

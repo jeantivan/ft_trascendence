@@ -17,6 +17,7 @@ const emptyAccount: ExportAccountSource = {
   groups: [],
   events: [],
   feedbackReceived: [],
+  contacts: [],
 };
 
 function repositoryWith(
@@ -87,6 +88,7 @@ describe("buildExportFiles", () => {
       groups: [],
       events: [],
       feedback_received: [],
+      contacts: [],
     });
   });
 
@@ -242,6 +244,21 @@ describe("buildExportFiles", () => {
       { id: "fb-2", event_id: null, body: "Sigue así", created_at: "2026-10-06T09:00:00Z" },
     ]);
     expect(JSON.stringify(data)).not.toContain("manager");
+  });
+
+  it("contacts lleva solo estado, quién lo pidió y fecha", async () => {
+    const data = await dataJsonOf(athlete, {
+      ...emptyAccount,
+      contacts: [
+        { status: "accepted", requestedByYou: true, createdAt: new Date("2026-03-01T00:00:00.000Z") },
+        { status: "pending", requestedByYou: false, createdAt: new Date("2026-03-02T00:00:00.000Z") },
+      ],
+    });
+
+    expect(data.contacts).toEqual([
+      { status: "accepted", requested_by_you: true, created_at: "2026-03-01T00:00:00Z" },
+      { status: "pending", requested_by_you: false, created_at: "2026-03-02T00:00:00Z" },
+    ]);
   });
 
 });

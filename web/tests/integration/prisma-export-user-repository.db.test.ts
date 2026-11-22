@@ -174,6 +174,30 @@ describe("Integration: createPrismaExportUserRepository", () => {
       expect(JSON.stringify(data)).not.toContain(other.id);
     });
 
+    it("devuelve los contactos como user_a o user_b sin datos del otro usuario", async () => {
+      const { user, other } = await createFixture();
+      const third = await prisma.user.create({ data: { email: "export-user-repository-third@example.com" } });
+      const [a, b] = [user.id, other.id].sort();
+      await prisma.contact.create({
+        data: { userA: a, userB: b, status: "accepted", requestedBy: user.id, createdAt: at(3) },
+      });
+      const [c, d] = [user.id, third.id].sort();
+      await prisma.contact.create({
+        data: { userA: c, userB: d, status: "pending", requestedBy: third.id, createdAt: at(4) },
+      });
+      await prisma.user.deleteMany({ where: { email: "export-user-repository-third@example.com" } });
+      const unrelated = await prisma.user.create({ data: { email: "export-user-repository-fourth@example.com" } });
+      const [e, f] = [other.id, unrelated.id].sort();
+      await prisma.contact.create({ data: { userA: e, userB: f, requestedBy: other.id } });
+
+      const data = await repository.findAccountData(user.id);
+
+      expect(data?.contacts).toEqual([{ status: "accepted", requestedByYou: true, createdAt: at(3) }]);
+      expect(JSON.stringify(data)).not.toContain(other.id);
+      expect(JSON.stringify(data, (_key, value) => (typeof value === "bigint" ? String(value) : value))).not.toContain("nick");
+      await prisma.user.deleteMany({ where: { email: "export-user-repository-fourth@example.com" } });
+    });
+
     it("devuelve null si el usuario no existe", async () => {
       await expect(repository.findAccountData("00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
     });

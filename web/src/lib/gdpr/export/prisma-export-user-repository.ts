@@ -38,7 +38,7 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
     async findAccountData(userId) {
       // RepeatableRead: every query sees the same snapshot, so a club left halfway
       // through the export cannot show up in memberships but not in groups
-      const [user, memberships, groups, spotRequests, feedback] =
+      const [user, memberships, groups, spotRequests, feedback, contacts] =
         await db.$transaction(
           [
             db.user.findUnique({
@@ -81,6 +81,12 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
               select: { id: true, eventId: true, body: true, createdAt: true },
               orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             }),
+            // requestedBy is read only to answer requested_by_you; the other user is never selected
+            db.contact.findMany({
+              where: { OR: [{ userA: userId }, { userB: userId }] },
+              select: { userA: true, userB: true, status: true, requestedBy: true, createdAt: true },
+              orderBy: [{ createdAt: "asc" }, { userA: "asc" }, { userB: "asc" }],
+            }),
           ],
           { isolationLevel: "RepeatableRead" },
         );
@@ -115,6 +121,11 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
           requestedAt: request.createdAt,
         })),
         feedbackReceived: feedback,
+        contacts: contacts.map((contact) => ({
+          status: contact.status,
+          requestedByYou: contact.requestedBy === userId,
+          createdAt: contact.createdAt,
+        })),
       };
     },
 
