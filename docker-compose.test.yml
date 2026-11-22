@@ -39,7 +39,7 @@ services:
       - ./web:/app
       # Keep the container's node_modules (Linux/Alpine binaries) instead of the host's
       - /app/node_modules
-    command: ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm test"]
+    command: ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm test -- ${TEST_ARGS:-}"]
     depends_on:
       db-test:
         condition: service_healthy

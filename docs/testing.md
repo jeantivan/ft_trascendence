@@ -9,6 +9,8 @@ The tests use [Vitest](https://vitest.dev/) and live in `web/tests/`.
 | `make test` | Docker, with an empty PostgreSQL test database | **Every test**: the normal ones and the `*.db.test.ts` files |
 | `npm test` (inside `web/`) | Your machine, no database | The normal tests. The `*.db.test.ts` files are skipped and Vitest prints a warning saying so |
 
+To run only some files, pass `ARGS` (anything `vitest run` accepts): `make test ARGS="tests/integration/organization-repository.db.test.ts"`. Without `ARGS` it runs everything.
+
 Run `make test` before opening a pull request. The CI runs every test too, against its own PostgreSQL database.
 
 ## `make test`

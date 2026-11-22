@@ -75,9 +75,10 @@ check-compose: env
 # Ctrl+C only has to exit, then the EXIT trap cleans up once.
 # --volumes only removes this project's anonymous volumes (the database is in
 # memory): never pgdata. Safe with make dev running: it is another compose project.
+# ARGS limits the run to some files or tests, e.g. make test ARGS="tests/integration/x.db.test.ts".
 test: env
 	trap '$(COMPOSE_TEST) down --volumes --remove-orphans' EXIT; trap 'exit 130' INT TERM; \
-	$(COMPOSE_TEST) run --build --rm test
+	TEST_ARGS='$(ARGS)' $(COMPOSE_TEST) run --build --rm test
 
 # Check that nginx is the only way in, over HTTPS. Needs make or make dev running.
 test-nginx:
