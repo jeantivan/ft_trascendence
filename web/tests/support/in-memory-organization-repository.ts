@@ -8,6 +8,8 @@ import {
   MembershipRequestNotPendingError,
   RequestAlreadyPendingError,
   NotManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   OrganizationNameTakenError,
   OrganizationNotFoundError,
   UserNotFoundError,
@@ -16,6 +18,9 @@ import {
   type OrganizationEdit,
   type OrganizationRepository,
   type OrganizationSummary,
+  type ScheduleDeletionResult,
+  DAY_MS,
+  DELETION_NOTICE_DAYS,
 } from "@/lib/org/organization-repository";
 import {
   MEMBERSHIP_ACCEPTED,
@@ -40,6 +45,7 @@ type Role = "athlete" | "manager";
 // A club as stored: its data, and each member's role by user id
 interface StoredClub {
   data: Omit<NewClub, "members">;
+  deleteAt: Date | null;
   members: Map<string, Role>;
 }
 
@@ -85,7 +91,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
 
   private store(data: StoredClub["data"], members: Map<string, Role>): string {
     const id = randomUUID();
-    this.clubs.set(id, { data, members });
+    this.clubs.set(id, { data, deleteAt: null, members });
     return id;
   }
 
@@ -99,6 +105,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
       id,
       name: club.data.name,
       description: club.data.description,
+      deleteAt: club.deleteAt,
       memberCount: club.members.size,
     }));
   }
@@ -129,7 +136,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
       { name: input.name, description: input.description, timezone: input.timezone },
       new Map(managerIds.map((userId) => [userId, "manager" as Role])),
     );
-    return { id, name: input.name, description: input.description, timezone: input.timezone };
+    return { id, name: input.name, description: input.description, timezone: input.timezone, deleteAt: null };
   }
 
   async findById(orgId: string): Promise<OrganizationDetail | null> {
@@ -141,6 +148,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
       name: club.data.name,
       description: club.data.description,
       timezone: club.data.timezone,
+      deleteAt: club.deleteAt,
     };
   }
 
@@ -148,8 +156,12 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     orgId = normalizeId(orgId);
     userId = normalizeId(userId);
     const members = this.memberRoles(orgId, userId);
+    const club = this.clubs.get(orgId);
     if (this.admins.has(userId)) throw new AdminCannotBeManagerError();
     if (members.get(userId) === "manager") throw new AlreadyManagerError();
+    if (!members.has(userId) && club && club.deleteAt !== null) {
+      throw new OrganizationDeletionAlreadyScheduledError();
+    }
     members.set(userId, "manager");
   }
 
@@ -167,6 +179,38 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     return [...members].filter(([, role]) => role === "manager").map(([userId]) => userId);
   }
 
+  async scheduleDeletion(
+    _adminId: string,
+    orgId: string,
+    now: Date = new Date(),
+  ): Promise<ScheduleDeletionResult> {
+    orgId = normalizeId(orgId);
+    assertUuid(orgId);
+    const club = this.clubs.get(orgId);
+    if (!club) throw new OrganizationNotFoundError();
+    if (club.deleteAt !== null) throw new OrganizationDeletionAlreadyScheduledError();
+    const deleteAt = new Date(now.getTime() + DELETION_NOTICE_DAYS * DAY_MS);
+    club.deleteAt = deleteAt;
+    // The fake has no user emails, so it never has anyone to mail; the service's email path is
+    // tested with the service's own mail sender
+    return { orgId, orgName: club.data.name, deleteAt, memberEmails: [] };
+  }
+
+  async cancelDeletion(
+    _adminId: string,
+    orgId: string,
+    now: Date = new Date(),
+  ): Promise<void> {
+    orgId = normalizeId(orgId);
+    assertUuid(orgId);
+    const club = this.clubs.get(orgId);
+    if (!club) throw new OrganizationNotFoundError();
+    if (club.deleteAt === null || club.deleteAt <= now) {
+      throw new OrganizationDeletionNotScheduledError();
+    }
+    club.deleteAt = null;
+  }
+
   // Blocked reads like missing, like the database one
   private assertUserCanJoin(userId: string): void {
     if (!this.users.has(userId) || this.blocked.has(userId)) throw new UserNotFoundError();
@@ -181,6 +225,7 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
     this.assertUserCanJoin(userId);
     const club = this.clubs.get(orgId);
     if (!club) throw new OrganizationNotFoundError();
+    if (club.deleteAt !== null) throw new OrganizationDeletionAlreadyScheduledError();
     if (club.members.has(userId)) throw new AlreadyMemberError();
     const pending = [...this.requests.values()].some(
       (request) => request.orgId === orgId && request.userId === userId && request.status === "pending",

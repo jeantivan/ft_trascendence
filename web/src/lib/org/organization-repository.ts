@@ -6,6 +6,11 @@ import {
   type PrismaClient,
 } from "@/generated/prisma/client";
 import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
+import { notify } from "@/lib/notifications/notify";
+import {
+  ORGANIZATION_DELETION_CANCELLED,
+  ORGANIZATION_DELETION_SCHEDULED,
+} from "./club-deletion-notifier";
 import { normalizeId, type CreateOrganizationInput } from "./schemas";
 import {
   MEMBERSHIP_ACCEPTED,
@@ -61,6 +66,20 @@ export class OrganizationNotFoundError extends Error {
   }
 }
 
+export class OrganizationDeletionAlreadyScheduledError extends Error {
+  constructor(message = "Organization deletion is already scheduled") {
+    super(message);
+    this.name = "OrganizationDeletionAlreadyScheduledError";
+  }
+}
+
+export class OrganizationDeletionNotScheduledError extends Error {
+  constructor(message = "Organization has no active scheduled deletion") {
+    super(message);
+    this.name = "OrganizationDeletionNotScheduledError";
+  }
+}
+
 export class UserNotFoundError extends Error {
   constructor(message = "The user does not exist") {
     super(message);
@@ -107,6 +126,7 @@ export interface OrganizationSummary {
   id: string;
   name: string;
   description: string | null;
+  deleteAt: Date | null;
   memberCount: number;
 }
 
@@ -117,6 +137,14 @@ export interface OrganizationDetail {
   description: string | null;
   // IANA zone, e.g. "Europe/Madrid"
   timezone: string;
+  deleteAt: Date | null;
+}
+
+export interface ScheduleDeletionResult {
+  orgId: string;
+  orgName: string;
+  deleteAt: Date;
+  memberEmails: string[];
 }
 
 // The fields of a club that its Manager can change
@@ -163,6 +191,10 @@ export interface OrganizationRepository {
   removeManager(adminId: string, orgId: string, userId: string): Promise<void>;
   // The ids of the club's Managers
   listManagerIds(orgId: string): Promise<string[]>;
+  // Admin only: schedules club deletion in 30 days, revokes pending requests, notifies members and audits
+  scheduleDeletion(adminId: string, orgId: string, now?: Date): Promise<ScheduleDeletionResult>;
+  // Admin only: cancels an active scheduled deletion (deleteAt > now), notifies members and audits
+  cancelDeletion(adminId: string, orgId: string, now?: Date): Promise<void>;
   // Manager only (invitation.manage): managerId is who invites, for createdBy. UserNotFoundError if
   // the user does not exist or is blocked (the same answer, so a blocked account is not revealed),
   // then OrganizationNotFoundError, AlreadyMemberError, RequestAlreadyPendingError; none creates anything.
@@ -225,6 +257,34 @@ async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): 
   if (users.some((user) => user.is_admin)) throw new AdminCannotBeManagerError();
 }
 
+export const DELETION_NOTICE_DAYS = 30;
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Scheduling or cancelling a deletion notifies every member, and each notification's foreign key
+// needs a KEY SHARE lock on the member's row. A concurrent account deletion holds that row FOR
+// UPDATE and then waits for the club, so taking the club first here ends in a deadlock (40P01).
+// So the members' rows go first, in id order, then the club (the same order as lockUserThenClub).
+// FOR NO KEY UPDATE for the reason given there.
+// Known limit: someone who joins between this read and the club lock is not locked; if that user
+// deletes their account at that very moment the deadlock can still happen.
+async function lockMemberUsers(tx: Prisma.TransactionClient, orgId: string): Promise<void> {
+  const members = await tx.membership.findMany({ where: { orgId }, select: { userId: true } });
+  if (members.length === 0) return;
+  await tx.$queryRaw`
+    SELECT id FROM users WHERE id = ANY(${members.map((m) => m.userId)}::uuid[])
+    ORDER BY id FOR NO KEY UPDATE`;
+}
+
+async function lockOrganization(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+): Promise<{ id: string; name: string; delete_at: Date | null }> {
+  const clubs = await tx.$queryRaw<{ id: string; name: string; delete_at: Date | null }[]>`
+    SELECT id, name, delete_at FROM organizations WHERE id = ${orgId}::uuid FOR UPDATE`;
+  if (clubs.length === 0) throw new OrganizationNotFoundError();
+  return clubs[0];
+}
+
 // Role changes lock the target user, then the club: the order account deletion uses
 // (delete-account.ts), so the two cannot wait on each other. Whatever is read about the
 // membership or the other Managers must be read after this, in a new statement.
@@ -238,13 +298,12 @@ async function lockUserThenClub(
   tx: Prisma.TransactionClient,
   orgId: string,
   userId: string,
-): Promise<{ isAdmin: boolean }> {
+): Promise<{ isAdmin: boolean; clubDeleteAt: Date | null }> {
   const users = await tx.$queryRaw<{ is_admin: boolean }[]>`
     SELECT role_global = 'admin' AS is_admin FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
   if (users.length === 0) throw new UserNotFoundError();
-  const clubs = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM organizations WHERE id = ${orgId}::uuid FOR UPDATE`;
-  if (clubs.length === 0) throw new OrganizationNotFoundError();
-  return { isAdmin: users[0].is_admin };
+  const club = await lockOrganization(tx, orgId);
+  return { isAdmin: users[0].is_admin, clubDeleteAt: club.delete_at };
 }
 
 // The partial unique index on (org_id, user_id) WHERE status = 'pending' (exported for its test)
@@ -275,6 +334,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
         id: true,
         name: true,
         description: true,
+        deleteAt: true,
         // _count counts the rows in the database, the members are not read
         _count: { select: { memberships: true } },
       },
@@ -289,7 +349,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
   async findById(orgId: string): Promise<OrganizationDetail | null> {
     return this.db.organization.findUnique({
       where: { id: orgId },
-      select: { id: true, name: true, description: true, timezone: true },
+      select: { id: true, name: true, description: true, timezone: true, deleteAt: true },
     });
   }
 
@@ -313,7 +373,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
               create: managerIds.map((userId) => ({ userId, role: "manager" as const })),
             },
           },
-          select: { id: true, name: true, description: true, timezone: true },
+          select: { id: true, name: true, description: true, timezone: true, deleteAt: true },
         });
         await recordAdminAction(tx, {
           adminId,
@@ -347,13 +407,18 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     userId = normalizeId(userId);
     await this.db.$transaction(
       async (tx) => {
-        const { isAdmin } = await lockUserThenClub(tx, orgId, userId);
+        const { isAdmin, clubDeleteAt } = await lockUserThenClub(tx, orgId, userId);
         if (isAdmin) throw new AdminCannotBeManagerError();
         const membership = await tx.membership.findUnique({
           where: { userId_orgId: { userId, orgId } },
           select: { role: true },
         });
         if (membership?.role === "manager") throw new AlreadyManagerError();
+        // Existing members can still become Managers during the 30-day notice,
+        // but no new members can join while deletion is scheduled (#217)
+        if (!membership && clubDeleteAt !== null) {
+          throw new OrganizationDeletionAlreadyScheduledError();
+        }
         await tx.membership.upsert({
           where: { userId_orgId: { userId, orgId } },
           update: { role: "manager" },
@@ -431,8 +496,13 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
       return await this.db.$transaction(
         async (tx) => {
           await assertUserCanJoin(tx, userId);
-          const club = await tx.organization.findUnique({ where: { id: orgId }, select: { id: true } });
+          const club = await tx.organization.findUnique({ where: { id: orgId }, select: { deleteAt: true } });
           if (!club) throw new OrganizationNotFoundError();
+          // Known limit: deleteAt is read without locking the club. Locking it here and then
+          // notifying the Managers (KEY SHARE on their user rows) is the organizations -> users
+          // order that deadlocks with account deletion. A request created in the instant
+          // scheduleDeletion commits survives its revocation; the purge removes it with the club
+          if (club.deleteAt !== null) throw new OrganizationDeletionAlreadyScheduledError();
           const member = await tx.membership.findUnique({
             where: { userId_orgId: { userId, orgId } },
             select: { userId: true },
@@ -564,7 +634,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
       return await this.db.organization.update({
         where: { id: orgId },
         data: { description: data.description, timezone: data.timezone },
-        select: { id: true, name: true, description: true, timezone: true },
+        select: { id: true, name: true, description: true, timezone: true, deleteAt: true },
       });
     } catch (error) {
       // P2025: the row to update does not exist
@@ -573,6 +643,96 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
       }
       throw error;
     }
+  }
+
+  async scheduleDeletion(
+    adminId: string,
+    orgId: string,
+    now: Date = new Date(),
+  ): Promise<ScheduleDeletionResult> {
+    orgId = normalizeId(orgId);
+    return this.db.$transaction(
+      async (tx) => {
+        await lockMemberUsers(tx, orgId);
+        const club = await lockOrganization(tx, orgId);
+        if (club.delete_at !== null) {
+          throw new OrganizationDeletionAlreadyScheduledError();
+        }
+        const deleteAt = new Date(now.getTime() + DELETION_NOTICE_DAYS * DAY_MS);
+        await tx.organization.update({
+          where: { id: orgId },
+          data: { deleteAt },
+        });
+        await tx.membershipRequest.updateMany({
+          where: { orgId, status: "pending" },
+          data: { status: "revoked" },
+        });
+        const members = await tx.membership.findMany({
+          where: { orgId },
+          select: { userId: true, user: { select: { email: true } } },
+        });
+        // The payload only carries ids: the date goes by email and is read from the club
+        for (const member of members) {
+          await notify(tx, {
+            userId: member.userId,
+            type: ORGANIZATION_DELETION_SCHEDULED,
+            payload: { orgId },
+          });
+        }
+        await recordAdminAction(tx, {
+          adminId,
+          action: "delete",
+          resource: "organization",
+          resourceId: orgId,
+        });
+        return {
+          orgId,
+          orgName: club.name,
+          deleteAt,
+          memberEmails: members.map((member) => member.user.email),
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    );
+  }
+
+  async cancelDeletion(
+    adminId: string,
+    orgId: string,
+    now: Date = new Date(),
+  ): Promise<void> {
+    orgId = normalizeId(orgId);
+    await this.db.$transaction(
+      async (tx) => {
+        await lockMemberUsers(tx, orgId);
+        const club = await lockOrganization(tx, orgId);
+        if (club.delete_at === null || club.delete_at <= now) {
+          throw new OrganizationDeletionNotScheduledError();
+        }
+        await tx.organization.update({
+          where: { id: orgId },
+          data: { deleteAt: null },
+        });
+        const members = await tx.membership.findMany({
+          where: { orgId },
+          select: { userId: true },
+        });
+        for (const member of members) {
+          await notify(tx, {
+            userId: member.userId,
+            type: ORGANIZATION_DELETION_CANCELLED,
+            payload: { orgId },
+          });
+        }
+        await recordAdminAction(tx, {
+          adminId,
+          action: "update",
+          resource: "organization",
+          resourceId: orgId,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    );
   }
 }
 

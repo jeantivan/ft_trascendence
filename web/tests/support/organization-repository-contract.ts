@@ -8,6 +8,8 @@ import {
   MembershipRequestNotPendingError,
   RequestAlreadyPendingError,
   NotManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   OrganizationNameTakenError,
   OrganizationNotFoundError,
   type OrganizationRepository,
@@ -79,6 +81,7 @@ export function runOrganizationRepositoryContract(
         id,
         name: data.name,
         description: data.description,
+        deleteAt: null,
         memberCount: 3,
       });
     });
@@ -101,7 +104,7 @@ export function runOrganizationRepositoryContract(
 
       const club = (await repo.listCatalog()).find((c) => c.id === id);
 
-      expect(Object.keys(club ?? {}).sort()).toEqual(["description", "id", "memberCount", "name"]);
+      expect(Object.keys(club ?? {}).sort()).toEqual(["deleteAt", "description", "id", "memberCount", "name"]);
     });
 
     it("findById returns the club's record with its time zone", async () => {
@@ -114,6 +117,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: data.description,
         timezone: data.timezone,
+        deleteAt: null,
       });
     });
 
@@ -135,6 +139,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: null,
         timezone: "Europe/London",
+        deleteAt: null,
       });
       await expect(repo.findById(id)).resolves.toEqual(updated);
     });
@@ -164,6 +169,7 @@ export function runOrganizationRepositoryContract(
         name: data.name,
         description: data.description,
         timezone: data.timezone,
+        deleteAt: null,
       });
       await expect(repo.findById(created.id)).resolves.toEqual(created);
     });
@@ -429,6 +435,18 @@ export function runOrganizationRepositoryContract(
           expect(sent()).toHaveLength(before);
         });
 
+        it(`${operation} throws OrganizationDeletionAlreadyScheduledError during the deletion notice and creates nothing`, async () => {
+          const { repo, sent, orgId, managerId, userId } = await setup();
+          await repo.scheduleDeletion(managerId, orgId);
+          const before = sent().length;
+
+          await expect(call(repo, managerId, orgId, userId)).rejects.toBeInstanceOf(
+            OrganizationDeletionAlreadyScheduledError,
+          );
+          expect(sent()).toHaveLength(before);
+          expect(await repo.listPendingRequests(orgId)).toEqual([]);
+        });
+
         it(`${operation} treats a blocked user like a missing one`, async () => {
           const { repo, blockUser, orgId, managerId, userId } = await setup();
           await blockUser(userId);
@@ -588,6 +606,60 @@ export function runOrganizationRepositoryContract(
         const last = await repo.requestToJoin(second, orgId);
 
         expect((await repo.listPendingRequests(orgId)).map((r) => r.id)).toEqual([first.id, last.id]);
+      });
+    });
+
+    // Scheduled deletion (#217): both implementations count 30 days from `now`
+    describe("scheduled deletion", () => {
+      async function setup() {
+        const fixture = createFixture();
+        const orgId = await fixture.createClub(newClub({ members: 0 }));
+        const [adminId] = await fixture.createUsers(1);
+        return { ...fixture, orgId, adminId };
+      }
+
+      it("scheduleDeletion sets deleteAt 30 days after now and returns the club name", async () => {
+        const { repo, orgId, adminId } = await setup();
+        const now = new Date("2026-01-01T10:00:00Z");
+
+        const result = await repo.scheduleDeletion(adminId, orgId, now);
+
+        expect(result.orgId).toBe(orgId);
+        expect(result.deleteAt).toEqual(new Date("2026-01-31T10:00:00Z"));
+      });
+
+      it("scheduleDeletion throws OrganizationDeletionAlreadyScheduledError the second time", async () => {
+        const { repo, orgId, adminId } = await setup();
+        await repo.scheduleDeletion(adminId, orgId);
+
+        await expect(repo.scheduleDeletion(adminId, orgId)).rejects.toBeInstanceOf(
+          OrganizationDeletionAlreadyScheduledError,
+        );
+      });
+
+      it("scheduleDeletion throws OrganizationNotFoundError for a missing club", async () => {
+        const { repo, adminId } = await setup();
+
+        await expect(repo.scheduleDeletion(adminId, UNKNOWN_ID)).rejects.toBeInstanceOf(
+          OrganizationNotFoundError,
+        );
+      });
+
+      it("cancelDeletion clears the schedule, so it can be scheduled again", async () => {
+        const { repo, orgId, adminId } = await setup();
+        await repo.scheduleDeletion(adminId, orgId);
+
+        await repo.cancelDeletion(adminId, orgId);
+
+        await expect(repo.scheduleDeletion(adminId, orgId)).resolves.toMatchObject({ orgId });
+      });
+
+      it("cancelDeletion throws OrganizationDeletionNotScheduledError if nothing is scheduled", async () => {
+        const { repo, orgId, adminId } = await setup();
+
+        await expect(repo.cancelDeletion(adminId, orgId)).rejects.toBeInstanceOf(
+          OrganizationDeletionNotScheduledError,
+        );
       });
     });
   });

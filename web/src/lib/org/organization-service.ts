@@ -1,5 +1,9 @@
+import type { MailSender } from "@/lib/mail/mail-sender";
+import { createSmtpMailSender } from "@/lib/mail/smtp-mail-sender";
 import {
   AdminCannotBeManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   AlreadyMemberError,
   MembershipRequestNotFoundError,
   MembershipRequestNotPendingError,
@@ -11,6 +15,8 @@ import {
   type OrganizationDetail,
   type OrganizationRepository,
   type OrganizationSummary,
+  type ScheduleDeletionResult,
+  DELETION_NOTICE_DAYS,
 } from "./organization-repository";
 import { PrismaClubExit } from "./club-exit";
 import { createOrganizationSchema, normalizeId, updateOrganizationSchema } from "./schemas";
@@ -21,6 +27,8 @@ type ClubExit = Pick<PrismaClubExit, "leave" | "expel">;
 // Defined in the repository (which also throws it); re-exported to keep this import path
 export {
   AdminCannotBeManagerError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionNotScheduledError,
   AlreadyMemberError,
   MembershipRequestNotFoundError,
   MembershipRequestNotPendingError,
@@ -39,6 +47,7 @@ export class OrganizationService {
   constructor(
     private readonly repo: OrganizationRepository = organizationRepository,
     private readonly clubExit: ClubExit = new PrismaClubExit(),
+    private readonly mailSender?: MailSender,
   ) {}
 
   // Any signed-in user, member of a club or not
@@ -100,6 +109,38 @@ export class OrganizationService {
       throw new OrganizationNotFoundError();
     }
     return organization;
+  }
+
+  // Admin only: schedules club deletion in 30 days and notifies every member by email
+  async scheduleDeletion(adminId: string, orgId: string): Promise<ScheduleDeletionResult> {
+    const result = await this.repo.scheduleDeletion(adminId, orgId);
+    if (result.memberEmails.length > 0) {
+      await this.sendDeletionNoticeEmails(result);
+    }
+    return result;
+  }
+
+  // Admin only: cancels an active scheduled deletion (deleteAt > now)
+  cancelDeletion(adminId: string, orgId: string): Promise<void> {
+    return this.repo.cancelDeletion(adminId, orgId);
+  }
+
+  private async sendDeletionNoticeEmails(result: ScheduleDeletionResult): Promise<void> {
+    const sender = this.mailSender ?? createSmtpMailSender();
+    const deleteDate = result.deleteAt.toISOString().slice(0, 10);
+    const subject = `Aviso de borrado del club ${result.orgName}`;
+    const text =
+      `Hola,\n\n` +
+      `El administrador de StrideSync ha programado el borrado del club "${result.orgName}" para el ${deleteDate} (UTC), con ${DELETION_NOTICE_DAYS} días de antelación.\n` +
+      `Hasta esa fecha puedes descargar tus datos desde tu cuenta.\n`;
+
+    const deliveries = await Promise.allSettled(
+      result.memberEmails.map((to) => sender.send({ to, subject, text })),
+    );
+    const failed = deliveries.filter((delivery) => delivery.status === "rejected").length;
+    if (failed > 0) {
+      console.warn(`Organization deletion scheduled, but ${failed} notice email(s) failed`);
+    }
   }
 
   // Invitations and requests to join (#149). The service receives a userId: finding someone by

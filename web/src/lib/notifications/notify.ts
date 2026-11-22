@@ -6,7 +6,12 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { publish } from "@/lib/realtime/publish";
 
-const MANDATORY_TYPES = ["club_without_manager"];
+// Sent even when the user has notifications disabled: legal notices about the club or the account
+const MANDATORY_TYPES = [
+  "club_without_manager",
+  "organization_deletion_scheduled",
+  "organization_deletion_cancelled",
+];
 
 export const notifyInputSchema = z.strictObject({
   userId: z.guid(),

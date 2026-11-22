@@ -1,4 +1,5 @@
 import { purgeOldAuditRows } from "@/lib/gdpr/audit";
+import { purgeExpiredOrganizations } from "@/lib/org/purge-expired-organizations";
 import { prisma } from "@/lib/prisma";
 import { sweepOrphanAvatars } from "@/lib/uploads/sweep-orphan-avatars";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
@@ -11,4 +12,5 @@ import type { Job } from "./run-jobs";
 export const JOBS: readonly Job[] = [
   { name: "audit_log purge", run: () => purgeOldAuditRows(prisma, new Date()) },
   { name: "orphan avatar sweep", run: () => sweepOrphanAvatars(prisma, UPLOADS_DIR, new Date()) },
+  { name: "organization purge", run: () => purgeExpiredOrganizations(prisma, new Date()) },
 ];
