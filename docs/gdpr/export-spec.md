@@ -70,8 +70,8 @@ export.zip
 
 Convenciones:
 - **Fechas:** ISO 8601 en UTC (`2026-10-01T07:00:00Z`).
-- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180. Valor ausente = celda vacía.
-- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todos los campos de texto libre.
+- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180, fin de línea CRLF. Valor ausente = celda vacía.
+- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todas las celdas de texto (los números y booleanos no se tocan).
 - **JSON:** `null` para valores ausentes. Claves en `snake_case`, igual que las columnas de la base de datos.
 
 ### 3.1 `data.json`
@@ -139,7 +139,7 @@ El `access_log` cubre el derecho a saber quién ha accedido a tus datos (art. 15
 
 ### 3.2 `sessions.csv`
 
-Sesiones individuales del usuario (`athlete_id` = usuario) y sesiones de grupo de los grupos a los que pertenece.
+Sesiones individuales del usuario (`athlete_id` = usuario), sesiones de grupo de los grupos a los que pertenece y sesiones de grupos que ya no son suyos si tiene un registro (`SessionLog`) en ellas, y la sesión de grupo que modifica una copia personalizada suya, para que `session_logs.csv` y `customizes_session_id` nunca apunten a una sesión que falte. Una sesión individual de otro atleta nunca se incluye, aunque tenga un registro suyo.
 
 ```
 session_id,org_id,origin,session_type,target_distance_m,target_pace_s_per_km,target_duration_s,scheduled_at,group_id,customizes_session_id
@@ -181,7 +181,8 @@ Usuario: athlete@example.com
 CONTENIDO:
 - data.json: perfil, ajustes, consentimientos, clubes, grupos, eventos,
   feedback recibido, contactos, notificaciones y registro de accesos
-- sessions.csv: sesiones (tipo, objetivo)
+- sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de
+  grupos que dejaste si registraste la sesión), una fila por sesión
 - session_logs.csv: resultados (completada, RPE, distancia, duración)
 - messages.csv: los mensajes que escribiste (los que borraste
   aparecen con la fecha de borrado si aún los conservamos)

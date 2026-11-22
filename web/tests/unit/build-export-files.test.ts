@@ -1,11 +1,37 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { buildExportFiles, type ExportProfileSource, type ExportUserRepository } from "@/lib/gdpr/export/build-export-files";
+import {
+  buildExportFiles,
+  type ExportProfileSource,
+  type ExportSessionSource,
+  type ExportUserRepository,
+} from "@/lib/gdpr/export/build-export-files";
 
 const NOW = new Date("2026-10-06T11:28:00.000Z");
 
-function repositoryWith(user: Awaited<ReturnType<ExportUserRepository["findProfile"]>>): ExportUserRepository {
-  return { findProfile: async () => user };
+function repositoryWith(
+  user: Awaited<ReturnType<ExportUserRepository["findProfile"]>>,
+  sessions: ExportSessionSource[] = [],
+): ExportUserRepository {
+  return { findProfile: async () => user, findSessions: async () => sessions };
+}
+
+const session: ExportSessionSource = {
+  id: "22222222-2222-4222-8222-222222222222",
+  orgId: "33333333-3333-4333-8333-333333333333",
+  origin: "template",
+  sessionType: "rodaje",
+  targetDistanceM: 10000,
+  targetPaceSPerKm: 360,
+  targetDurationS: 3600,
+  scheduledAt: new Date("2026-10-01T07:00:00.000Z"),
+  groupId: "44444444-4444-4444-8444-444444444444",
+  customizesSessionId: null,
+};
+
+async function sessionsCsvOf(sessions: ExportSessionSource[]) {
+  const files = await buildExportFiles(athlete.id, repositoryWith(athlete, sessions), NOW);
+  return files!.find((file) => file.name === "sessions.csv")!.content;
 }
 
 const athlete: ExportProfileSource = {
@@ -76,12 +102,42 @@ describe("buildExportFiles", () => {
   it("incluye un README.txt que dice qué contiene el ZIP y qué no", async () => {
     const files = await buildExportFiles(athlete.id, repositoryWith(athlete), NOW);
 
-    expect(files!.map((file) => file.name)).toEqual(["data.json", "README.txt"]);
+    expect(files!.map((file) => file.name)).toEqual(["data.json", "sessions.csv", "README.txt"]);
     const readme = files!.find((file) => file.name === "README.txt")!.content;
     expect(readme).toContain("data.json");
+    expect(readme).toContain("sessions.csv");
     expect(readme).toContain("2026-10-06 11:28 UTC");
     expect(readme).toContain("athlete@example.com");
     expect(readme).toContain("NO SE INCLUYE");
+  });
+
+  it("sessions.csv lleva la cabecera de la spec y una fila por sesión, con celdas vacías para lo ausente", async () => {
+    const free: ExportSessionSource = {
+      ...session,
+      id: "55555555-5555-4555-8555-555555555555",
+      origin: "free",
+      sessionType: "intervalos",
+      targetDistanceM: 8000,
+      targetPaceSPerKm: null,
+      targetDurationS: 1800,
+      scheduledAt: new Date("2026-10-02T18:00:00.123Z"),
+      groupId: null,
+    };
+
+    expect(await sessionsCsvOf([session, free])).toBe(
+      [
+        "session_id,org_id,origin,session_type,target_distance_m,target_pace_s_per_km,target_duration_s,scheduled_at,group_id,customizes_session_id",
+        `${session.id},${session.orgId},template,rodaje,10000,360,3600,2026-10-01T07:00:00Z,${session.groupId},`,
+        `${free.id},${free.orgId},free,intervalos,8000,,1800,2026-10-02T18:00:00Z,,`,
+        "",
+      ].join("\r\n"),
+    );
+  });
+
+  it("sessions.csv lleva solo la cabecera si el usuario no tiene sesiones", async () => {
+    expect(await sessionsCsvOf([])).toBe(
+      "session_id,org_id,origin,session_type,target_distance_m,target_pace_s_per_km,target_duration_s,scheduled_at,group_id,customizes_session_id\r\n",
+    );
   });
 
   it("devuelve null si el usuario no existe", async () => {
