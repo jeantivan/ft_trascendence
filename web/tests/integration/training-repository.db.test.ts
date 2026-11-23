@@ -3,7 +3,10 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { PrismaTrainingRepository } from "@/lib/training/prisma-training-repository";
 import { notify } from "@/lib/notifications/notify";
-import { TrainingNotFoundError } from "@/lib/training/errors";
+import {
+  TrainingConflictError,
+  TrainingNotFoundError,
+} from "@/lib/training/errors";
 import { TrainingService } from "@/lib/training/training-service";
 import {
   TRAINING_TEMPLATE_ASSIGNED,
@@ -527,5 +530,45 @@ describe("Integration: PrismaTrainingRepository", () => {
         expect(assignResult.value).toHaveLength(1);
       }
     }
+  });
+
+  it("serializes concurrent identical assignTemplateToGroup calls so only one copy and notification batch is created (#238 row 10)", async () => {
+    const trainingService = new TrainingService(repo, notify);
+    const template = await trainingService.createTemplate(manager1Id, orgId, {
+      name: "Double Click Protection",
+      sessions: [
+        { sessionType: "rodaje", dayOffset: 0, targetDistanceM: 7000 },
+        { sessionType: "cuestas", dayOffset: 2, targetDistanceM: 4000 },
+      ],
+    });
+
+    const results = await Promise.allSettled([
+      trainingService.assignTemplateToGroup(manager1Id, orgId, {
+        templateId: template.id,
+        groupId,
+        startDate: "2026-06-15",
+      }),
+      trainingService.assignTemplateToGroup(manager1Id, orgId, {
+        templateId: template.id,
+        groupId,
+        startDate: "2026-06-15",
+      }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(TrainingConflictError);
+
+    const sessions = await prisma.trainingSession.findMany({
+      where: { orgId, groupId, sourceTemplateId: template.id },
+    });
+    expect(sessions).toHaveLength(2);
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId: athleteId, type: TRAINING_TEMPLATE_ASSIGNED },
+    });
+    expect(notifications).toHaveLength(1);
   });
 });

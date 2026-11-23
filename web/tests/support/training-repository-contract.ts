@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TrainingNotFoundError } from "@/lib/training/errors";
+import { TrainingConflictError, TrainingNotFoundError } from "@/lib/training/errors";
 import type { TrainingRepository } from "@/lib/training/types";
 
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
@@ -404,6 +404,59 @@ export function runTrainingRepositoryContract(
       ).rejects.toThrow("Simulated failure on assign");
 
       expect(await repo.listForAthlete(orgId, athleteId)).toHaveLength(0);
+    });
+
+    it("rejects duplicate assignment for the same template, group, and startDate while allowing another startDate", async () => {
+      const { repo, orgId, manager1Id, groupId } = getFixture();
+
+      const template = await repo.create({
+        orgId,
+        name: "Overlap & Duplicate Block",
+        createdBy: manager1Id,
+        sessions: [
+          { sessionType: "rodaje", dayOffset: 0, targetDistanceM: 6000 },
+          { sessionType: "tirada_larga", dayOffset: 3, targetDistanceM: 16000 },
+        ],
+      });
+
+      let notifyCalls = 0;
+      await repo.assignTemplateToGroup(
+        {
+          orgId,
+          templateId: template.id,
+          groupId,
+          startDate: "2026-06-01",
+        },
+        async () => {
+          notifyCalls += 1;
+        }
+      );
+      expect(notifyCalls).toBe(1);
+
+      // Exact same (templateId, groupId, startDate) is rejected without notifying again
+      await expect(
+        repo.assignTemplateToGroup(
+          {
+            orgId,
+            templateId: template.id,
+            groupId,
+            startDate: "2026-06-01",
+          },
+          async () => {
+            notifyCalls += 1;
+          }
+        )
+      ).rejects.toThrow(TrainingConflictError);
+      expect(notifyCalls).toBe(1);
+
+      // Different startDate (even overlapping on 2026-06-04) is still allowed
+      const overlappingBatch = await repo.assignTemplateToGroup({
+        orgId,
+        templateId: template.id,
+        groupId,
+        startDate: "2026-06-04",
+      });
+      expect(overlappingBatch).toHaveLength(2);
     });
   });
 }

@@ -225,6 +225,21 @@ export class TrainingService {
     );
   }
 
+  // Decision (#238 row 10): to prevent accidental duplicate copies on double-click / concurrent
+  // retries without adding a schema migration, the repository serializes assignments on the Group
+  // row (FOR NO KEY UPDATE) and rejects with TrainingConflictError when the exact same template
+  // already has all planned (scheduledAt, sessionType) copies in that group for the same startDate.
+  // Intentional reassignments of the same template to the same group on another startDate remain allowed.
+  //
+  // Known limit (#238):
+  // - actor role is checked before the transaction; concurrent demotion or group membership edits
+  //   in the same millisecond are out of scope.
+  // - notifying group Athletes inside the transaction acquires FOR KEY SHARE on users(id); a
+  //   concurrent account deletion (users FOR UPDATE) can fail with P2003 (notifications_user_id_fkey)
+  //   or deadlock (40P01 / P2034) if that user created the template (created_by ON DELETE SET NULL).
+  // - locking training_templates -> groups before inserting sessions (FOR KEY SHARE on organizations)
+  //   is the inverse order of purgeExpiredOrganizations (organizations FOR UPDATE -> CASCADE), so a
+  //   concurrent club purge in the same millisecond can deadlock (40P01 / P2034) or fail with P2003.
   async assignTemplateToGroup(
     actorId: string,
     orgId: string,
@@ -232,8 +247,6 @@ export class TrainingService {
   ): Promise<TrainingSessionData[]> {
     const normalizedOrgId = normalizeId(orgId);
     const normalizedActorId = normalizeId(actorId);
-    // Known limit (#238): actor role is checked before the transaction; concurrent demotion
-    // or group membership edits in the same millisecond are out of scope.
     const role = await this.assertRole(normalizedOrgId, normalizedActorId);
 
     if (role !== "manager") {

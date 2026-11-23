@@ -7,6 +7,7 @@ import { notify } from "@/lib/notifications/notify";
 import { trainingRepository } from "./prisma-training-repository";
 import { TrainingService } from "./training-service";
 import {
+  TrainingConflictError,
   TrainingForbiddenError,
   TrainingNotFoundError,
   TrainingValidationError,
@@ -33,7 +34,10 @@ async function runTrainingAction<T>(
     if (error instanceof TrainingForbiddenError) {
       forbidden();
     }
-    if (error instanceof TrainingValidationError) {
+    if (
+      error instanceof TrainingValidationError ||
+      error instanceof TrainingConflictError
+    ) {
       return { success: false, error: error.message };
     }
     throw error;

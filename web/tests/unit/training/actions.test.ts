@@ -424,5 +424,43 @@ describe("Training Server Actions", () => {
 
       expect(result.success).toBe(false);
     });
+
+    it("returns { success: false, error } on duplicate assignment for same startDate without notifying twice", async () => {
+      repo.addGroup(ORG_A, GROUP_1);
+      repo.addAthleteToGroup(ATHLETE_USER.id, GROUP_1);
+
+      const created = await repo.create({
+        orgId: ORG_A,
+        name: "No Double Click Plan",
+        createdBy: MANAGER_USER.id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 5000 }],
+      });
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      const first = await assignTrainingTemplateAction(ORG_A, {
+        templateId: created.id,
+        groupId: GROUP_1,
+        startDate: "2026-07-01",
+      });
+      expect(first.success).toBe(true);
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      const duplicate = await assignTrainingTemplateAction(ORG_A, {
+        templateId: created.id,
+        groupId: GROUP_1,
+        startDate: "2026-07-01",
+      });
+      expect(duplicate.success).toBe(false);
+      if (!duplicate.success) {
+        expect(duplicate.error).toContain("ya está asignada");
+      }
+      expect(notify).toHaveBeenCalledTimes(1);
+    });
   });
 });
