@@ -1,0 +1,224 @@
+import { z } from "zod";
+import type { Prisma } from "@/generated/prisma/client";
+import { normalizeId } from "@/lib/org/schemas";
+import {
+  trainingTemplateSchema,
+  templateSessionSchema,
+  trainingTemplateNameSchema,
+} from "./schemas";
+import {
+  TRAINING_TEMPLATE_CREATED,
+  TRAINING_TEMPLATE_DELETED,
+  TRAINING_TEMPLATE_UPDATED,
+  type TrainingNotificationType,
+  type TrainingNotify,
+  type TrainingRepository,
+  type TrainingTemplateData,
+} from "./types";
+import {
+  TrainingForbiddenError,
+  TrainingNotFoundError,
+  TrainingValidationError,
+} from "./errors";
+
+const updateTrainingTemplateSchema = z
+  .object({
+    name: trainingTemplateNameSchema.optional(),
+    sessions: z
+      .array(templateSessionSchema)
+      .min(1, "La plantilla debe tener al menos una sesión")
+      .optional(),
+  })
+  .refine(
+    (data) => data.name !== undefined || data.sessions !== undefined,
+    { message: "Debe proporcionar al menos un campo para actualizar" }
+  );
+
+export class TrainingService {
+  constructor(
+    private readonly repo: TrainingRepository,
+    private readonly notifier?: TrainingNotify
+  ) {}
+
+  // Re-checked here even when Server Actions call requireOrgRole, so the service enforces
+  // club membership and role independently in unit tests and non-action callers.
+  // Known limit (#238): role is checked before the repository transaction, so a concurrent
+  // demotion or removal in the same millisecond lets the operation proceed.
+  private async assertRole(orgId: string, actorId: string): Promise<"manager" | "athlete"> {
+    const role = await this.repo.findRole(orgId, actorId);
+    if (!role) {
+      throw new TrainingNotFoundError();
+    }
+    return role;
+  }
+
+  // Known limit (#238): inside update/delete, notifying another Manager whose account is being
+  // deleted at the same millisecond can deadlock (P2034) between training_templates and users
+  // (created_by ON DELETE SET NULL), matching the lock order note in organization-repository.ts.
+  private async notifyOtherManagers(
+    orgId: string,
+    actorId: string,
+    templateId: string,
+    type: TrainingNotificationType,
+    tx: Prisma.TransactionClient
+  ): Promise<void> {
+    if (!this.notifier) {
+      return;
+    }
+    const otherManagers = await this.repo.findOtherManagerIds(orgId, actorId, tx);
+    for (const userId of otherManagers) {
+      await this.notifier(tx, {
+        userId,
+        type,
+        payload: {
+          orgId,
+          templateId,
+        },
+      });
+    }
+  }
+
+  async listTemplates(actorId: string, orgId: string): Promise<TrainingTemplateData[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role === "manager") {
+      return this.repo.listForManager(normalizedOrgId);
+    }
+    return this.repo.listForAthlete(normalizedOrgId, normalizedActorId);
+  }
+
+  async getTemplate(
+    actorId: string,
+    orgId: string,
+    templateId: string
+  ): Promise<TrainingTemplateData> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedTemplateId = normalizeId(templateId);
+
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    const template = await this.repo.findById(normalizedTemplateId);
+    if (!template || normalizeId(template.orgId) !== normalizedOrgId) {
+      throw new TrainingNotFoundError();
+    }
+
+    if (role === "athlete") {
+      const visibleTemplates = await this.repo.listForAthlete(
+        normalizedOrgId,
+        normalizedActorId
+      );
+      const isVisible = visibleTemplates.some(
+        (t) => normalizeId(t.id) === normalizedTemplateId
+      );
+      if (!isVisible) {
+        throw new TrainingNotFoundError();
+      }
+    }
+
+    return template;
+  }
+
+  async createTemplate(
+    actorId: string,
+    orgId: string,
+    input: unknown
+  ): Promise<TrainingTemplateData> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    const parseResult = trainingTemplateSchema.safeParse(input);
+    if (!parseResult.success) {
+      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
+      throw new TrainingValidationError(message);
+    }
+
+    // Known limit (#238): concurrent club deletion can trigger P2003 on training_templates_org_id_fkey.
+    return this.repo.create(
+      {
+        orgId: normalizedOrgId,
+        name: parseResult.data.name,
+        createdBy: normalizedActorId,
+        sessions: parseResult.data.sessions,
+      },
+      (createdId, tx) =>
+        this.notifyOtherManagers(
+          normalizedOrgId,
+          normalizedActorId,
+          createdId,
+          TRAINING_TEMPLATE_CREATED,
+          tx
+        )
+    );
+  }
+
+  async updateTemplate(
+    actorId: string,
+    orgId: string,
+    templateId: string,
+    input: unknown
+  ): Promise<TrainingTemplateData> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedTemplateId = normalizeId(templateId);
+
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    const parseResult = updateTrainingTemplateSchema.safeParse(input);
+    if (!parseResult.success) {
+      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
+      throw new TrainingValidationError(message);
+    }
+
+    // Existence and org ownership are checked inside repo.update under the row lock (FOR UPDATE).
+    return this.repo.update(
+      normalizedOrgId,
+      normalizedTemplateId,
+      {
+        name: parseResult.data.name,
+        sessions: parseResult.data.sessions,
+      },
+      (updatedId, tx) =>
+        this.notifyOtherManagers(
+          normalizedOrgId,
+          normalizedActorId,
+          updatedId,
+          TRAINING_TEMPLATE_UPDATED,
+          tx
+        )
+    );
+  }
+
+  async deleteTemplate(
+    actorId: string,
+    orgId: string,
+    templateId: string
+  ): Promise<void> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedTemplateId = normalizeId(templateId);
+
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    // Existence and org ownership are checked inside repo.delete under the row lock (FOR UPDATE).
+    await this.repo.delete(normalizedOrgId, normalizedTemplateId, (deletedId, tx) =>
+      this.notifyOtherManagers(
+        normalizedOrgId,
+        normalizedActorId,
+        deletedId,
+        TRAINING_TEMPLATE_DELETED,
+        tx
+      )
+    );
+  }
+}
