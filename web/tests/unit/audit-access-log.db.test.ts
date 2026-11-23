@@ -38,4 +38,14 @@ describe.skipIf(!isTestDatabase)("listAccessesToUser: only accesses, by action t
       { created_at: "2026-10-05T09:10:00.000Z", action: "read", resource: "account", actor_role: "manager" },
     ]);
   });
+
+  it("orders rows written in the same millisecond by id, whatever the insertion order", async () => {
+    const base = { actorId: ACTOR_ID, subjectId: SUBJECT_ID, actorRole: "admin" as const, createdAt: new Date("2026-10-05T09:10:00Z") };
+    await db.auditLog.create({ data: { ...base, id: BigInt(9_000_000_002), action: "update", resource: "second" } });
+    await db.auditLog.create({ data: { ...base, id: BigInt(9_000_000_001), action: "update", resource: "first" } });
+
+    const resources = (await listAccessesToUser(db, SUBJECT_ID)).map((entry) => entry.resource);
+
+    expect(resources).toEqual(["first", "second"]);
+  });
 });

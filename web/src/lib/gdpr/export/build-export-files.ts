@@ -5,6 +5,7 @@ import type {
   SessionType,
   SpotRequestStatus,
 } from "@/generated/prisma/client";
+import type { AccessLogEntry } from "@/lib/gdpr/audit";
 import { toCsv } from "@/lib/gdpr/export/csv";
 import type { ExportFile } from "@/lib/gdpr/export/write-export-zip";
 
@@ -70,6 +71,9 @@ export type ExportUserRepository = {
   // (so session_logs.csv and customizes_session_id never point to a missing session),
   // ordered by date
   findSessions(userId: string): Promise<ExportSessionSource[]>;
+  // Actions a Manager or an Admin took on the user, oldest first. Already shaped for the
+  // export: no actor id
+  findAccessLog(userId: string): Promise<AccessLogEntry[]>;
 };
 
 // ISO 8601 in UTC without milliseconds (docs/gdpr/export-spec.md, section 3)
@@ -91,6 +95,7 @@ export async function buildExportFiles(
   const account = await repository.findAccountData(userId);
   if (account === null) return null;
   const sessions = await repository.findSessions(userId);
+  const accessLog = await repository.findAccessLog(userId);
 
   const data = {
     exported_at: toExportDate(now),
@@ -152,6 +157,12 @@ export async function buildExportFiles(
       read_at: toExportDateOrNull(notification.readAt),
       created_at: toExportDate(notification.createdAt),
     })),
+    access_log: accessLog.map((entry) => ({
+      created_at: toExportDate(new Date(entry.created_at)),
+      action: entry.action,
+      resource: entry.resource,
+      actor_role: entry.actor_role,
+    })),
   };
   return [
     { name: "data.json", content: JSON.stringify(data, null, 2) },
@@ -200,7 +211,7 @@ function buildReadme(email: string, now: Date): string {
     "",
     "CONTENIDO:",
     "- data.json: perfil, ajustes, consentimientos, clubes, grupos, eventos,",
-    "  feedback recibido, contactos y notificaciones",
+    "  feedback recibido, contactos, notificaciones y registro de accesos",
     "- sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de",
     "  grupos que dejaste si registraste la sesión), una fila por sesión",
     "",
