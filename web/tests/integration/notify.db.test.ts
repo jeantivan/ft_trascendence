@@ -62,6 +62,18 @@ describe("Integration: notify", () => {
     expect(rows[0]).toMatchObject({ id, type: "club_without_manager", payload, readAt: null });
   });
 
+  it.each(["organization_deletion_scheduled", "organization_deletion_cancelled"])(
+    "saves %s even when the user has notifications disabled",
+    async (type) => {
+      const user = await createUser(type, false);
+      const payload = { orgId: "a0000000-0000-4000-8000-000000000201" };
+
+      await prisma.$transaction((tx) => notify(tx, { userId: user.id, type, payload }));
+
+      expect(await rowsOf(user.id)).toHaveLength(1);
+    },
+  );
+
   it("returns null for a mandatory notification when the user does not exist", async () => {
     const missingUserId = crypto.randomUUID();
     const payload = { orgId: "a0000000-0000-4000-8000-000000000201" };

@@ -76,7 +76,6 @@ export type TrainingNotifyInput =
       payload: {
         orgId: string;
         templateId: string;
-        actorId: string;
       };
     }
   | {

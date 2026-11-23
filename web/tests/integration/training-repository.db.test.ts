@@ -226,7 +226,7 @@ describe("Integration: PrismaTrainingRepository", () => {
     });
     expect(manager2Notifications).toHaveLength(3);
 
-    const expectedPayload = { orgId, templateId: created.id, actorId: manager1Id };
+    const expectedPayload = { orgId, templateId: created.id };
     expect(manager2Notifications.map((n) => n.type)).toEqual([
       TRAINING_TEMPLATE_CREATED,
       TRAINING_TEMPLATE_UPDATED,

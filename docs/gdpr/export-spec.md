@@ -70,8 +70,8 @@ export.zip
 
 Convenciones:
 - **Fechas:** ISO 8601 en UTC (`2026-10-01T07:00:00Z`).
-- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180. Valor ausente = celda vacía.
-- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todos los campos de texto libre.
+- **CSV:** UTF-8, separador coma, cabecera en la primera fila, comillas dobles según RFC 4180, fin de línea CRLF. Valor ausente = celda vacía.
+- **Inyección de fórmulas:** si el valor de una celda de texto empieza por `=`, `+`, `-`, `@`, tabulador o retorno de carro, se antepone una comilla simple `'`. Se aplica a todas las celdas de texto (los números y booleanos no se tocan).
 - **JSON:** `null` para valores ausentes. Claves en `snake_case`, igual que las columnas de la base de datos.
 
 ### 3.1 `data.json`
@@ -139,7 +139,7 @@ El `access_log` cubre el derecho a saber quién ha accedido a tus datos (art. 15
 
 ### 3.2 `sessions.csv`
 
-Sesiones individuales del usuario (`athlete_id` = usuario) y sesiones de grupo de los grupos a los que pertenece.
+Sesiones individuales del usuario (`athlete_id` = usuario), sesiones de grupo de los grupos a los que pertenece y sesiones de grupos que ya no son suyos si tiene un registro (`SessionLog`) en ellas, y la sesión de grupo que modifica una copia personalizada suya, para que `session_logs.csv` y `customizes_session_id` nunca apunten a una sesión que falte. Una sesión individual de otro atleta nunca se incluye, aunque tenga un registro suyo.
 
 ```
 session_id,org_id,origin,session_type,target_distance_m,target_pace_s_per_km,target_duration_s,scheduled_at,group_id,customizes_session_id
@@ -150,14 +150,14 @@ uuid-2,uuid-org,free,intervalos,8000,,1800,2026-10-02T18:00:00Z,,
 ### 3.3 `session_logs.csv`
 
 ```
-session_id,completed,rpe,distance_m,duration_s,performed_at,incompletion_reason
-uuid-1,true,7,10200,3600,2026-10-01T07:30:00Z,
-uuid-2,false,5,,600,2026-10-02T18:15:00Z,time_constraints
+session_id,completed,rpe,distance_m,duration_s,performed_at,incompletion_reason,avg_heart_rate_bpm,max_heart_rate_bpm
+uuid-1,true,7,10200,3600,2026-10-01T07:30:00Z,,148,175
+uuid-2,false,5,,600,2026-10-02T18:15:00Z,time_constraints,,
 ```
 
-`incompletion_reason` sale de `session_logs.extra`. Es el único campo que lleva `extra` (enum cerrado, sin texto libre).
+`incompletion_reason`, `avg_heart_rate_bpm` y `max_heart_rate_bpm` salen de `session_logs.extra` (esquema cerrado `sessionLogExtraSchema` de `#141`, sin texto libre).
 
-Tras la purga de datos de salud (#131), `rpe` queda vacío en las filas purgadas: la celda sale vacía (ni `0` ni `null`) y el resto de columnas no cambia.
+Tras la purga de datos de salud (`#131`), `rpe`, `avg_heart_rate_bpm` y `max_heart_rate_bpm` quedan vacíos en las filas purgadas: la celda sale vacía (ni `0` ni `null`) y el resto de columnas no cambia.
 
 ### 3.4 `messages.csv`
 
@@ -181,7 +181,8 @@ Usuario: athlete@example.com
 CONTENIDO:
 - data.json: perfil, ajustes, consentimientos, clubes, grupos, eventos,
   feedback recibido, contactos, notificaciones y registro de accesos
-- sessions.csv: sesiones (tipo, objetivo)
+- sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de
+  grupos que dejaste si registraste la sesión), una fila por sesión
 - session_logs.csv: resultados (completada, RPE, distancia, duración)
 - messages.csv: los mensajes que escribiste (los que borraste
   aparecen con la fecha de borrado si aún los conservamos)
@@ -196,6 +197,8 @@ CAMPOS:
   - route_unavailable: ruta no disponible
   - equipment_issue: problema de equipamiento
   - other: otro
+- avg_heart_rate_bpm: frecuencia cardíaca media (ppm); vacío si lo borraste
+- max_heart_rate_bpm: frecuencia cardíaca máxima (ppm); vacío si lo borraste
 
 ZONA HORARIA: UTC
 

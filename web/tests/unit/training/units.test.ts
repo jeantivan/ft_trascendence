@@ -6,8 +6,10 @@ import {
   POSTGRES_INT_MAX,
 } from "@/lib/training/schemas";
 import {
+  calculateAveragePaceSecondsPerKm,
   computeScheduledAtUtc,
   durationToSecondsSchema,
+  formatAveragePace,
   formatMetersToKm,
   formatSecondsPerKmToPace,
   formatSecondsToDuration,
@@ -208,5 +210,22 @@ describe("parseIsoCalendarDay and computeScheduledAtUtc", () => {
     expect(() =>
       computeScheduledAtUtc("2026-03-28", MAX_DAY_OFFSET + 1, "Europe/Madrid"),
     ).toThrow();
+  });
+});
+
+describe("average pace calculation", () => {
+  it("computes and formats average pace in min/km from distanceM and durationS", () => {
+    expect(calculateAveragePaceSecondsPerKm(10000, 3000)).toBe(300);
+    expect(formatAveragePace(10000, 3000)).toBe("5:00");
+    expect(formatAveragePace(5000, 1350)).toBe("4:30");
+    expect(calculateAveragePaceSecondsPerKm(3000, 1000)).toBe(333);
+  });
+
+  it("returns null when distance or duration is missing, non-positive, or out of display bounds", () => {
+    expect(calculateAveragePaceSecondsPerKm(null, 1800)).toBeNull();
+    expect(formatAveragePace(10000, undefined)).toBeNull();
+    expect(formatAveragePace(0, 1800)).toBeNull();
+    expect(formatAveragePace(10000, 0)).toBeNull();
+    expect(formatAveragePace(100, 1000)).toBeNull(); // 10000 s/km > 99:59
   });
 });

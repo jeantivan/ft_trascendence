@@ -52,26 +52,42 @@ function toTemplateData(template: PrismaTemplateWithSessions): TrainingTemplateD
   };
 }
 
-// Locks the template row inside the transaction (like a row-level mutex) so concurrent
-// updates or deletes serialize instead of hitting P2002, P2003, or P2025 under READ COMMITTED.
-async function lockTemplateForUpdate(
+// Locks the template row inside the transaction so concurrent updates/deletes/assignments
+// serialize cleanly without P2002, P2003, or P2025 under READ COMMITTED.
+// - "update": FOR NO KEY UPDATE (allows external FOR KEY SHARE FK checks while blocking updates/deletes/assigns)
+// - "delete": FOR UPDATE (blocks FK references while removing the primary key)
+// - "share": FOR SHARE (allows concurrent assignments while waiting for update/delete)
+async function lockTemplate(
   tx: Prisma.TransactionClient,
   orgId: string,
-  id: string
+  id: string,
+  mode: "update" | "delete" | "share"
 ): Promise<void> {
   if (!isDbId(orgId) || !isDbId(id)) {
     throw new TrainingNotFoundError();
   }
-  const rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
-    SELECT id, org_id FROM training_templates WHERE id = ${normalizeId(id)}::uuid FOR UPDATE
-  `;
+  const normalizedId = normalizeId(id);
+  const rows =
+    mode === "update"
+      ? await tx.$queryRaw<{ id: string; org_id: string }[]>`
+          SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR NO KEY UPDATE
+        `
+      : mode === "share"
+        ? await tx.$queryRaw<{ id: string; org_id: string }[]>`
+            SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR SHARE
+          `
+        : await tx.$queryRaw<{ id: string; org_id: string }[]>`
+            SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR UPDATE
+          `;
   if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
     throw new TrainingNotFoundError();
   }
 }
 
-// Always acquire after lockTemplateForUpdate so lock ordering stays consistent (templates -> groups).
-async function lockGroupForUpdate(
+// Always acquire after lockTemplate so lock ordering stays consistent (templates -> groups).
+// Uses FOR SHARE so concurrent assignments to the same group do not block each other, while
+// a concurrent group delete waits until this transaction finishes.
+async function lockGroupForShare(
   tx: Prisma.TransactionClient,
   orgId: string,
   groupId: string
@@ -80,7 +96,7 @@ async function lockGroupForUpdate(
     throw new TrainingNotFoundError();
   }
   const rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
-    SELECT id, org_id FROM groups WHERE id = ${normalizeId(groupId)}::uuid FOR UPDATE
+    SELECT id, org_id FROM groups WHERE id = ${normalizeId(groupId)}::uuid FOR SHARE
   `;
   if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
     throw new TrainingNotFoundError();
@@ -233,7 +249,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
   ): Promise<TrainingTemplateData> {
     const normalizedId = normalizeId(id);
     return await this.db.$transaction(async (tx) => {
-      await lockTemplateForUpdate(tx, orgId, normalizedId);
+      await lockTemplate(tx, orgId, normalizedId, "update");
 
       // Replace TemplateSessions (0..n-1) rather than diffing positions; copied TrainingSessions
       // in groups are independent rows and keep their original values.
@@ -279,7 +295,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
   ): Promise<void> {
     const normalizedId = normalizeId(id);
     await this.db.$transaction(async (tx) => {
-      await lockTemplateForUpdate(tx, orgId, normalizedId);
+      await lockTemplate(tx, orgId, normalizedId, "delete");
       // TemplateSessions cascade-delete; copied TrainingSessions keep sourceTemplateId set to null.
       await tx.trainingTemplate.delete({
         where: { id: normalizedId },
@@ -305,8 +321,8 @@ export class PrismaTrainingRepository implements TrainingRepository {
 
     return await this.db.$transaction(async (tx) => {
       // Lock template then group in fixed order so concurrent delete/update serializes cleanly.
-      await lockTemplateForUpdate(tx, normalizedOrgId, normalizedTemplateId);
-      await lockGroupForUpdate(tx, normalizedOrgId, normalizedGroupId);
+      await lockTemplate(tx, normalizedOrgId, normalizedTemplateId, "share");
+      await lockGroupForShare(tx, normalizedOrgId, normalizedGroupId);
 
       const org = await tx.organization.findUnique({
         where: { id: normalizedOrgId },

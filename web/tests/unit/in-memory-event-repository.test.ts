@@ -14,5 +14,6 @@ runEventRepositoryContract("in memory", () => {
     addSession: async (orgId, session) => repo.addSession(orgId, session),
     addSpotRequest: async (eventId, userId, status, createdAt) =>
       repo.addSpotRequest(eventId, userId, status, createdAt),
+    chatParticipant: async (eventId, userId) => repo.chatParticipant(eventId, userId),
   };
 });

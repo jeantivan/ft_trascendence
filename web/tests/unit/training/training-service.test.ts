@@ -138,7 +138,6 @@ describe("TrainingService", () => {
         payload: {
           orgId: ORG_A,
           templateId: created.id,
-          actorId: MANAGER_1,
         },
       });
       // Verify payload contains only *Id keys and NO health data or feedback
@@ -167,7 +166,6 @@ describe("TrainingService", () => {
         expect(call.input.payload).toEqual({
           orgId: ORG_A,
           templateId: created.id,
-          actorId: MANAGER_1,
         });
       }
 
@@ -269,7 +267,6 @@ describe("TrainingService", () => {
         payload: {
           orgId: ORG_A,
           templateId: template.id,
-          actorId: MANAGER_1,
         },
       });
     });
@@ -294,7 +291,6 @@ describe("TrainingService", () => {
         payload: {
           orgId: ORG_A,
           templateId: template.id,
-          actorId: MANAGER_2,
         },
       });
     });
@@ -334,7 +330,6 @@ describe("TrainingService", () => {
         payload: {
           orgId: ORG_A,
           templateId: template.id,
-          actorId: MANAGER_1,
         },
       });
     });
@@ -357,7 +352,6 @@ describe("TrainingService", () => {
         payload: {
           orgId: ORG_A,
           templateId: template.id,
-          actorId: MANAGER_2,
         },
       });
     });
