@@ -8,7 +8,10 @@ import {
   createTrainingTemplateAction,
   updateTrainingTemplateAction,
   deleteTrainingTemplateAction,
+  assignTrainingTemplateAction,
 } from "@/lib/training/actions";
+import { TRAINING_TEMPLATE_ASSIGNED } from "@/lib/training/types";
+import { notify } from "@/lib/notifications/notify";
 import { InMemoryTrainingRepository } from "../../support/in-memory-training-repository";
 
 const repoHolder = vi.hoisted(() => ({
@@ -27,6 +30,10 @@ vi.mock("@/lib/training/prisma-training-repository", () => ({
 
 vi.mock("@/lib/permissions/require-org-role", () => ({
   requireOrgRole: vi.fn(),
+}));
+
+vi.mock("@/lib/notifications/notify", () => ({
+  notify: vi.fn(),
 }));
 
 class NextNavigationSignal extends Error {
@@ -293,6 +300,129 @@ describe("Training Server Actions", () => {
         deleteTrainingTemplateAction(ORG_A, "missing-template-id")
       ).rejects.toThrow("NEXT_NOT_FOUND");
       expect(notFound).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("assignTrainingTemplateAction", () => {
+    const GROUP_1 = "13500000-0000-4000-8000-000000000041";
+
+    it("calls requireOrgRole with trainingTemplate.write, creates sessions, and notifies group athletes", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+
+      repo.addGroup(ORG_A, GROUP_1);
+      repo.addAthleteToGroup(ATHLETE_USER.id, GROUP_1);
+
+      const created = await repo.create({
+        orgId: ORG_A,
+        name: "10K Group Block",
+        createdBy: MANAGER_USER.id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 1, targetDistanceM: 6000 }],
+      });
+
+      const result = await assignTrainingTemplateAction(ORG_A, {
+        templateId: created.id,
+        groupId: GROUP_1,
+        startDate: "2026-07-01",
+      });
+
+      expect(requireOrgRole).toHaveBeenCalledWith(
+        ORG_A,
+        ORG_ROLES["trainingTemplate.write"]
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0].sourceTemplateId).toBe(created.id);
+        expect(result.data[0].groupId).toBe(GROUP_1);
+      }
+      expect(notify).toHaveBeenCalledWith(expect.anything(), {
+        userId: ATHLETE_USER.id,
+        type: TRAINING_TEMPLATE_ASSIGNED,
+        payload: {
+          orgId: ORG_A,
+          templateId: created.id,
+          groupId: GROUP_1,
+        },
+      });
+    });
+
+    it("propagates 403 when requireOrgRole rejects an athlete", async () => {
+      vi.mocked(requireOrgRole).mockImplementationOnce(() => {
+        forbidden();
+      });
+
+      await expect(
+        assignTrainingTemplateAction(ORG_A, {
+          templateId: "13500000-0000-4000-8000-000000000010",
+          groupId: GROUP_1,
+          startDate: "2026-07-01",
+        })
+      ).rejects.toThrow("NEXT_FORBIDDEN");
+      expect(forbidden).toHaveBeenCalledOnce();
+    });
+
+    it("triggers notFound() (404) when group or template belongs to another club", async () => {
+      const ORG_OTHER = "org-9999-9999-9999-999999999999";
+      const OTHER_GROUP = "13500000-0000-4000-8000-000000000049";
+      repo.addGroup(ORG_A, GROUP_1);
+      repo.addGroup(ORG_OTHER, OTHER_GROUP);
+
+      const created = await repo.create({
+        orgId: ORG_A,
+        name: "Club A Template",
+        createdBy: MANAGER_USER.id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+      const otherClubTemplate = await repo.create({
+        orgId: ORG_OTHER,
+        name: "Other Club Template",
+        createdBy: "other-manager",
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      await expect(
+        assignTrainingTemplateAction(ORG_A, {
+          templateId: created.id,
+          groupId: OTHER_GROUP,
+          startDate: "2026-07-01",
+        })
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      await expect(
+        assignTrainingTemplateAction(ORG_A, {
+          templateId: otherClubTemplate.id,
+          groupId: GROUP_1,
+          startDate: "2026-07-01",
+        })
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+
+      expect(notFound).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns { success: false, error } on invalid startDate", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+
+      const result = await assignTrainingTemplateAction(ORG_A, {
+        templateId: "13500000-0000-4000-8000-000000000010",
+        groupId: GROUP_1,
+        startDate: "2026-02-30",
+      });
+
+      expect(result.success).toBe(false);
     });
   });
 });

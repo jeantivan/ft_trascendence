@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SessionType } from "@/generated/prisma/enums";
+import { idSchema } from "@/lib/org/schemas";
 
 export const POSTGRES_INT_MAX = 2_147_483_647;
 // Capped well below Date's +-100M-day limit so clubMidnightToUtc never overflows
@@ -55,3 +56,21 @@ export const trainingTemplateSchema = z
 export type TrainingTemplateInput = z.infer<typeof trainingTemplateSchema>;
 export type NormalizedTemplateSessionInput =
   TrainingTemplateInput["sessions"][number];
+
+export const assignTrainingTemplateSchema = z
+  .object({
+    templateId: idSchema,
+    groupId: idSchema,
+    startDate: z
+      .string()
+      .trim()
+      .pipe(z.iso.date("Fecha inválida (usa YYYY-MM-DD válido)"))
+      .refine((value) => Number(value.slice(0, 4)) >= 1970, {
+        message: "El año debe ser igual o posterior a 1970",
+      }),
+  })
+  .strict();
+
+export type AssignTrainingTemplatePayload = z.infer<
+  typeof assignTrainingTemplateSchema
+>;

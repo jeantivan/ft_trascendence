@@ -1,5 +1,6 @@
 import type {
   Prisma,
+  SessionOrigin,
   SessionType,
   MembershipRole,
 } from "@/generated/prisma/client";
@@ -33,24 +34,60 @@ export interface UpdateTrainingTemplateInput {
   sessions?: Omit<TemplateSessionData, "position">[];
 }
 
+export interface TrainingSessionData {
+  id: string;
+  orgId: string;
+  origin: SessionOrigin;
+  sessionType: SessionType;
+  targetDistanceM: number | null;
+  targetDurationS: number | null;
+  targetPaceSPerKm: number | null;
+  scheduledAt: Date;
+  groupId: string | null;
+  athleteId: string | null;
+  sourceTemplateId: string | null;
+}
+
+export interface AssignTrainingTemplateInput {
+  orgId: string;
+  templateId: string;
+  groupId: string;
+  startDate: string;
+}
+
 export const TRAINING_TEMPLATE_CREATED = "training_template_created";
 export const TRAINING_TEMPLATE_UPDATED = "training_template_updated";
 export const TRAINING_TEMPLATE_DELETED = "training_template_deleted";
+export const TRAINING_TEMPLATE_ASSIGNED = "training_template_assigned";
 
-export type TrainingNotificationType =
+export type TrainingTemplateManagerNotificationType =
   | typeof TRAINING_TEMPLATE_CREATED
   | typeof TRAINING_TEMPLATE_UPDATED
   | typeof TRAINING_TEMPLATE_DELETED;
 
-export interface TrainingNotifyInput {
-  userId: string;
-  type: TrainingNotificationType;
-  payload: {
-    orgId: string;
-    templateId: string;
-    actorId: string;
-  };
-}
+export type TrainingNotificationType =
+  | TrainingTemplateManagerNotificationType
+  | typeof TRAINING_TEMPLATE_ASSIGNED;
+
+export type TrainingNotifyInput =
+  | {
+      userId: string;
+      type: TrainingTemplateManagerNotificationType;
+      payload: {
+        orgId: string;
+        templateId: string;
+        actorId: string;
+      };
+    }
+  | {
+      userId: string;
+      type: typeof TRAINING_TEMPLATE_ASSIGNED;
+      payload: {
+        orgId: string;
+        templateId: string;
+        groupId: string;
+      };
+    };
 
 export type TrainingNotify = (
   tx: Prisma.TransactionClient,
@@ -60,6 +97,11 @@ export type TrainingNotify = (
 // Runs inside the repository's $transaction so notifications commit or roll back atomically with the template write.
 export type TrainingMutationCallback = (
   templateId: string,
+  tx: Prisma.TransactionClient
+) => Promise<void>;
+
+export type TrainingAssignCallback = (
+  athleteIds: string[],
   tx: Prisma.TransactionClient
 ) => Promise<void>;
 
@@ -88,4 +130,8 @@ export interface TrainingRepository {
     id: string,
     afterWrite?: TrainingMutationCallback
   ): Promise<void>;
+  assignTemplateToGroup(
+    input: AssignTrainingTemplateInput,
+    afterAssign?: TrainingAssignCallback
+  ): Promise<TrainingSessionData[]>;
 }

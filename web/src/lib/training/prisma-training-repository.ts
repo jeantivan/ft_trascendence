@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isDbId } from "@/lib/permissions/is-db-id";
 import { normalizeId } from "@/lib/org/schemas";
+import { computeScheduledAtUtc } from "@/lib/training/units";
 import type {
   Prisma,
   PrismaClient,
@@ -9,11 +10,14 @@ import type {
 } from "@/generated/prisma/client";
 import { TrainingNotFoundError } from "./errors";
 import type {
-  TrainingRepository,
-  TrainingTemplateData,
+  AssignTrainingTemplateInput,
   CreateTrainingTemplateInput,
-  UpdateTrainingTemplateInput,
+  TrainingAssignCallback,
   TrainingMutationCallback,
+  TrainingRepository,
+  TrainingSessionData,
+  TrainingTemplateData,
+  UpdateTrainingTemplateInput,
 } from "./types";
 
 type PrismaTemplateWithSessions = {
@@ -60,6 +64,23 @@ async function lockTemplateForUpdate(
   }
   const rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
     SELECT id, org_id FROM training_templates WHERE id = ${normalizeId(id)}::uuid FOR UPDATE
+  `;
+  if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
+    throw new TrainingNotFoundError();
+  }
+}
+
+// Always acquire after lockTemplateForUpdate so lock ordering stays consistent (templates -> groups).
+async function lockGroupForUpdate(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  groupId: string
+): Promise<void> {
+  if (!isDbId(orgId) || !isDbId(groupId)) {
+    throw new TrainingNotFoundError();
+  }
+  const rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+    SELECT id, org_id FROM groups WHERE id = ${normalizeId(groupId)}::uuid FOR UPDATE
   `;
   if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
     throw new TrainingNotFoundError();
@@ -264,6 +285,94 @@ export class PrismaTrainingRepository implements TrainingRepository {
         where: { id: normalizedId },
       });
       await afterWrite?.(normalizedId, tx);
+    });
+  }
+
+  async assignTemplateToGroup(
+    input: AssignTrainingTemplateInput,
+    afterAssign?: TrainingAssignCallback
+  ): Promise<TrainingSessionData[]> {
+    if (
+      !isDbId(input.orgId) ||
+      !isDbId(input.templateId) ||
+      !isDbId(input.groupId)
+    ) {
+      throw new TrainingNotFoundError();
+    }
+    const normalizedOrgId = normalizeId(input.orgId);
+    const normalizedTemplateId = normalizeId(input.templateId);
+    const normalizedGroupId = normalizeId(input.groupId);
+
+    return await this.db.$transaction(async (tx) => {
+      // Lock template then group in fixed order so concurrent delete/update serializes cleanly.
+      await lockTemplateForUpdate(tx, normalizedOrgId, normalizedTemplateId);
+      await lockGroupForUpdate(tx, normalizedOrgId, normalizedGroupId);
+
+      const org = await tx.organization.findUnique({
+        where: { id: normalizedOrgId },
+        select: { timezone: true },
+      });
+      if (!org) {
+        throw new TrainingNotFoundError();
+      }
+
+      const templateSessions = await tx.templateSession.findMany({
+        where: { templateId: normalizedTemplateId },
+        orderBy: { position: "asc" },
+      });
+
+      const created = await tx.trainingSession.createManyAndReturn({
+        data: templateSessions.map((s) => ({
+          orgId: normalizedOrgId,
+          origin: "template" as const,
+          sessionType: s.sessionType,
+          targetDistanceM: s.targetDistanceM,
+          targetDurationS: s.targetDurationS,
+          targetPaceSPerKm: s.targetPaceSPerKm,
+          scheduledAt: computeScheduledAtUtc(
+            input.startDate,
+            s.dayOffset,
+            org.timezone
+          ),
+          groupId: normalizedGroupId,
+          athleteId: null,
+          sourceTemplateId: normalizedTemplateId,
+        })),
+      });
+
+      const groupAthletes = await tx.groupMember.findMany({
+        where: {
+          groupId: normalizedGroupId,
+          user: {
+            memberships: {
+              some: {
+                orgId: normalizedOrgId,
+                role: "athlete",
+              },
+            },
+          },
+        },
+        select: { userId: true },
+      });
+
+      await afterAssign?.(
+        groupAthletes.map((m) => m.userId),
+        tx
+      );
+
+      return created.map((row) => ({
+        id: row.id,
+        orgId: row.orgId,
+        origin: row.origin,
+        sessionType: row.sessionType,
+        targetDistanceM: row.targetDistanceM,
+        targetDurationS: row.targetDurationS,
+        targetPaceSPerKm: row.targetPaceSPerKm,
+        scheduledAt: row.scheduledAt,
+        groupId: row.groupId,
+        athleteId: row.athleteId,
+        sourceTemplateId: row.sourceTemplateId,
+      }));
     });
   }
 }

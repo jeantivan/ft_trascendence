@@ -12,7 +12,9 @@ export interface TrainingRepositoryFixture {
   manager2Id: string;
   athleteId: string;
   groupId: string;
-  assignTemplateToGroup(groupId: string, templateId: string): Promise<void>;
+  emptyGroupId: string;
+  otherOrgGroupId: string;
+  seedTemplateAssignment(groupId: string, templateId: string): Promise<void>;
 }
 
 /** Shared contract suite run against both InMemoryTrainingRepository and PrismaTrainingRepository. */
@@ -64,7 +66,7 @@ export function runTrainingRepositoryContract(
         manager2Id,
         athleteId,
         groupId,
-        assignTemplateToGroup,
+        seedTemplateAssignment,
       } = getFixture();
 
       const t1 = await repo.create({
@@ -95,7 +97,7 @@ export function runTrainingRepositoryContract(
 
       expect(await repo.listForAthlete(orgId, athleteId)).toHaveLength(0);
 
-      await assignTemplateToGroup(groupId, t1.id);
+      await seedTemplateAssignment(groupId, t1.id);
 
       const athleteList = await repo.listForAthlete(orgId, athleteId);
       expect(athleteList).toHaveLength(1);
@@ -219,6 +221,189 @@ export function runTrainingRepositoryContract(
         })
       ).rejects.toThrow("Simulated failure on delete");
       expect(await repo.findById(created.id)).not.toBeNull();
+    });
+
+    it("assigns template to group by value at club 00:00 and passes group athlete IDs to afterAssign", async () => {
+      const { repo, orgId, manager1Id, athleteId, groupId } = getFixture();
+
+      const template = await repo.create({
+        orgId,
+        name: "Spring DST Block",
+        createdBy: manager1Id,
+        sessions: [
+          {
+            sessionType: "rodaje",
+            dayOffset: 0,
+            targetDistanceM: 8000,
+            targetPaceSPerKm: 300,
+            targetDurationS: 2400,
+          },
+          { sessionType: "tirada_larga", dayOffset: 3, targetDistanceM: 22000 },
+        ],
+      });
+
+      const notifiedAthleteIds: string[] = [];
+      const createdSessions = await repo.assignTemplateToGroup(
+        {
+          orgId,
+          templateId: template.id,
+          groupId,
+          // Europe/Madrid switches CET (UTC+1) -> CEST (UTC+2) on 2026-03-29
+          startDate: "2026-03-27",
+        },
+        async (athleteIds) => {
+          notifiedAthleteIds.push(...athleteIds);
+        }
+      );
+
+      expect(createdSessions).toHaveLength(2);
+      expect(createdSessions[0]).toMatchObject({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        targetDistanceM: 8000,
+        targetPaceSPerKm: 300,
+        targetDurationS: 2400,
+        groupId,
+        athleteId: null,
+        sourceTemplateId: template.id,
+        scheduledAt: new Date("2026-03-26T23:00:00.000Z"),
+      });
+      expect(createdSessions[1]).toMatchObject({
+        orgId,
+        origin: "template",
+        sessionType: "tirada_larga",
+        targetDistanceM: 22000,
+        targetPaceSPerKm: null,
+        targetDurationS: null,
+        groupId,
+        athleteId: null,
+        sourceTemplateId: template.id,
+        scheduledAt: new Date("2026-03-29T22:00:00.000Z"),
+      });
+      expect(notifiedAthleteIds).toEqual([athleteId]);
+    });
+
+    it("supports empty group, reassignment, and past startDate", async () => {
+      const { repo, orgId, manager1Id, emptyGroupId, groupId } = getFixture();
+
+      const template = await repo.create({
+        orgId,
+        name: "Reusable Block",
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "cuestas", dayOffset: 0, targetDurationS: 1800 }],
+      });
+
+      const emptyGroupNotified: string[] = [];
+      const firstBatch = await repo.assignTemplateToGroup(
+        {
+          orgId,
+          templateId: template.id,
+          groupId: emptyGroupId,
+          startDate: "2020-01-15",
+        },
+        async (athleteIds) => {
+          emptyGroupNotified.push(...athleteIds);
+        }
+      );
+
+      expect(firstBatch).toHaveLength(1);
+      expect(firstBatch[0].groupId).toBe(emptyGroupId);
+      expect(firstBatch[0].scheduledAt).toEqual(
+        new Date("2020-01-14T23:00:00.000Z")
+      );
+      expect(emptyGroupNotified).toEqual([]);
+
+      const batchA = await repo.assignTemplateToGroup({
+        orgId,
+        templateId: template.id,
+        groupId,
+        startDate: "2026-05-01",
+      });
+      const batchB = await repo.assignTemplateToGroup({
+        orgId,
+        templateId: template.id,
+        groupId,
+        startDate: "2026-05-08",
+      });
+
+      expect(batchA[0].id).not.toBe(batchB[0].id);
+      expect(batchA[0].scheduledAt).not.toEqual(batchB[0].scheduledAt);
+    });
+
+    it("throws TrainingNotFoundError when template or group is missing or belongs to another club", async () => {
+      const { repo, orgId, otherOrgId, manager1Id, groupId, otherOrgGroupId } =
+        getFixture();
+
+      const template = await repo.create({
+        orgId,
+        name: "Club A Plan",
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      await expect(
+        repo.assignTemplateToGroup({
+          orgId: otherOrgId,
+          templateId: template.id,
+          groupId: otherOrgGroupId,
+          startDate: "2026-05-01",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        repo.assignTemplateToGroup({
+          orgId,
+          templateId: template.id,
+          groupId: otherOrgGroupId,
+          startDate: "2026-05-01",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        repo.assignTemplateToGroup({
+          orgId,
+          templateId: UNKNOWN_ID,
+          groupId,
+          startDate: "2026-05-01",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        repo.assignTemplateToGroup({
+          orgId,
+          templateId: template.id,
+          groupId: UNKNOWN_ID,
+          startDate: "2026-05-01",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+    });
+
+    it("rolls back created sessions when afterAssign throws", async () => {
+      const { repo, orgId, manager1Id, athleteId, groupId } = getFixture();
+
+      const template = await repo.create({
+        orgId,
+        name: "Rollback Plan",
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      await expect(
+        repo.assignTemplateToGroup(
+          {
+            orgId,
+            templateId: template.id,
+            groupId,
+            startDate: "2026-05-01",
+          },
+          async () => {
+            throw new Error("Simulated failure on assign");
+          }
+        )
+      ).rejects.toThrow("Simulated failure on assign");
+
+      expect(await repo.listForAthlete(orgId, athleteId)).toHaveLength(0);
     });
   });
 }

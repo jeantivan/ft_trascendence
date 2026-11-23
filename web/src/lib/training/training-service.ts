@@ -2,18 +2,21 @@ import { z } from "zod";
 import type { Prisma } from "@/generated/prisma/client";
 import { normalizeId } from "@/lib/org/schemas";
 import {
+  assignTrainingTemplateSchema,
   trainingTemplateSchema,
   templateSessionSchema,
   trainingTemplateNameSchema,
 } from "./schemas";
 import {
+  TRAINING_TEMPLATE_ASSIGNED,
   TRAINING_TEMPLATE_CREATED,
   TRAINING_TEMPLATE_DELETED,
   TRAINING_TEMPLATE_UPDATED,
-  type TrainingNotificationType,
   type TrainingNotify,
   type TrainingRepository,
+  type TrainingSessionData,
   type TrainingTemplateData,
+  type TrainingTemplateManagerNotificationType,
 } from "./types";
 import {
   TrainingForbiddenError,
@@ -54,7 +57,7 @@ export class TrainingService {
     orgId: string,
     actorId: string,
     templateId: string,
-    type: TrainingNotificationType,
+    type: TrainingTemplateManagerNotificationType,
     tx: Prisma.TransactionClient
   ): Promise<void> {
     if (!this.notifier) {
@@ -214,6 +217,53 @@ export class TrainingService {
         TRAINING_TEMPLATE_DELETED,
         tx
       )
+    );
+  }
+
+  async assignTemplateToGroup(
+    actorId: string,
+    orgId: string,
+    input: unknown
+  ): Promise<TrainingSessionData[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    // Known limit (#238): actor role is checked before the transaction; concurrent demotion
+    // or group membership edits in the same millisecond are out of scope.
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    const parseResult = assignTrainingTemplateSchema.safeParse(input);
+    if (!parseResult.success) {
+      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
+      throw new TrainingValidationError(message);
+    }
+
+    return this.repo.assignTemplateToGroup(
+      {
+        orgId: normalizedOrgId,
+        templateId: parseResult.data.templateId,
+        groupId: parseResult.data.groupId,
+        startDate: parseResult.data.startDate,
+      },
+      async (athleteIds, tx) => {
+        if (!this.notifier) {
+          return;
+        }
+        for (const userId of athleteIds) {
+          await this.notifier(tx, {
+            userId,
+            type: TRAINING_TEMPLATE_ASSIGNED,
+            payload: {
+              orgId: normalizedOrgId,
+              templateId: parseResult.data.templateId,
+              groupId: parseResult.data.groupId,
+            },
+          });
+        }
+      }
     );
   }
 }

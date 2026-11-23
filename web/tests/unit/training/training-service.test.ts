@@ -10,6 +10,7 @@ import {
   TrainingValidationError,
 } from "@/lib/training/errors";
 import {
+  TRAINING_TEMPLATE_ASSIGNED,
   TRAINING_TEMPLATE_CREATED,
   TRAINING_TEMPLATE_DELETED,
   TRAINING_TEMPLATE_UPDATED,
@@ -45,6 +46,7 @@ describe("TrainingService", () => {
     repo.addMember(ORG_A, MANAGER_1, "manager");
     repo.addMember(ORG_A, MANAGER_2, "manager");
     repo.addMember(ORG_A, ATHLETE_1, "athlete");
+    repo.addGroup(ORG_A, GROUP_1);
     repo.addAthleteToGroup(ATHLETE_1, GROUP_1);
   });
 
@@ -80,7 +82,7 @@ describe("TrainingService", () => {
       );
 
       // Assign t1 to Athlete's group
-      repo.assignTemplateToGroup(GROUP_1, t1.id);
+      repo.seedTemplateAssignment(GROUP_1, t1.id);
 
       const athleteAfter = await service.listTemplates(ATHLETE_1, ORG_A);
       expect(athleteAfter).toHaveLength(1);
@@ -371,6 +373,139 @@ describe("TrainingService", () => {
       await expect(
         service.deleteTemplate(ATHLETE_1, ORG_A, template.id)
       ).rejects.toThrow(TrainingForbiddenError);
+    });
+  });
+
+  describe("assignTemplateToGroup", () => {
+    it("allows manager to assign template to group and notifies group athletes with IDs only", async () => {
+      const template = await repo.create({
+        orgId: ORG_A,
+        name: "Base 10K",
+        createdBy: MANAGER_1,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 7000 }],
+      });
+      notifiedCalls = [];
+
+      const created = await service.assignTemplateToGroup(MANAGER_1, ORG_A, {
+        templateId: template.id,
+        groupId: GROUP_1,
+        startDate: "2026-06-01",
+      });
+
+      expect(created).toHaveLength(1);
+      expect(created[0]).toMatchObject({
+        orgId: ORG_A,
+        origin: "template",
+        groupId: GROUP_1,
+        athleteId: null,
+        sourceTemplateId: template.id,
+      });
+
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].tx).toBe(IN_MEMORY_TX_TOKEN);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: ATHLETE_1,
+        type: TRAINING_TEMPLATE_ASSIGNED,
+        payload: {
+          orgId: ORG_A,
+          templateId: template.id,
+          groupId: GROUP_1,
+        },
+      });
+    });
+
+    it("sends zero notifications when group is empty and rolls back when notifier throws", async () => {
+      const EMPTY_GROUP = "13400000-0000-4000-8000-000000000042";
+      repo.addGroup(ORG_A, EMPTY_GROUP);
+
+      const template = await repo.create({
+        orgId: ORG_A,
+        name: "Empty Group Plan",
+        createdBy: MANAGER_1,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+      notifiedCalls = [];
+
+      const created = await service.assignTemplateToGroup(MANAGER_1, ORG_A, {
+        templateId: template.id,
+        groupId: EMPTY_GROUP,
+        startDate: "2026-06-01",
+      });
+
+      expect(created).toHaveLength(1);
+      expect(notifiedCalls).toHaveLength(0);
+
+      const failingService = new TrainingService(repo, async () => {
+        throw new Error("Notification service down");
+      });
+
+      await expect(
+        failingService.assignTemplateToGroup(MANAGER_1, ORG_A, {
+          templateId: template.id,
+          groupId: GROUP_1,
+          startDate: "2026-06-01",
+        })
+      ).rejects.toThrow("Notification service down");
+
+      expect(await repo.listForAthlete(ORG_A, ATHLETE_1)).toHaveLength(0);
+    });
+
+    it("rejects athlete with 403, non-member or cross-org with 404, and invalid startDate with 400", async () => {
+      const OTHER_GROUP = "13400000-0000-4000-8000-000000000043";
+      repo.addGroup(ORG_OTHER, OTHER_GROUP);
+
+      const template = await repo.create({
+        orgId: ORG_A,
+        name: "Auth & Validation Plan",
+        createdBy: MANAGER_1,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+      const otherTemplate = await repo.create({
+        orgId: ORG_OTHER,
+        name: "Other Club Plan",
+        createdBy: STRANGER,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+
+      await expect(
+        service.assignTemplateToGroup(ATHLETE_1, ORG_A, {
+          templateId: template.id,
+          groupId: GROUP_1,
+          startDate: "2026-06-01",
+        })
+      ).rejects.toThrow(TrainingForbiddenError);
+
+      await expect(
+        service.assignTemplateToGroup(STRANGER, ORG_A, {
+          templateId: template.id,
+          groupId: GROUP_1,
+          startDate: "2026-06-01",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        service.assignTemplateToGroup(MANAGER_1, ORG_A, {
+          templateId: template.id,
+          groupId: OTHER_GROUP,
+          startDate: "2026-06-01",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        service.assignTemplateToGroup(MANAGER_1, ORG_A, {
+          templateId: otherTemplate.id,
+          groupId: GROUP_1,
+          startDate: "2026-06-01",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        service.assignTemplateToGroup(MANAGER_1, ORG_A, {
+          templateId: template.id,
+          groupId: GROUP_1,
+          startDate: "2026-02-30",
+        })
+      ).rejects.toThrow(TrainingValidationError);
     });
   });
 });

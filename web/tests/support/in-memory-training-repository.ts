@@ -2,13 +2,17 @@ import { randomUUID } from "node:crypto";
 import type { MembershipRole, Prisma } from "@/generated/prisma/client";
 import { normalizeId } from "@/lib/org/schemas";
 import { TrainingNotFoundError } from "@/lib/training/errors";
+import { computeScheduledAtUtc } from "@/lib/training/units";
 import type {
-  TrainingRepository,
-  TrainingTemplateData,
-  TemplateSessionData,
+  AssignTrainingTemplateInput,
   CreateTrainingTemplateInput,
-  UpdateTrainingTemplateInput,
+  TemplateSessionData,
+  TrainingAssignCallback,
   TrainingMutationCallback,
+  TrainingRepository,
+  TrainingSessionData,
+  TrainingTemplateData,
+  UpdateTrainingTemplateInput,
 } from "@/lib/training/types";
 
 export const IN_MEMORY_TX_TOKEN = Symbol(
@@ -18,16 +22,32 @@ export const IN_MEMORY_TX_TOKEN = Symbol(
 export class InMemoryTrainingRepository implements TrainingRepository {
   private templates: Map<string, TrainingTemplateData> = new Map();
   private memberships: Map<string, MembershipRole> = new Map();
+  private orgTimezones: Map<string, string> = new Map();
+  private groups: Map<string, string> = new Map();
   private athleteGroups: Map<string, Set<string>> = new Map();
   private groupTemplates: Map<string, Set<string>> = new Map();
   public copiedSessions: Array<{
     id: string;
+    orgId?: string;
+    origin?: "template" | "customized" | "free";
     sourceTemplateId: string | null;
-    groupId?: string;
+    groupId?: string | null;
+    athleteId?: string | null;
     sessionType?: TemplateSessionData["sessionType"];
     dayOffset?: number;
     targetDistanceM?: number | null;
+    targetDurationS?: number | null;
+    targetPaceSPerKm?: number | null;
+    scheduledAt?: Date;
   }> = [];
+
+  addOrganization(orgId: string, timezone = "Europe/Madrid"): void {
+    this.orgTimezones.set(normalizeId(orgId), timezone);
+  }
+
+  addGroup(orgId: string, groupId: string): void {
+    this.groups.set(normalizeId(groupId), normalizeId(orgId));
+  }
 
   addMember(orgId: string, userId: string, role: MembershipRole): void {
     this.memberships.set(`${normalizeId(orgId)}:${normalizeId(userId)}`, role);
@@ -40,7 +60,7 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     this.athleteGroups.set(normalizedAthleteId, groups);
   }
 
-  assignTemplateToGroup(groupId: string, templateId: string): void {
+  seedTemplateAssignment(groupId: string, templateId: string): void {
     const normalizedGroupId = normalizeId(groupId);
     const normalizedTemplateId = normalizeId(templateId);
     const templates = this.groupTemplates.get(normalizedGroupId) ?? new Set();
@@ -230,5 +250,69 @@ export class InMemoryTrainingRepository implements TrainingRepository {
       }
       throw error;
     }
+  }
+
+  async assignTemplateToGroup(
+    input: AssignTrainingTemplateInput,
+    afterAssign?: TrainingAssignCallback
+  ): Promise<TrainingSessionData[]> {
+    const normalizedOrgId = normalizeId(input.orgId);
+    const normalizedTemplateId = normalizeId(input.templateId);
+    const normalizedGroupId = normalizeId(input.groupId);
+
+    const template = this.templates.get(normalizedTemplateId);
+    if (!template || template.orgId !== normalizedOrgId) {
+      throw new TrainingNotFoundError();
+    }
+    if (this.groups.get(normalizedGroupId) !== normalizedOrgId) {
+      throw new TrainingNotFoundError();
+    }
+
+    const timezone = this.orgTimezones.get(normalizedOrgId) ?? "Europe/Madrid";
+    const sortedSessions = [...template.sessions].sort(
+      (a, b) => a.position - b.position
+    );
+    const created: TrainingSessionData[] = sortedSessions.map((s) => ({
+      id: randomUUID(),
+      orgId: normalizedOrgId,
+      origin: "template",
+      sessionType: s.sessionType,
+      targetDistanceM: s.targetDistanceM ?? null,
+      targetDurationS: s.targetDurationS ?? null,
+      targetPaceSPerKm: s.targetPaceSPerKm ?? null,
+      scheduledAt: computeScheduledAtUtc(input.startDate, s.dayOffset, timezone),
+      groupId: normalizedGroupId,
+      athleteId: null,
+      sourceTemplateId: normalizedTemplateId,
+    }));
+
+    const athleteIds: string[] = [];
+    for (const [athleteId, groups] of this.athleteGroups.entries()) {
+      if (
+        groups.has(normalizedGroupId) &&
+        this.memberships.get(`${normalizedOrgId}:${athleteId}`) === "athlete"
+      ) {
+        athleteIds.push(athleteId);
+      }
+    }
+
+    const prevLength = this.copiedSessions.length;
+    const prevTemplates = new Set(
+      this.groupTemplates.get(normalizedGroupId) ?? []
+    );
+    this.copiedSessions.push(...created);
+    const templates = new Set(prevTemplates);
+    templates.add(normalizedTemplateId);
+    this.groupTemplates.set(normalizedGroupId, templates);
+
+    try {
+      await afterAssign?.(athleteIds, IN_MEMORY_TX_TOKEN);
+    } catch (error) {
+      this.copiedSessions.length = prevLength;
+      this.groupTemplates.set(normalizedGroupId, prevTemplates);
+      throw error;
+    }
+
+    return created.map((s) => ({ ...s }));
   }
 }
