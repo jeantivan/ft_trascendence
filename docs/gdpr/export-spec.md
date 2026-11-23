@@ -171,6 +171,8 @@ message_id,conversation_id,kind,body,created_at,deleted_at
 
 No se incluyen los mensajes de otras personas ni sus nombres. `kind` es `event` o `dm`. Los mensajes borrados por el usuario se incluyen mientras sigan conservados en la base de datos, identificados con `deleted_at`; el `README.txt` lo explica.
 
+Se exportan **todos** los mensajes con `author_id` = usuario, también los de conversaciones DM donde ya no participa (`ConversationParticipant.removedAt` no nulo, p. ej. tras romperse el `Contact`) o de un Event en el que ya no está apuntado. No se filtra por `removedAt` ni por pertenencia actual (decisión de Marta, 21-nov-2026, preflight #172).
+
 ### 3.5 `README.txt`
 
 ```
