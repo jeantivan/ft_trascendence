@@ -48,7 +48,6 @@ export interface TrainingNotifyInput {
   payload: {
     orgId: string;
     templateId: string;
-    actorId: string;
   };
 }
 

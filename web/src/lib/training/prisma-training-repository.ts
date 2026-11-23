@@ -50,17 +50,26 @@ function toTemplateData(template: PrismaTemplateWithSessions): TrainingTemplateD
 
 // Locks the template row inside the transaction (like a row-level mutex) so concurrent
 // updates or deletes serialize instead of hitting P2002, P2003, or P2025 under READ COMMITTED.
-async function lockTemplateForUpdate(
+// Uses FOR NO KEY UPDATE on update so FK checks (FOR KEY SHARE) on sessions.source_template_id
+// do not wait, and FOR UPDATE on delete because removing the row invalidates its primary key.
+async function lockTemplate(
   tx: Prisma.TransactionClient,
   orgId: string,
-  id: string
+  id: string,
+  mode: "update" | "delete"
 ): Promise<void> {
   if (!isDbId(orgId) || !isDbId(id)) {
     throw new TrainingNotFoundError();
   }
-  const rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
-    SELECT id, org_id FROM training_templates WHERE id = ${normalizeId(id)}::uuid FOR UPDATE
-  `;
+  const normalizedId = normalizeId(id);
+  const rows =
+    mode === "update"
+      ? await tx.$queryRaw<{ id: string; org_id: string }[]>`
+          SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR NO KEY UPDATE
+        `
+      : await tx.$queryRaw<{ id: string; org_id: string }[]>`
+          SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR UPDATE
+        `;
   if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
     throw new TrainingNotFoundError();
   }
@@ -212,7 +221,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
   ): Promise<TrainingTemplateData> {
     const normalizedId = normalizeId(id);
     return await this.db.$transaction(async (tx) => {
-      await lockTemplateForUpdate(tx, orgId, normalizedId);
+      await lockTemplate(tx, orgId, normalizedId, "update");
 
       // Replace TemplateSessions (0..n-1) rather than diffing positions; copied TrainingSessions
       // in groups are independent rows and keep their original values.
@@ -258,7 +267,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
   ): Promise<void> {
     const normalizedId = normalizeId(id);
     await this.db.$transaction(async (tx) => {
-      await lockTemplateForUpdate(tx, orgId, normalizedId);
+      await lockTemplate(tx, orgId, normalizedId, "delete");
       // TemplateSessions cascade-delete; copied TrainingSessions keep sourceTemplateId set to null.
       await tx.trainingTemplate.delete({
         where: { id: normalizedId },

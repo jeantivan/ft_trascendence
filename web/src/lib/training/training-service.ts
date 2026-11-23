@@ -42,6 +42,8 @@ export class TrainingService {
 
   // Re-checked here even when Server Actions call requireOrgRole, so the service enforces
   // club membership and role independently in unit tests and non-action callers.
+  // Known limit (#238): role is checked before the repository transaction, so a concurrent
+  // demotion or removal in the same millisecond lets the operation proceed.
   private async assertRole(orgId: string, actorId: string): Promise<"manager" | "athlete"> {
     const role = await this.repo.findRole(orgId, actorId);
     if (!role) {
@@ -50,6 +52,9 @@ export class TrainingService {
     return role;
   }
 
+  // Known limit (#238): inside update/delete, notifying another Manager whose account is being
+  // deleted at the same millisecond can deadlock (P2034) between training_templates and users
+  // (created_by ON DELETE SET NULL), matching the lock order note in organization-repository.ts.
   private async notifyOtherManagers(
     orgId: string,
     actorId: string,
@@ -68,7 +73,6 @@ export class TrainingService {
         payload: {
           orgId,
           templateId,
-          actorId,
         },
       });
     }
@@ -133,6 +137,7 @@ export class TrainingService {
       throw new TrainingValidationError(message);
     }
 
+    // Known limit (#238): concurrent club deletion can trigger P2003 on training_templates_org_id_fkey.
     return this.repo.create(
       {
         orgId: normalizedOrgId,
