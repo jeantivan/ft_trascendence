@@ -145,10 +145,11 @@ async function refuseLastAdmin(tx: Prisma.TransactionClient, accountId: string):
 // The common part of every change the panel makes to an account: change it only
 // if it is not like that already, and write the audit row in the same transaction.
 // guard runs first, in that transaction, and refuses with its reason (the last-Admin
-// rule for blocking and removing the Admin role, the Manager one for giving it). where narrows the account to the rows that would change; when
-// none does, the account does not exist (not-found) or is already like that
-// (changed: false, and no audit row, since nothing happened). So two Admins doing
-// the same thing at once write one audit row, not two
+// rule for blocking and removing the Admin role, the Manager one for giving it).
+// where narrows the account to the rows that would change; when none does, the
+// account does not exist (not-found) or is already like that (changed: false, and
+// no audit row, since nothing happened). So two Admins doing the same thing at once
+// write one audit row, not two
 async function changeAccount(
   db: PrismaClient,
   { adminId, accountId }: AccountAction,
@@ -213,6 +214,10 @@ export async function updateAccountNick(
 }
 
 // Makes an account an Admin or a normal user (#103): Roles management in Advanced permissions
+// Known limit: requireAdmin reads the acting Admin's role before this transaction. If
+// another Admin removes their Admin role (or blocks them) in that instant, this change
+// still goes through. It never breaks the last-Admin rule: the guard reads after the
+// lock. Every panel action (block, unblock, nick, delete) has the same window
 export async function changeGlobalRole(
   db: PrismaClient,
   { adminId, accountId, role }: AccountAction & { role: GlobalRole },

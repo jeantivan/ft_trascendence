@@ -26,7 +26,9 @@ import { prisma } from "@/lib/prisma";
 // nothing changed, and for not-found the account page would turn into a 404 and lose
 // its message
 function redrawPanelIfStale<T extends AccountActionResult | UpdateNickResult>(result: T): T {
-  if (result.ok || result.reason === "last-admin" || result.reason === "club-manager") revalidatePath("/admin/accounts", "layout");
+  if (result.ok || result.reason === "last-admin" || result.reason === "club-manager") {
+    revalidatePath("/admin/accounts", "layout");
+  }
   return result;
 }
 
