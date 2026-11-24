@@ -716,6 +716,28 @@ export function runOrganizationRepositoryContract(
         expect(await repo.hasClub(UNKNOWN_ID)).toBe(false);
       });
 
+      it("listUserClubs returns the user's clubs by name with their role and whether they are the last Manager", async () => {
+        const { repo, createClub, orgId, managerId, otherManagerId, memberId } = await setup();
+        const second = await createClub(newClub({ name: "Zeta club", members: 0 }));
+        await repo.assignManager(managerId, second, managerId);
+
+        const mine = await repo.listUserClubs(managerId);
+
+        // setup() names its club "Club de prueba N", which sorts before "Zeta club"
+        expect(mine.map((club) => club.orgId)).toEqual([orgId, second]);
+        expect(mine.find((club) => club.orgId === orgId)).toMatchObject({ role: "manager", isLastManager: false });
+        expect(mine.find((club) => club.orgId === second)).toMatchObject({ role: "manager", isLastManager: true });
+        expect(await repo.listUserClubs(memberId)).toMatchObject([{ orgId, role: "athlete", isLastManager: false }]);
+        expect((await repo.listUserClubs(otherManagerId)).map((club) => club.orgId)).toEqual([orgId]);
+      });
+
+      it("listUserClubs is empty for a user with none", async () => {
+        const { repo, userId } = await setup();
+
+        expect(await repo.listUserClubs(userId)).toEqual([]);
+        expect(await repo.listUserClubs(UNKNOWN_ID)).toEqual([]);
+      });
+
       it("listUserRequests is empty for a user with none", async () => {
         const { repo, userId } = await setup();
 

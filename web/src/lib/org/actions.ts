@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/permissions/require-auth";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { idSchema } from "./schemas";
+import { NotMemberError } from "./club-exit";
 import {
   AlreadyManagerError,
   BlockedAccountError,
@@ -446,6 +447,28 @@ export async function answerInvitationAction(
     return membershipRequestErrorResult(error, true);
   }
   // The /club view shows these rows
+  revalidatePath("/club");
+  return { success: true };
+}
+
+// Bind the club: leaveClubAction.bind(null, orgId). No fields. Manager or athlete of the club
+// (an Admin account is not a member). Leaving never blocks, not even the last Manager: the
+// Admins are warned. Someone already out (expelled meanwhile) gets the same result as leaving.
+export async function leaveClubAction(orgId: string): Promise<MembershipRequestActionResult> {
+  const { user } = await requireOrgRole(orgId, ORG_ROLES["membership.leave"]);
+
+  const club = idSchema.safeParse(orgId);
+  if (!club.success) {
+    return { success: false, error: "Club no válido" };
+  }
+  try {
+    await organizationService.leaveClub(user.id, club.data);
+  } catch (error) {
+    if (!(error instanceof NotMemberError)) {
+      throw error;
+    }
+  }
+  // /club decides which club or view the user sees now
   revalidatePath("/club");
   return { success: true };
 }

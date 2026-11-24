@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { requireAuth } from "@/lib/permissions/require-auth";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
-import type { OrganizationDetail, OrganizationSummary, UserMembershipRequest } from "./organization-repository";
+import type { OrganizationDetail, OrganizationSummary, UserClub, UserMembershipRequest } from "./organization-repository";
 import { OrganizationNotFoundError, OrganizationService } from "./organization-service";
 
 // Club reads for Server Components (pages). Not a "use server" file: those exports would become
@@ -48,6 +48,13 @@ export async function getMyMembershipRequests(): Promise<{
     invitations: rows.filter((r) => r.kind === "invite" && r.status === "pending"),
     sentRequests: rows.filter((r) => r.kind === "request"),
   };
+}
+
+// The signed-in user's clubs with their role, by name: the /club selector and header read them
+export async function getMyClubs(): Promise<UserClub[]> {
+  // Outside try/catch: it redirects by throwing
+  const user = await requireAuth();
+  return organizationService.listUserClubs(user.id);
 }
 
 // Whether the signed-in user is in any club: /club shows the no-club view to those who are not

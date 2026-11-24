@@ -5,6 +5,7 @@ import {
   cancelOrganizationDeletionAction,
   createOrganizationAction,
   inviteUserAction,
+  leaveClubAction,
   removeManagerAction,
   scheduleOrganizationDeletionAction,
   requestToJoinAction,
@@ -14,6 +15,7 @@ import {
   withdrawRequestAction,
 } from "@/lib/org/actions";
 import { requireAuth } from "@/lib/permissions/require-auth";
+import { NotMemberError } from "@/lib/org/club-exit";
 import {
   AlreadyManagerError,
   AlreadyMemberError,
@@ -49,6 +51,7 @@ const requestToJoin = vi.hoisted(() => vi.fn());
 const withdrawRequest = vi.hoisted(() => vi.fn());
 const answerInvitation = vi.hoisted(() => vi.fn());
 const reviewRequest = vi.hoisted(() => vi.fn());
+const leaveClub = vi.hoisted(() => vi.fn());
 const revalidatePath = vi.hoisted(() => vi.fn());
 
 vi.mock("next/cache", () => ({ revalidatePath }));
@@ -72,6 +75,7 @@ vi.mock("@/lib/org/organization-service", async (importOriginal) => ({
     withdrawRequest = withdrawRequest;
     answerInvitation = answerInvitation;
     reviewRequest = reviewRequest;
+    leaveClub = leaveClub;
   },
 }));
 
@@ -624,6 +628,45 @@ describe("the user's own request actions refresh /club", () => {
     requestToJoin.mockRejectedValue(new AlreadyMemberError());
 
     await requestToJoinAction(ORG_ID);
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("leaveClubAction", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(requireOrgRole).mockResolvedValue({ user: MANAGER, role: "manager" });
+  });
+
+  it("checks membership.leave, leaves with the session user and refreshes /club", async () => {
+    await expect(leaveClubAction(ORG_ID)).resolves.toEqual({ success: true });
+
+    expect(requireOrgRole).toHaveBeenCalledWith(ORG_ID, ORG_ROLES["membership.leave"]);
+    expect(leaveClub).toHaveBeenCalledWith(MANAGER.id, ORG_ID);
+    expect(revalidatePath).toHaveBeenCalledWith("/club");
+  });
+
+  it("does not leave when the role check rejects (not a member, or an Admin)", async () => {
+    vi.mocked(requireOrgRole).mockRejectedValue(new ForbiddenSignal());
+
+    await expect(leaveClubAction(ORG_ID)).rejects.toBeInstanceOf(ForbiddenSignal);
+
+    expect(leaveClub).not.toHaveBeenCalled();
+  });
+
+  it("treats someone already out as done, and still refreshes /club", async () => {
+    leaveClub.mockRejectedValue(new NotMemberError());
+
+    await expect(leaveClubAction(ORG_ID)).resolves.toEqual({ success: true });
+
+    expect(revalidatePath).toHaveBeenCalledWith("/club");
+  });
+
+  it("lets an unexpected error through and does not refresh", async () => {
+    leaveClub.mockRejectedValue(new Error("database down"));
+
+    await expect(leaveClubAction(ORG_ID)).rejects.toThrow("database down");
 
     expect(revalidatePath).not.toHaveBeenCalled();
   });

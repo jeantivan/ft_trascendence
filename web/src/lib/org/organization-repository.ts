@@ -181,6 +181,16 @@ export interface UserMembershipRequest {
   createdAt: Date;
 }
 
+// One of the user's clubs with their role in it, for the /club header and selector
+export interface UserClub {
+  orgId: string;
+  name: string;
+  role: "athlete" | "manager";
+  // A Manager with no other Manager in the club: leaving leaves it without one
+  // Known limit: a blocked Manager still counts as "another Manager" (#292)
+  isLastManager: boolean;
+}
+
 export interface OrganizationRepository {
   // Every club, for the catalog
   listCatalog(): Promise<OrganizationSummary[]>;
@@ -249,6 +259,8 @@ export interface OrganizationRepository {
   listUserRequests(userId: string): Promise<UserMembershipRequest[]>;
   // Whether the user is a member of any club (as Manager or athlete)
   hasClub(userId: string): Promise<boolean>;
+  // The user's clubs with their role, by club name
+  listUserClubs(userId: string): Promise<UserClub[]>;
 }
 
 // Prisma errors carry a `code` (P2025, P2002...); checked structurally, like update does
@@ -678,6 +690,30 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
 
   async hasClub(userId: string): Promise<boolean> {
     return (await this.db.membership.count({ where: { userId: normalizeId(userId) } })) > 0;
+  }
+
+  async listUserClubs(userId: string): Promise<UserClub[]> {
+    userId = normalizeId(userId);
+    const rows = await this.db.membership.findMany({
+      where: { userId },
+      orderBy: { organization: { name: "asc" } },
+      select: {
+        orgId: true,
+        role: true,
+        organization: {
+          select: {
+            name: true,
+            _count: { select: { memberships: { where: { role: "manager", userId: { not: userId } } } } },
+          },
+        },
+      },
+    });
+    return rows.map(({ orgId, role, organization }) => ({
+      orgId,
+      name: organization.name,
+      role,
+      isLastManager: role === "manager" && organization._count.memberships === 0,
+    }));
   }
 
   async update(orgId: string, data: OrganizationEdit): Promise<OrganizationDetail | null> {

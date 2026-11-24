@@ -15,6 +15,7 @@ import {
   OrganizationNotFoundError,
   UserNotFoundError,
   type MembershipRequestDetail,
+  type UserClub,
   type UserMembershipRequest,
   type OrganizationDetail,
   type OrganizationEdit,
@@ -342,6 +343,18 @@ export class InMemoryOrganizationRepository implements OrganizationRepository {
   async hasClub(userId: string): Promise<boolean> {
     userId = normalizeId(userId);
     return [...this.clubs.values()].some((club) => club.members.has(userId));
+  }
+
+  async listUserClubs(userId: string): Promise<UserClub[]> {
+    userId = normalizeId(userId);
+    return [...this.clubs]
+      .filter(([, club]) => club.members.has(userId))
+      .map(([orgId, club]) => {
+        const role = club.members.get(userId) as Role;
+        const otherManagers = [...club.members].filter(([id, r]) => id !== userId && r === "manager");
+        return { orgId, name: club.data.name, role, isLastManager: role === "manager" && otherManagers.length === 0 };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async listUserRequests(userId: string): Promise<UserMembershipRequest[]> {
