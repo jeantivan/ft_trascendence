@@ -117,6 +117,24 @@ describe("PrismaClubExit.leave", () => {
     expect(seen).toEqual([{ userId: athlete, memberships: 0, groupMembers: 0 }]);
   });
 
+  it("revokes the club's pending invitations to the user, and only those", async () => {
+    const [manager, athlete] = [await createUser(), await createUser()];
+    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+    const other = await createClub([[manager, "manager"]]);
+    const invite = (orgId: string, status: "pending" | "rejected") =>
+      prisma.membershipRequest.create({ data: { orgId, userId: athlete, kind: "invite", status, createdBy: manager } });
+    const pending = await invite(club.orgId, "pending");
+    const rejected = await invite(club.orgId, "rejected");
+    const inOther = await invite(other.orgId, "pending");
+
+    await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+    const statusOf = async (id: string) => (await prisma.membershipRequest.findUniqueOrThrow({ where: { id } })).status;
+    expect(await statusOf(pending.id)).toBe("revoked");
+    expect(await statusOf(rejected.id)).toBe("rejected");
+    expect(await statusOf(inOther.id)).toBe("pending");
+  });
+
   describe("spots in Events", () => {
     const exitAt = new Date(Date.now() + 48 * HOUR);
 
@@ -262,6 +280,22 @@ describe("PrismaClubExit.expel", () => {
 
     expect(await spotStatus(eventId, athlete)).toBe("withdrawn");
     expect((await chatOf(eventId, athlete))?.removedAt).not.toBeNull();
+  });
+
+  it("revokes the expelled user's pending invitations from the club", async () => {
+    const [manager, athlete] = [await createUser(), await createUser()];
+    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+    const invitation = await prisma.membershipRequest.create({
+      data: { orgId: club.orgId, userId: athlete, kind: "invite", status: "pending", createdBy: manager },
+    });
+
+    await new PrismaClubExit(prisma, { notify: fakeNotify().notify }).expel(
+      { id: manager, role: "manager" },
+      club.orgId,
+      athlete,
+    );
+
+    expect((await prisma.membershipRequest.findUniqueOrThrow({ where: { id: invitation.id } })).status).toBe("revoked");
   });
 
   async function auditRows(targetId: string) {
