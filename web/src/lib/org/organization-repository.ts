@@ -162,6 +162,16 @@ export interface MembershipRequestDetail {
   createdAt: Date;
 }
 
+// A user's own invitation or request, with the club's name for the /club view
+export interface UserMembershipRequest {
+  id: string;
+  orgId: string;
+  orgName: string;
+  kind: MembershipRequestKind;
+  status: MembershipRequestStatus;
+  createdAt: Date;
+}
+
 export interface OrganizationRepository {
   // Every club, for the catalog
   listCatalog(): Promise<OrganizationSummary[]>;
@@ -222,6 +232,11 @@ export interface OrganizationRepository {
   reviewRequest(orgId: string, requestId: string, approve: boolean): Promise<void>;
   // The club's pending requests (kind "request"), oldest first
   listPendingRequests(orgId: string): Promise<MembershipRequestDetail[]>;
+  // The user's own invitations and requests, of every kind and status, newest first
+  // Known limit: not paginated; a user has few (one pending per club).
+  listUserRequests(userId: string): Promise<UserMembershipRequest[]>;
+  // Whether the user is a member of any club (as Manager or athlete)
+  hasClub(userId: string): Promise<boolean>;
 }
 
 // Prisma errors carry a `code` (P2025, P2002...); checked structurally, like update does
@@ -627,6 +642,26 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
       where: { orgId: normalizeId(orgId), kind: "request", status: "pending" },
       orderBy: { createdAt: "asc" },
     });
+  }
+
+  async listUserRequests(userId: string): Promise<UserMembershipRequest[]> {
+    const rows = await this.db.membershipRequest.findMany({
+      where: { userId: normalizeId(userId) },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        orgId: true,
+        kind: true,
+        status: true,
+        createdAt: true,
+        organization: { select: { name: true } },
+      },
+    });
+    return rows.map(({ organization, ...request }) => ({ ...request, orgName: organization.name }));
+  }
+
+  async hasClub(userId: string): Promise<boolean> {
+    return (await this.db.membership.count({ where: { userId: normalizeId(userId) } })) > 0;
   }
 
   async update(orgId: string, data: OrganizationEdit): Promise<OrganizationDetail | null> {

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { requireAuth } from "@/lib/permissions/require-auth";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
-import type { OrganizationDetail, OrganizationSummary } from "./organization-repository";
+import type { OrganizationDetail, OrganizationSummary, UserMembershipRequest } from "./organization-repository";
 import { OrganizationNotFoundError, OrganizationService } from "./organization-service";
 
 // Club reads for Server Components (pages). Not a "use server" file: those exports would become
@@ -33,4 +33,26 @@ export async function getOrganizationPage(orgId: string): Promise<OrganizationDe
     }
     throw error;
   }
+}
+
+// The signed-in user's own rows. Invitations are the pending ones; sent requests keep every
+// status, so the user sees how each one ended
+export async function getMyMembershipRequests(): Promise<{
+  invitations: UserMembershipRequest[];
+  sentRequests: UserMembershipRequest[];
+}> {
+  // Outside try/catch: it redirects by throwing
+  const user = await requireAuth();
+  const rows = await organizationService.listUserRequests(user.id);
+  return {
+    invitations: rows.filter((r) => r.kind === "invite" && r.status === "pending"),
+    sentRequests: rows.filter((r) => r.kind === "request"),
+  };
+}
+
+// Whether the signed-in user is in any club: /club shows the no-club view to those who are not
+export async function userHasClub(): Promise<boolean> {
+  // Outside try/catch: it redirects by throwing
+  const user = await requireAuth();
+  return organizationService.hasClub(user.id);
 }
