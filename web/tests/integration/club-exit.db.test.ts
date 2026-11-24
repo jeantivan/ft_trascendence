@@ -31,6 +31,33 @@ async function createClub(members: [string, "athlete" | "manager"][]) {
   return { orgId: club.id, groupId: club.groups[0].id };
 }
 
+const repository = new PrismaEventRepository(prisma);
+const HOUR = 3_600_000;
+
+// An Event of the club that starts in 24 hours, with the user's spot request in the given state
+async function seedSpot(
+  orgId: string,
+  managerId: string,
+  userId: string,
+  status: "pending" | "approved" | "rejected",
+): Promise<string> {
+  const now = new Date();
+  const event = { title: "Rodaje", location: "Parque", startsAt: new Date(now.getTime() + 24 * HOUR), sessionId: null };
+  const eventId = eventIdOf(await repository.createEvent(orgId, managerId, event, now));
+  expect(await repository.requestSpot(orgId, eventId, userId, now)).toMatchObject({ ok: true });
+  if (status === "approved") expect(await repository.approveSpot(orgId, eventId, userId, now)).toMatchObject({ ok: true });
+  if (status === "rejected") expect(await repository.rejectSpot(orgId, eventId, userId, now)).toMatchObject({ ok: true });
+  return eventId;
+}
+
+async function spotStatus(eventId: string, userId: string) {
+  return (await prisma.spotRequest.findUnique({ where: { eventId_userId: { eventId, userId } } }))?.status;
+}
+
+function chatOf(eventId: string, userId: string) {
+  return prisma.conversationParticipant.findFirst({ where: { userId, conversation: { eventId } } });
+}
+
 afterEach(async () => {
   await prisma.organization.deleteMany({ where: { name: { startsWith: PREFIX } } });
   await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX } } });
@@ -89,26 +116,67 @@ describe("PrismaClubExit.leave", () => {
     expect(seen).toEqual([{ userId: athlete, memberships: 0, groupMembers: 0 }]);
   });
 
-  it("withdraws the user's spots in upcoming Events and takes them out of the chat", async () => {
-    const [manager, athlete] = [await createUser(), await createUser()];
-    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
-    const repository = new PrismaEventRepository(prisma);
-    const now = new Date();
-    const startsAt = new Date(now.getTime() + 24 * 3600_000);
-    const event = { title: "Rodaje", location: "Parque", startsAt, sessionId: null };
-    const pendingId = eventIdOf(await repository.createEvent(club.orgId, manager, event, now));
-    const approvedId = eventIdOf(await repository.createEvent(club.orgId, manager, event, now));
-    await repository.requestSpot(club.orgId, pendingId, athlete, now);
-    await repository.requestSpot(club.orgId, approvedId, athlete, now);
-    await repository.approveSpot(club.orgId, approvedId, athlete, now);
+  describe("spots in Events", () => {
+    const exitAt = new Date(Date.now() + 48 * HOUR);
 
-    await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+    it("withdraws pending and approved spots and takes the user out of the chat", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const pending = await seedSpot(club.orgId, manager, athlete, "pending");
+      const approved = await seedSpot(club.orgId, manager, athlete, "approved");
 
-    const requests = await prisma.spotRequest.findMany({ where: { userId: athlete } });
-    expect(requests.map((request) => request.status)).toEqual(["withdrawn", "withdrawn"]);
-    const chat = await prisma.conversationParticipant.findMany({ where: { userId: athlete } });
-    expect(chat).toHaveLength(1);
-    expect(chat[0].removedAt).not.toBeNull();
+      await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+      expect(await spotStatus(pending, athlete)).toBe("withdrawn");
+      expect(await spotStatus(approved, athlete)).toBe("withdrawn");
+      expect((await chatOf(approved, athlete))?.removedAt).not.toBeNull();
+    });
+
+    it("also withdraws a Manager's spots when the Manager leaves", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const eventId = await seedSpot(club.orgId, athlete, manager, "pending");
+
+      await new PrismaClubExit(prisma).leave(manager, club.orgId);
+
+      expect(await spotStatus(eventId, manager)).toBe("withdrawn");
+    });
+
+    it("leaves a rejected request rejected, and the spots in another club untouched", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const other = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const rejected = await seedSpot(club.orgId, manager, athlete, "rejected");
+      const inOther = await seedSpot(other.orgId, manager, athlete, "approved");
+
+      await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+      expect(await spotStatus(rejected, athlete)).toBe("rejected");
+      expect(await spotStatus(inOther, athlete)).toBe("approved");
+      expect((await chatOf(inOther, athlete))?.removedAt).toBeNull();
+    });
+
+    it("leaves an Event that has already started as it was", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const eventId = await seedSpot(club.orgId, manager, athlete, "approved");
+
+      await new PrismaClubExit(prisma, { now: () => exitAt }).leave(athlete, club.orgId);
+
+      expect(await spotStatus(eventId, athlete)).toBe("approved");
+      expect((await chatOf(eventId, athlete))?.removedAt).toBeNull();
+    });
+
+    it("leaves a cancelled Event as it was", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const eventId = await seedSpot(club.orgId, manager, athlete, "approved");
+      expect(await repository.cancelEvent(club.orgId, eventId, new Date())).toMatchObject({ ok: true });
+
+      await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+      expect(await spotStatus(eventId, athlete)).toBe("approved");
+    });
   });
 
   it("does not warn when an Athlete leaves a club that has no Manager", async () => {
@@ -167,21 +235,16 @@ describe("PrismaClubExit.expel", () => {
   it("withdraws the expelled user's spots in upcoming Events", async () => {
     const [manager, athlete] = [await createUser(), await createUser()];
     const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
-    const repository = new PrismaEventRepository(prisma);
-    const now = new Date();
-    const startsAt = new Date(now.getTime() + 24 * 3600_000);
-    const eventId = eventIdOf(
-      await repository.createEvent(club.orgId, manager, { title: "Rodaje", location: "Parque", startsAt, sessionId: null }, now),
+    const eventId = await seedSpot(club.orgId, manager, athlete, "approved");
+
+    await new PrismaClubExit(prisma, { notify: fakeNotify().notify }).expel(
+      { id: manager, role: "manager" },
+      club.orgId,
+      athlete,
     );
-    await repository.requestSpot(club.orgId, eventId, athlete, now);
-    await repository.approveSpot(club.orgId, eventId, athlete, now);
 
-    await new PrismaClubExit(prisma, { notify: fakeNotify().notify }).expel({ id: manager, role: "manager" }, club.orgId, athlete);
-
-    const request = await prisma.spotRequest.findFirstOrThrow({ where: { userId: athlete } });
-    expect(request.status).toBe("withdrawn");
-    const chat = await prisma.conversationParticipant.findFirstOrThrow({ where: { userId: athlete } });
-    expect(chat.removedAt).not.toBeNull();
+    expect(await spotStatus(eventId, athlete)).toBe("withdrawn");
+    expect((await chatOf(eventId, athlete))?.removedAt).not.toBeNull();
   });
 
   async function auditRows(targetId: string) {
