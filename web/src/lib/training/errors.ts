@@ -18,3 +18,12 @@ export class TrainingValidationError extends Error {
     this.name = "TrainingValidationError";
   }
 }
+
+export class TrainingConflictError extends Error {
+  constructor(
+    message = "Esta plantilla ya está asignada a este grupo para esa fecha"
+  ) {
+    super(message);
+    this.name = "TrainingConflictError";
+  }
+}

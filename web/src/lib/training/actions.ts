@@ -7,11 +7,12 @@ import { notify } from "@/lib/notifications/notify";
 import { trainingRepository } from "./prisma-training-repository";
 import { TrainingService } from "./training-service";
 import {
+  TrainingConflictError,
   TrainingForbiddenError,
   TrainingNotFoundError,
   TrainingValidationError,
 } from "./errors";
-import type { TrainingTemplateData } from "./types";
+import type { TrainingSessionData, TrainingTemplateData } from "./types";
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
@@ -33,7 +34,10 @@ async function runTrainingAction<T>(
     if (error instanceof TrainingForbiddenError) {
       forbidden();
     }
-    if (error instanceof TrainingValidationError) {
+    if (
+      error instanceof TrainingValidationError ||
+      error instanceof TrainingConflictError
+    ) {
       return { success: false, error: error.message };
     }
     throw error;
@@ -85,5 +89,15 @@ export async function deleteTrainingTemplateAction(
   const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.write"]);
   return runTrainingAction(() =>
     trainingService.deleteTemplate(user.id, orgId, templateId)
+  );
+}
+
+export async function assignTrainingTemplateAction(
+  orgId: string,
+  input: unknown
+): Promise<ActionResult<TrainingSessionData[]>> {
+  const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.write"]);
+  return runTrainingAction(() =>
+    trainingService.assignTemplateToGroup(user.id, orgId, input)
   );
 }

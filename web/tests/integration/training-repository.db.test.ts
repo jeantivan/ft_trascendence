@@ -3,12 +3,16 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { PrismaTrainingRepository } from "@/lib/training/prisma-training-repository";
 import { notify } from "@/lib/notifications/notify";
-import { TrainingNotFoundError } from "@/lib/training/errors";
+import {
+  TrainingConflictError,
+  TrainingNotFoundError,
+} from "@/lib/training/errors";
 import { TrainingService } from "@/lib/training/training-service";
 import {
+  TRAINING_TEMPLATE_ASSIGNED,
   TRAINING_TEMPLATE_CREATED,
-  TRAINING_TEMPLATE_UPDATED,
   TRAINING_TEMPLATE_DELETED,
+  TRAINING_TEMPLATE_UPDATED,
 } from "@/lib/training/types";
 import { runTrainingRepositoryContract } from "../support/training-repository-contract";
 
@@ -23,6 +27,8 @@ describe("Integration: PrismaTrainingRepository", () => {
   let manager2Id: string;
   let athleteId: string;
   let groupId: string;
+  let emptyGroupId: string;
+  let otherOrgGroupId: string;
 
   beforeEach(async () => {
     const club = await prisma.organization.create({
@@ -63,6 +69,16 @@ describe("Integration: PrismaTrainingRepository", () => {
     });
     groupId = group.id;
 
+    const emptyGroup = await prisma.group.create({
+      data: { orgId, name: `${PREFIX}EmptyGroup` },
+    });
+    emptyGroupId = emptyGroup.id;
+
+    const otherGroup = await prisma.group.create({
+      data: { orgId: otherOrgId, name: `${PREFIX}OtherGroup` },
+    });
+    otherOrgGroupId = otherGroup.id;
+
     await prisma.groupMember.create({
       data: { groupId, userId: athleteId },
     });
@@ -92,7 +108,9 @@ describe("Integration: PrismaTrainingRepository", () => {
     manager2Id,
     athleteId,
     groupId,
-    assignTemplateToGroup: async (targetGroupId, templateId) => {
+    emptyGroupId,
+    otherOrgGroupId,
+    seedTemplateAssignment: async (targetGroupId, templateId) => {
       await prisma.trainingSession.create({
         data: {
           orgId,
@@ -349,5 +367,208 @@ describe("Integration: PrismaTrainingRepository", () => {
       expect(rejected[0].reason).toBeInstanceOf(TrainingNotFoundError);
       expect(await repo.findById(created.id)).toBeNull();
     }
+  });
+
+  it("assigns template via TrainingService with real notify() and keeps copies after template update/delete", async () => {
+    const trainingService = new TrainingService(repo, notify);
+    const otherAthlete = await prisma.user.create({
+      data: { email: `${PREFIX}ath2@test.com`, nick: "Athlete2" },
+    });
+    await prisma.membership.create({
+      data: { orgId, userId: otherAthlete.id, role: "athlete" },
+    });
+
+    const created = await trainingService.createTemplate(manager1Id, orgId, {
+      name: "Club Block",
+      sessions: [
+        { sessionType: "rodaje", dayOffset: 0, targetDistanceM: 7000 },
+        { sessionType: "tirada_larga", dayOffset: 3, targetDistanceM: 18000 },
+      ],
+    });
+
+    const assigned = await trainingService.assignTemplateToGroup(
+      manager1Id,
+      orgId,
+      {
+        templateId: created.id,
+        groupId,
+        startDate: "2026-03-27",
+      }
+    );
+
+    expect(assigned).toHaveLength(2);
+    expect(assigned[0].scheduledAt).toEqual(new Date("2026-03-26T23:00:00.000Z"));
+    expect(assigned[1].scheduledAt).toEqual(new Date("2026-03-29T22:00:00.000Z"));
+
+    const athleteNotifications = await prisma.notification.findMany({
+      where: { userId: athleteId, type: TRAINING_TEMPLATE_ASSIGNED },
+    });
+    expect(athleteNotifications).toHaveLength(1);
+    expect(athleteNotifications[0].payload).toEqual({
+      orgId,
+      templateId: created.id,
+      groupId,
+    });
+
+    const nonMemberNotifications = await prisma.notification.findMany({
+      where: {
+        userId: { in: [otherAthlete.id, manager1Id, manager2Id] },
+        type: TRAINING_TEMPLATE_ASSIGNED,
+      },
+    });
+    expect(nonMemberNotifications).toHaveLength(0);
+
+    await trainingService.updateTemplate(manager1Id, orgId, created.id, {
+      name: "Modified Later",
+      sessions: [{ sessionType: "cuestas", dayOffset: 1, targetDistanceM: 3000 }],
+    });
+
+    const afterUpdate = await prisma.trainingSession.findMany({
+      where: { groupId },
+      orderBy: { scheduledAt: "asc" },
+    });
+    expect(afterUpdate).toHaveLength(2);
+    expect(afterUpdate[0].sessionType).toBe("rodaje");
+    expect(afterUpdate[0].targetDistanceM).toBe(7000);
+
+    await trainingService.deleteTemplate(manager1Id, orgId, created.id);
+
+    const afterDelete = await prisma.trainingSession.findMany({
+      where: { groupId },
+      orderBy: { scheduledAt: "asc" },
+    });
+    expect(afterDelete).toHaveLength(2);
+    expect(afterDelete[0].sourceTemplateId).toBeNull();
+    expect(afterDelete[1].sourceTemplateId).toBeNull();
+  });
+
+  it("serializes concurrent assignTemplateToGroup with delete and update without P2003", async () => {
+    for (let i = 0; i < 5; i++) {
+      const template = await repo.create({
+        orgId,
+        name: `Race Assign Delete ${i}`,
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 5000 }],
+      });
+
+      const [deleteResult, assignResult] = await Promise.allSettled([
+        repo.delete(orgId, template.id),
+        repo.assignTemplateToGroup({
+          orgId,
+          templateId: template.id,
+          groupId,
+          startDate: "2026-06-01",
+        }),
+      ]);
+
+      expect(deleteResult.status).toBe("fulfilled");
+      if (assignResult.status === "rejected") {
+        expect(assignResult.reason).toBeInstanceOf(TrainingNotFoundError);
+      } else {
+        expect(assignResult.value).toHaveLength(1);
+      }
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const template = await repo.create({
+        orgId,
+        name: `Race Assign Update ${i}`,
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 5000 }],
+      });
+
+      const [updateResult, assignResult] = await Promise.allSettled([
+        repo.update(orgId, template.id, {
+          name: `Updated ${i}`,
+          sessions: [
+            { sessionType: "intervalos", dayOffset: 1, targetDistanceM: 8000 },
+            { sessionType: "cuestas", dayOffset: 2, targetDistanceM: 4000 },
+          ],
+        }),
+        repo.assignTemplateToGroup({
+          orgId,
+          templateId: template.id,
+          groupId,
+          startDate: "2026-06-01",
+        }),
+      ]);
+
+      expect(updateResult.status).toBe("fulfilled");
+      expect(assignResult.status).toBe("fulfilled");
+      if (assignResult.status === "fulfilled") {
+        expect([1, 2]).toContain(assignResult.value.length);
+      }
+    }
+  });
+
+  it("handles concurrent assignTemplateToGroup and group delete without P2003", async () => {
+    for (let i = 0; i < 5; i++) {
+      const template = await repo.create({
+        orgId,
+        name: `Race Assign Group Delete ${i}`,
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
+      });
+      const tempGroup = await prisma.group.create({
+        data: { orgId, name: `${PREFIX}TempGroup-${i}` },
+      });
+
+      const [groupDeleteResult, assignResult] = await Promise.allSettled([
+        prisma.group.delete({ where: { id: tempGroup.id } }),
+        repo.assignTemplateToGroup({
+          orgId,
+          templateId: template.id,
+          groupId: tempGroup.id,
+          startDate: "2026-06-01",
+        }),
+      ]);
+
+      expect(groupDeleteResult.status).toBe("fulfilled");
+      if (assignResult.status === "rejected") {
+        expect(assignResult.reason).toBeInstanceOf(TrainingNotFoundError);
+      } else {
+        expect(assignResult.value).toHaveLength(1);
+      }
+    }
+  });
+
+  it("serializes concurrent identical assignTemplateToGroup calls so only one copy and notification batch is created (#238 row 10)", async () => {
+    const trainingService = new TrainingService(repo, notify);
+    const template = await trainingService.createTemplate(manager1Id, orgId, {
+      name: "Double Click Protection",
+      sessions: [
+        { sessionType: "rodaje", dayOffset: 0, targetDistanceM: 7000 },
+        { sessionType: "cuestas", dayOffset: 2, targetDistanceM: 4000 },
+      ],
+    });
+
+    const results = await Promise.allSettled([
+      trainingService.assignTemplateToGroup(manager1Id, orgId, {
+        templateId: template.id,
+        groupId,
+        startDate: "2026-06-15",
+      }),
+      trainingService.assignTemplateToGroup(manager1Id, orgId, {
+        templateId: template.id,
+        groupId,
+        startDate: "2026-06-15",
+      }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(TrainingConflictError);
+
+    const sessions = await prisma.trainingSession.findMany({
+      where: { orgId, groupId, sourceTemplateId: template.id },
+    });
+    expect(sessions).toHaveLength(2);
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId: athleteId, type: TRAINING_TEMPLATE_ASSIGNED },
+    });
+    expect(notifications).toHaveLength(1);
   });
 });

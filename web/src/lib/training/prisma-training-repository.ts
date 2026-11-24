@@ -1,19 +1,24 @@
 import { prisma } from "@/lib/prisma";
 import { isDbId } from "@/lib/permissions/is-db-id";
 import { normalizeId } from "@/lib/org/schemas";
+import { computeScheduledAtUtc } from "@/lib/training/units";
 import type {
   Prisma,
   PrismaClient,
   MembershipRole,
   SessionType,
 } from "@/generated/prisma/client";
-import { TrainingNotFoundError } from "./errors";
+import { isDuplicateTemplateAssignment } from "./duplicate-assignment";
+import { TrainingConflictError, TrainingNotFoundError } from "./errors";
 import type {
-  TrainingRepository,
-  TrainingTemplateData,
+  AssignTrainingTemplateInput,
   CreateTrainingTemplateInput,
-  UpdateTrainingTemplateInput,
+  TrainingAssignCallback,
   TrainingMutationCallback,
+  TrainingRepository,
+  TrainingSessionData,
+  TrainingTemplateData,
+  UpdateTrainingTemplateInput,
 } from "./types";
 
 type PrismaTemplateWithSessions = {
@@ -48,28 +53,76 @@ function toTemplateData(template: PrismaTemplateWithSessions): TrainingTemplateD
   };
 }
 
-// Locks the template row inside the transaction (like a row-level mutex) so concurrent
-// updates or deletes serialize instead of hitting P2002, P2003, or P2025 under READ COMMITTED.
-// Uses FOR NO KEY UPDATE on update so FK checks (FOR KEY SHARE) on sessions.source_template_id
-// do not wait, and FOR UPDATE on delete because removing the row invalidates its primary key.
+function toSessionData(row: TrainingSessionData): TrainingSessionData {
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    origin: row.origin,
+    sessionType: row.sessionType,
+    targetDistanceM: row.targetDistanceM,
+    targetDurationS: row.targetDurationS,
+    targetPaceSPerKm: row.targetPaceSPerKm,
+    scheduledAt: row.scheduledAt,
+    groupId: row.groupId,
+    athleteId: row.athleteId,
+    sourceTemplateId: row.sourceTemplateId,
+  };
+}
+
+// Locks the template row inside the transaction so concurrent updates/deletes/assignments
+// serialize cleanly without P2002, P2003, or P2025 under READ COMMITTED.
+// - "update": FOR NO KEY UPDATE (allows external FOR KEY SHARE FK checks while blocking updates/deletes/assigns)
+// - "delete": FOR UPDATE (blocks FK references while removing the primary key)
+// - "assign": FOR SHARE (allows concurrent assignments while waiting for update/delete)
 async function lockTemplate(
   tx: Prisma.TransactionClient,
   orgId: string,
   id: string,
-  mode: "update" | "delete"
+  mode: "update" | "delete" | "assign"
 ): Promise<void> {
   if (!isDbId(orgId) || !isDbId(id)) {
     throw new TrainingNotFoundError();
   }
   const normalizedId = normalizeId(id);
-  const rows =
-    mode === "update"
-      ? await tx.$queryRaw<{ id: string; org_id: string }[]>`
-          SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR NO KEY UPDATE
-        `
-      : await tx.$queryRaw<{ id: string; org_id: string }[]>`
-          SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR UPDATE
-        `;
+  let rows: { id: string; org_id: string }[];
+  switch (mode) {
+    case "update":
+      rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+        SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR NO KEY UPDATE
+      `;
+      break;
+    case "assign":
+      rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+        SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR SHARE
+      `;
+      break;
+    case "delete":
+      rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+        SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR UPDATE
+      `;
+      break;
+  }
+  if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
+    throw new TrainingNotFoundError();
+  }
+}
+
+// Always acquire after lockTemplate so lock ordering stays consistent (templates -> groups).
+// Decision (#238 row 10): uses FOR NO KEY UPDATE so concurrent assignments to the same group
+// serialize and the duplicate check sees committed rows from an earlier click/retry, while
+// remaining compatible with external FOR KEY SHARE FK checks (e.g. adding GroupMembers) and
+// still serializing with a concurrent group delete (FOR UPDATE).
+async function lockGroupForAssign(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  groupId: string
+): Promise<void> {
+  if (!isDbId(orgId) || !isDbId(groupId)) {
+    throw new TrainingNotFoundError();
+  }
+  const rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+    SELECT id, org_id FROM groups WHERE id = ${normalizeId(groupId)}::uuid FOR NO KEY UPDATE
+  `;
   if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
     throw new TrainingNotFoundError();
   }
@@ -273,6 +326,105 @@ export class PrismaTrainingRepository implements TrainingRepository {
         where: { id: normalizedId },
       });
       await afterWrite?.(normalizedId, tx);
+    });
+  }
+
+  async assignTemplateToGroup(
+    input: AssignTrainingTemplateInput,
+    afterAssign?: TrainingAssignCallback
+  ): Promise<TrainingSessionData[]> {
+    if (
+      !isDbId(input.orgId) ||
+      !isDbId(input.templateId) ||
+      !isDbId(input.groupId)
+    ) {
+      throw new TrainingNotFoundError();
+    }
+    const normalizedOrgId = normalizeId(input.orgId);
+    const normalizedTemplateId = normalizeId(input.templateId);
+    const normalizedGroupId = normalizeId(input.groupId);
+
+    return await this.db.$transaction(async (tx) => {
+      // Lock template then group in fixed order so concurrent delete/update and double-submits serialize cleanly.
+      await lockTemplate(tx, normalizedOrgId, normalizedTemplateId, "assign");
+      await lockGroupForAssign(tx, normalizedOrgId, normalizedGroupId);
+
+      const org = await tx.organization.findUnique({
+        where: { id: normalizedOrgId },
+        select: { timezone: true },
+      });
+      if (!org) {
+        throw new TrainingNotFoundError();
+      }
+
+      const templateSessions = await tx.templateSession.findMany({
+        where: { templateId: normalizedTemplateId },
+        orderBy: { position: "asc" },
+      });
+
+      const plannedSessions = templateSessions.map((s) => ({
+        orgId: normalizedOrgId,
+        origin: "template" as const,
+        sessionType: s.sessionType,
+        targetDistanceM: s.targetDistanceM,
+        targetDurationS: s.targetDurationS,
+        targetPaceSPerKm: s.targetPaceSPerKm,
+        scheduledAt: computeScheduledAtUtc(
+          input.startDate,
+          s.dayOffset,
+          org.timezone
+        ),
+        groupId: normalizedGroupId,
+        athleteId: null,
+        sourceTemplateId: normalizedTemplateId,
+      }));
+
+      if (plannedSessions.length > 0) {
+        const uniqueDates = Array.from(
+          new Map(
+            plannedSessions.map((s) => [s.scheduledAt.getTime(), s.scheduledAt])
+          ).values()
+        );
+        const existingSessions = await tx.trainingSession.findMany({
+          where: {
+            orgId: normalizedOrgId,
+            groupId: normalizedGroupId,
+            sourceTemplateId: normalizedTemplateId,
+            origin: "template",
+            scheduledAt: { in: uniqueDates },
+          },
+          select: { scheduledAt: true, sessionType: true },
+        });
+        if (isDuplicateTemplateAssignment(plannedSessions, existingSessions)) {
+          throw new TrainingConflictError();
+        }
+      }
+
+      const created = await tx.trainingSession.createManyAndReturn({
+        data: plannedSessions,
+      });
+
+      const groupAthletes = await tx.groupMember.findMany({
+        where: {
+          groupId: normalizedGroupId,
+          user: {
+            memberships: {
+              some: {
+                orgId: normalizedOrgId,
+                role: "athlete",
+              },
+            },
+          },
+        },
+        select: { userId: true },
+      });
+
+      await afterAssign?.(
+        groupAthletes.map((m) => m.userId),
+        tx
+      );
+
+      return created.map(toSessionData);
     });
   }
 }

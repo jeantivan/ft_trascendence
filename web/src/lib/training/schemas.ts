@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SessionType } from "@/generated/prisma/enums";
+import { idSchema } from "@/lib/org/schemas";
 import type { RpeValue } from "./rpe";
 
 export const POSTGRES_INT_MAX = 2_147_483_647;
@@ -56,6 +57,24 @@ export const trainingTemplateSchema = z
 export type TrainingTemplateInput = z.infer<typeof trainingTemplateSchema>;
 export type NormalizedTemplateSessionInput =
   TrainingTemplateInput["sessions"][number];
+
+export const assignTrainingTemplateSchema = z
+  .object({
+    templateId: idSchema,
+    groupId: idSchema,
+    startDate: z
+      .string()
+      .trim()
+      .pipe(z.iso.date("Fecha inválida (usa YYYY-MM-DD válido)"))
+      .refine((value) => Number(value.slice(0, 4)) >= 1970, {
+        message: "El año debe ser igual o posterior a 1970",
+      }),
+  })
+  .strict();
+
+export type AssignTrainingTemplatePayload = z.infer<
+  typeof assignTrainingTemplateSchema
+>;
 
 export const incompletionReasonSchema = z.enum([
   "time_constraints",
