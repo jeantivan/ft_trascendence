@@ -10,7 +10,7 @@ Every command is a target of the `Makefile`. Run them from the repository root. 
 | `make dev` | Development mode with hot reload: edits in `web/` show up without rebuilding. It removes the old `app` container with its `node_modules` volume first, so new dependencies are installed every time. Loads the demo data by itself at start. Use `make logs` to see the output. |
 | `make down` | Stops and removes the containers. The database data is kept. |
 | `make clean` | Same as `make down`. |
-| `make fclean` | `make down` plus removing the volumes and the images of this project. **Deletes the database data.** |
+| `make fclean` | Removes everything the project created: the containers and the network; the volumes, that is **the database, the uploaded files** and the HTTPS certificate (the next start makes a new one); and the images it built (`app`, `migrate`, `nginx` and `transcendence-app-dev`), plus the old untagged versions of those images that rebuilding left behind (about 1.5 GB each). Those untagged versions are found by the project names `transcendence` and `transcendence-test`, which every clone on the computer shares, so the ones from other clones are removed too. `transcendence-app-dev` is the `make dev` / `make test` image, shared by every clone on the computer, so it is removed for all of them (the next `make dev` or `make test` rebuilds it). Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them. |
 | `make re` | `make clean` and then `make`. Sequential on purpose: with `make -j` both could run at once. |
 
 If `make` or `make dev` fails to start, it prints the last lines of the `migrate` container (where the reason usually is) and explains it when PostgreSQL rejected the password.
@@ -43,7 +43,7 @@ If `make` or `make dev` fails to start, it prints the last lines of the `migrate
 
 | Command | What it does |
 |---|---|
-| `make env` | Creates `.env` or adds the variables it is missing, and generates the secrets that are empty. The other targets call it, so you rarely run it by hand. |
+| `make env` | Creates `.env` or adds the variables it is missing, and generates the secrets that are empty. `make`, `make dev`, `make seed`, `make test` and `make check-compose` call it, so you rarely run it by hand. |
 
 ## Variables
 
