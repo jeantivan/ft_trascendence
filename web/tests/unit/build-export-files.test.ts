@@ -6,6 +6,7 @@ import {
   type ExportAccountSource,
   type ExportMessageSource,
   type ExportProfileSource,
+  type ExportSessionLogSource,
   type ExportSessionSource,
   type ExportUserRepository,
 } from "@/lib/gdpr/export/build-export-files";
@@ -29,6 +30,7 @@ function repositoryWith(
   account: ExportAccountSource | null = emptyAccount,
   accessLog: AccessLogEntry[] = [],
   messages: ExportMessageSource[] = [],
+  sessionLogs: ExportSessionLogSource[] = [],
 ): ExportUserRepository {
   return {
     findProfile: async () => user,
@@ -36,6 +38,7 @@ function repositoryWith(
     findSessions: async () => sessions,
     findAccessLog: async () => accessLog,
     findMessages: async () => messages,
+    findSessionLogs: async () => sessionLogs,
   };
 }
 
@@ -60,6 +63,11 @@ async function sessionsCsvOf(sessions: ExportSessionSource[]) {
 async function messagesCsvOf(messages: ExportMessageSource[]) {
   const files = await buildExportFiles(athlete.id, repositoryWith(athlete, [], emptyAccount, [], messages), NOW);
   return files!.find((file) => file.name === "messages.csv")!.content;
+}
+
+async function sessionLogsCsvOf(sessionLogs: ExportSessionLogSource[]) {
+  const files = await buildExportFiles(athlete.id, repositoryWith(athlete, [], emptyAccount, [], [], sessionLogs), NOW);
+  return files!.find((file) => file.name === "session_logs.csv")!.content;
 }
 
 const athlete: ExportProfileSource = {
@@ -157,10 +165,11 @@ describe("buildExportFiles", () => {
   it("incluye un README.txt que dice qué contiene el ZIP y qué no", async () => {
     const files = await buildExportFiles(athlete.id, repositoryWith(athlete), NOW);
 
-    expect(files!.map((file) => file.name)).toEqual(["data.json", "sessions.csv", "messages.csv", "README.txt"]);
+    expect(files!.map((file) => file.name)).toEqual(["data.json", "sessions.csv", "messages.csv", "session_logs.csv", "README.txt"]);
     const readme = files!.find((file) => file.name === "README.txt")!.content;
     expect(readme).toContain("data.json");
     expect(readme).toContain("sessions.csv");
+    expect(readme).toContain("session_logs.csv: lo que registraste en cada sesión");
     expect(readme).toContain("messages.csv: los mensajes que escribiste");
     expect(readme).toContain("aparecen con la fecha de borrado si aún los conservamos");
     expect(readme).toContain("2026-10-06 11:28 UTC");
@@ -272,6 +281,56 @@ describe("buildExportFiles", () => {
 
   it("messages.csv lleva solo la cabecera si el usuario no ha escrito mensajes", async () => {
     expect(await messagesCsvOf([])).toBe("message_id,conversation_id,kind,body,created_at,deleted_at\r\n");
+  });
+
+  const log: ExportSessionLogSource = {
+    sessionId: "88888888-8888-4888-8888-888888888888",
+    completed: true,
+    rpe: 7,
+    distanceM: 10200,
+    durationS: 3600,
+    performedAt: new Date("2026-10-01T07:30:00.789Z"),
+    extra: { avg_heart_rate_bpm: 148, max_heart_rate_bpm: 175 },
+  };
+
+  it("session_logs.csv lleva la cabecera de la spec y una fila por registro, con la fecha sin milisegundos", async () => {
+    const incomplete: ExportSessionLogSource = {
+      ...log,
+      sessionId: "99999999-9999-4999-8999-999999999999",
+      completed: false,
+      rpe: 5,
+      distanceM: null,
+      durationS: 600,
+      performedAt: new Date("2026-10-02T18:15:00.000Z"),
+      extra: { incompletion_reason: "time_constraints" },
+    };
+
+    expect(await sessionLogsCsvOf([log, incomplete])).toBe(
+      [
+        "session_id,completed,rpe,distance_m,duration_s,performed_at,incompletion_reason,avg_heart_rate_bpm,max_heart_rate_bpm",
+        `${log.sessionId},true,7,10200,3600,2026-10-01T07:30:00Z,,148,175`,
+        `${incomplete.sessionId},false,5,,600,2026-10-02T18:15:00Z,time_constraints,,`,
+        "",
+      ].join("\r\n"),
+    );
+  });
+
+  it("session_logs.csv deja vacías rpe y las frecuencias tras la purga, y el resto de columnas igual", async () => {
+    const purged: ExportSessionLogSource = { ...log, rpe: null, extra: null };
+
+    expect(await sessionLogsCsvOf([purged])).toContain(`${log.sessionId},true,,10200,3600,2026-10-01T07:30:00Z,,,\r\n`);
+  });
+
+  it("session_logs.csv deja vacías las tres columnas de extra si extra no cumple el esquema", async () => {
+    const wrong: ExportSessionLogSource = { ...log, extra: { incompletion_reason: "otra cosa", notes: "texto libre" } };
+
+    expect(await sessionLogsCsvOf([wrong])).toContain(`${log.sessionId},true,7,10200,3600,2026-10-01T07:30:00Z,,,\r\n`);
+  });
+
+  it("session_logs.csv lleva solo la cabecera si el usuario no tiene registros", async () => {
+    expect(await sessionLogsCsvOf([])).toBe(
+      "session_id,completed,rpe,distance_m,duration_s,performed_at,incompletion_reason,avg_heart_rate_bpm,max_heart_rate_bpm\r\n",
+    );
   });
 
   it("devuelve null si el usuario no existe", async () => {

@@ -8,6 +8,7 @@ import type {
 } from "@/generated/prisma/client";
 import type { AccessLogEntry } from "@/lib/gdpr/audit";
 import { toCsv } from "@/lib/gdpr/export/csv";
+import { sessionLogExtraSchema } from "@/lib/training/schemas";
 import type { ExportFile } from "@/lib/gdpr/export/write-export-zip";
 
 // What the export may read about a user. The repository selects exactly these
@@ -49,6 +50,19 @@ export type ExportMessageSource = {
   deletedAt: Date | null;
 };
 
+// One row of session_logs.csv: what the user logged, never the logs of other athletes.
+// rpe and extra are null after the health purge (#131); extra is read with the Zod schema
+// of #141 when the CSV is built, so the repository does not need to know its keys
+export type ExportSessionLogSource = {
+  sessionId: string;
+  completed: boolean;
+  rpe: number | null;
+  distanceM: number | null;
+  durationS: number | null;
+  performedAt: Date;
+  extra: unknown;
+};
+
 // The rest of data.json. Nothing of other people is selected: no manager_id, no id, nick or
 // email of a contact, no notification payload (docs/gdpr/export-spec.md, section 3.1).
 export type ExportAccountSource = {
@@ -87,6 +101,9 @@ export type ExportUserRepository = {
   // filtered by removedAt or current membership (docs/gdpr/export-spec.md, section 3.4),
   // ordered by date
   findMessages(userId: string): Promise<ExportMessageSource[]>;
+  // Every log the user wrote, ordered by date. Only hers: a group session holds the logs of
+  // other athletes too
+  findSessionLogs(userId: string): Promise<ExportSessionLogSource[]>;
   // Actions a Manager or an Admin took on the user, oldest first. Already shaped for the
   // export: no actor id
   findAccessLog(userId: string): Promise<AccessLogEntry[]>;
@@ -112,6 +129,7 @@ export async function buildExportFiles(
   if (account === null) return null;
   const sessions = await repository.findSessions(userId);
   const messages = await repository.findMessages(userId);
+  const sessionLogs = await repository.findSessionLogs(userId);
   const accessLog = await repository.findAccessLog(userId);
 
   const data = {
@@ -185,6 +203,7 @@ export async function buildExportFiles(
     { name: "data.json", content: JSON.stringify(data, null, 2) },
     { name: "sessions.csv", content: buildSessionsCsv(sessions) },
     { name: "messages.csv", content: buildMessagesCsv(messages) },
+    { name: "session_logs.csv", content: buildSessionLogsCsv(sessionLogs) },
     { name: "README.txt", content: buildReadme(profile.email, now) },
   ];
 }
@@ -218,6 +237,38 @@ function buildSessionsCsv(sessions: ExportSessionSource[]): string {
   );
 }
 
+function buildSessionLogsCsv(sessionLogs: ExportSessionLogSource[]): string {
+  return toCsv(
+    [
+      "session_id",
+      "completed",
+      "rpe",
+      "distance_m",
+      "duration_s",
+      "performed_at",
+      "incompletion_reason",
+      "avg_heart_rate_bpm",
+      "max_heart_rate_bpm",
+    ],
+    sessionLogs.map((sessionLog) => {
+      // A null or invalid extra leaves its three cells empty: one bad row must not block the export
+      const parsed = sessionLogExtraSchema.safeParse(sessionLog.extra);
+      const extra = parsed.success ? parsed.data : {};
+      return [
+        sessionLog.sessionId,
+        sessionLog.completed,
+        sessionLog.rpe,
+        sessionLog.distanceM,
+        sessionLog.durationS,
+        toExportDate(sessionLog.performedAt),
+        extra.incompletion_reason,
+        extra.avg_heart_rate_bpm,
+        extra.max_heart_rate_bpm,
+      ];
+    }),
+  );
+}
+
 function buildMessagesCsv(messages: ExportMessageSource[]): string {
   return toCsv(
     ["message_id", "conversation_id", "kind", "body", "created_at", "deleted_at"],
@@ -248,6 +299,9 @@ function buildReadme(email: string, now: Date): string {
     "  grupos que dejaste si registraste la sesión), una fila por sesión",
     "- messages.csv: los mensajes que escribiste (los borrados por moderación",
     "  aparecen con la fecha de borrado si aún los conservamos)",
+    "- session_logs.csv: lo que registraste en cada sesión (completada, RPE,",
+    "  distancia, duración y frecuencia cardíaca); tras borrar tus datos de salud,",
+    "  el RPE y la frecuencia cardíaca salen vacíos",
     "",
     "ZONA HORARIA: UTC",
     "",

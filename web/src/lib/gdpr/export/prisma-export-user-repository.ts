@@ -185,6 +185,24 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
       return messages.map(({ conversation, ...message }) => ({ ...message, kind: conversation.kind }));
     },
 
+    // Her own logs only (athleteId), whatever the session: the unique [sessionId, athleteId]
+    // gives one row per session. The extra column goes out raw: the CSV reads it with the Zod schema
+    async findSessionLogs(userId) {
+      return db.sessionLog.findMany({
+        where: { athleteId: userId },
+        select: {
+          sessionId: true,
+          completed: true,
+          rpe: true,
+          distanceM: true,
+          durationS: true,
+          performedAt: true,
+          extra: true,
+        },
+        orderBy: [{ performedAt: "asc" }, { id: "asc" }],
+      });
+    },
+
     async findAccessLog(userId) {
       return listAccessesToUser(db, userId);
     },
