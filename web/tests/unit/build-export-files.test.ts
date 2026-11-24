@@ -169,7 +169,12 @@ describe("buildExportFiles", () => {
     const readme = files!.find((file) => file.name === "README.txt")!.content;
     expect(readme).toContain("data.json");
     expect(readme).toContain("sessions.csv");
-    expect(readme).toContain("session_logs.csv: lo que registraste en cada sesión");
+    expect(readme).toContain("session_logs.csv: resultados (completada, RPE, distancia, duración)");
+    expect(readme).toContain("rpe: escala 1-10 (percepción de esfuerzo); vacío si lo borraste");
+    expect(readme).toContain("avg_heart_rate_bpm: frecuencia cardíaca media (ppm); vacío si lo borraste");
+    for (const reason of ["time_constraints", "schedule_conflict", "route_unavailable", "equipment_issue", "other"]) {
+      expect(readme).toContain(`  - ${reason}: `);
+    }
     expect(readme).toContain("messages.csv: los mensajes que escribiste");
     expect(readme).toContain("aparecen con la fecha de borrado si aún los conservamos");
     expect(readme).toContain("2026-10-06 11:28 UTC");
