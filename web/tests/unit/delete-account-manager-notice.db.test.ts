@@ -80,6 +80,15 @@ describe("deleteAccount: aviso al Admin por club sin Manager", { timeout: 30_000
     expect(await notices()).toEqual([]);
   });
 
+  it("avisa si el único otro Manager del club está bloqueado", async () => {
+    await createClub(ORG_1, [MANAGER_A, MANAGER_B]);
+    await db.user.update({ where: { id: MANAGER_B }, data: { blockedAt: new Date() } });
+
+    await deleteWithFreshOtp(MANAGER_A, db);
+
+    expect(await notices()).toEqual([[ADMIN_1, ORG_1]]);
+  });
+
   it("con varios clubes avisa solo por los que quedan sin Manager", async () => {
     await createClub(ORG_1, [MANAGER_A]);
     await createClub(ORG_2, [MANAGER_A, MANAGER_B]);

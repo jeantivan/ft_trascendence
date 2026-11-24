@@ -6,9 +6,10 @@ export const CLUB_WITHOUT_MANAGER = "club_without_manager";
 // The callers take notify() as a port so tests can swap it for a fake with the same signature
 export type Notify = typeof realNotify;
 
-// Locks the clubs (by id, to acquire club locks in a consistent order), counts their Managers
-// other than leavingUserId and, for each club left without one, notifies every Admin except
-// leavingUserId. Never blocks: the caller removes the Manager either way.
+// Locks the clubs (by id, to acquire club locks in a consistent order), counts their active
+// (not blocked) Managers other than leavingUserId, as removeManager does, and, for each club
+// left without one, notifies every Admin except leavingUserId. Never blocks: the caller
+// removes the Manager either way.
 //
 // Call it inside the transaction that removes the Manager, after locking the user row (lock
 // order: users, then clubs, then conversations; ADR 0004). The count is made after the club
@@ -30,7 +31,7 @@ export async function notifyAdminsOfClubsWithoutManager(
   const withoutManager: string[] = [];
   for (const orgId of orgIds) {
     const others = await tx.membership.count({
-      where: { orgId, role: "manager", userId: { not: leavingUserId } },
+      where: { orgId, role: "manager", userId: { not: leavingUserId }, user: { blockedAt: null } },
     });
     if (others === 0) withoutManager.push(orgId);
   }

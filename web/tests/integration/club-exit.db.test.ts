@@ -127,6 +127,16 @@ describe("PrismaClubExit.leave", () => {
     expect(await prisma.membership.count({ where: { orgId: club.orgId } })).toBe(1);
   });
 
+  it("warns every Admin when the only other Manager is blocked", async () => {
+    const [admin, managerA, managerB] = [await createUser("admin"), await createUser(), await createUser()];
+    const club = await createClub([[managerA, "manager"], [managerB, "manager"]]);
+    await prisma.user.update({ where: { id: managerB }, data: { blockedAt: new Date() } });
+
+    await new PrismaClubExit(prisma).leave(managerA, club.orgId);
+
+    expect(await notices([admin], club.orgId)).toEqual([admin]);
+  });
+
   it("does not warn when another Manager stays", async () => {
     const [admin, managerA, managerB] = [await createUser("admin"), await createUser(), await createUser()];
     const club = await createClub([[managerA, "manager"], [managerB, "manager"]]);
@@ -191,6 +201,19 @@ describe("PrismaClubExit.expel", () => {
     expect(calls.filter((call) => call.type === "club_without_manager")).toEqual([]);
 
     await new PrismaClubExit(prisma, { notify }).expel({ id: admin, role: "admin" }, club.orgId, managerA);
+    expect(calls.filter((call) => call.type === "club_without_manager")).toEqual([
+      { userId: admin, type: "club_without_manager", payload: { orgId: club.orgId } },
+    ]);
+  });
+
+  it("warns every Admin when the expelled Manager leaves only a blocked one", async () => {
+    const [admin, managerA, managerB] = [await createUser("admin"), await createUser(), await createUser()];
+    const club = await createClub([[managerA, "manager"], [managerB, "manager"]]);
+    await prisma.user.update({ where: { id: managerB }, data: { blockedAt: new Date() } });
+    const { calls, notify } = fakeNotify();
+
+    await new PrismaClubExit(prisma, { notify }).expel({ id: admin, role: "admin" }, club.orgId, managerA);
+
     expect(calls.filter((call) => call.type === "club_without_manager")).toEqual([
       { userId: admin, type: "club_without_manager", payload: { orgId: club.orgId } },
     ]);
