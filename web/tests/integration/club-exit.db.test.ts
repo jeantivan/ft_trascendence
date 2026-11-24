@@ -2,6 +2,8 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { CannotExpelSelfError, NotMemberError, PrismaClubExit, type CancelPendingContacts } from "@/lib/org/club-exit";
+import { PrismaEventRepository } from "@/lib/events/event-repository";
+import { eventIdOf } from "../support/event-repository-contract";
 import { withLockHarness } from "../support/lock-harness";
 import type { Notify } from "@/lib/org/club-without-manager";
 
@@ -87,6 +89,28 @@ describe("PrismaClubExit.leave", () => {
     expect(seen).toEqual([{ userId: athlete, memberships: 0, groupMembers: 0 }]);
   });
 
+  it("withdraws the user's spots in upcoming Events and takes them out of the chat", async () => {
+    const [manager, athlete] = [await createUser(), await createUser()];
+    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+    const repository = new PrismaEventRepository(prisma);
+    const now = new Date();
+    const startsAt = new Date(now.getTime() + 24 * 3600_000);
+    const event = { title: "Rodaje", location: "Parque", startsAt, sessionId: null };
+    const pendingId = eventIdOf(await repository.createEvent(club.orgId, manager, event, now));
+    const approvedId = eventIdOf(await repository.createEvent(club.orgId, manager, event, now));
+    await repository.requestSpot(club.orgId, pendingId, athlete, now);
+    await repository.requestSpot(club.orgId, approvedId, athlete, now);
+    await repository.approveSpot(club.orgId, approvedId, athlete, now);
+
+    await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+    const requests = await prisma.spotRequest.findMany({ where: { userId: athlete } });
+    expect(requests.map((request) => request.status)).toEqual(["withdrawn", "withdrawn"]);
+    const chat = await prisma.conversationParticipant.findMany({ where: { userId: athlete } });
+    expect(chat).toHaveLength(1);
+    expect(chat[0].removedAt).not.toBeNull();
+  });
+
   it("does not warn when an Athlete leaves a club that has no Manager", async () => {
     const [admin, athlete] = [await createUser("admin"), await createUser()];
     const club = await createClub([[athlete, "athlete"]]);
@@ -138,6 +162,26 @@ describe("PrismaClubExit.expel", () => {
     expect(await prisma.membership.findMany({ where: { userId: athlete } })).toEqual([]);
     expect(await prisma.groupMember.findMany({ where: { userId: athlete } })).toEqual([]);
     expect(calls).toEqual([{ userId: athlete, type: "membership_removed", payload: { orgId: club.orgId } }]);
+  });
+
+  it("withdraws the expelled user's spots in upcoming Events", async () => {
+    const [manager, athlete] = [await createUser(), await createUser()];
+    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+    const repository = new PrismaEventRepository(prisma);
+    const now = new Date();
+    const startsAt = new Date(now.getTime() + 24 * 3600_000);
+    const eventId = eventIdOf(
+      await repository.createEvent(club.orgId, manager, { title: "Rodaje", location: "Parque", startsAt, sessionId: null }, now),
+    );
+    await repository.requestSpot(club.orgId, eventId, athlete, now);
+    await repository.approveSpot(club.orgId, eventId, athlete, now);
+
+    await new PrismaClubExit(prisma, { notify: fakeNotify().notify }).expel({ id: manager, role: "manager" }, club.orgId, athlete);
+
+    const request = await prisma.spotRequest.findFirstOrThrow({ where: { userId: athlete } });
+    expect(request.status).toBe("withdrawn");
+    const chat = await prisma.conversationParticipant.findFirstOrThrow({ where: { userId: athlete } });
+    expect(chat.removedAt).not.toBeNull();
   });
 
   async function auditRows(targetId: string) {

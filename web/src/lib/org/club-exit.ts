@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
 import { notify as realNotify } from "@/lib/notifications/notify";
+import { withdrawMemberSpots } from "@/lib/events/withdraw-member-spots";
 import { notifyAdminsOfClubsWithoutManager, type Notify } from "./club-without-manager";
 
 export const MEMBERSHIP_REMOVED = "membership_removed";
@@ -73,7 +74,8 @@ export class PrismaClubExit {
     return this.db.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
   }
 
-  // Removes the user from the club and its Groups; warns the Admins if it was the last Manager
+  // Removes the user from the club, its Groups and its upcoming Events; warns the Admins if it was the
+  // last Manager
   private async removeMember(tx: Prisma.TransactionClient, orgId: string, userId: string): Promise<void> {
     // Same order as account deletion and role changes: user row, then the club (ADR 0004).
     // FOR NO KEY UPDATE on the user: warning the Admins takes a KEY SHARE on their rows
@@ -86,6 +88,8 @@ export class PrismaClubExit {
     if (!membership) throw new NotMemberError();
     if (membership.role === "manager") await notifyAdminsOfClubsWithoutManager(tx, [orgId], userId, this.notify);
     await tx.groupMember.deleteMany({ where: { userId, group: { orgId } } });
+    // Pending and approved spots in Events that have not started, and their chats
+    await withdrawMemberSpots(tx, orgId, userId, new Date());
     await tx.membership.delete({ where: { userId_orgId: { userId, orgId } } });
     // After the removal, so its query already sees the updated Groups
     await this.cancelPendingContacts(tx, userId);
