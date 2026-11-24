@@ -69,16 +69,18 @@ check-compose: env
 	$(COMPOSE_DEV) config --quiet
 	$(COMPOSE_TEST) config --quiet
 
-# Run every test (normal and *.db.test.ts) in Docker against an empty test
+# Run every test (normal and *.db.test.ts, or only those in args) in Docker against an empty test
 # database (docker-compose.test.yml, #83). The EXIT trap removes db-test and test
 # whatever happens (tests fail, Ctrl+C), and make exits with the tests' result;
 # Ctrl+C only has to exit, then the EXIT trap cleans up once.
 # --volumes only removes this project's anonymous volumes (the database is in
 # memory): never pgdata. Safe with make dev running: it is another compose project.
-# ARGS limits the run to some files or tests, e.g. make test ARGS="tests/integration/x.db.test.ts".
+# Without args it runs every test. args limits the run to some files or tests, paths
+# relative to web/: make test args="tests/integration/x.db.test.ts". Only file paths and
+# vitest filters: the value goes through sh, so no shell characters (; $ '), see docs/testing.md.
 test: env
 	trap '$(COMPOSE_TEST) down --volumes --remove-orphans' EXIT; trap 'exit 130' INT TERM; \
-	TEST_ARGS='$(ARGS)' $(COMPOSE_TEST) run --build --rm test
+	TEST_ARGS='$(args)' $(COMPOSE_TEST) run --build --rm test
 
 # Check that nginx is the only way in, over HTTPS. Needs make or make dev running.
 test-nginx:

@@ -47,7 +47,7 @@ The passwords in `.env` are generated randomly the first time and are never prin
 | `make` | Production mode: builds the images and starts everything in the background |
 | `make dev` | Development mode: same, but `./web` is mounted and the app reloads on save; loads the demo data |
 | `make seed` | Loads the demo data with the app in `make` mode (demo users, Club Demo, sessions); safe to run twice |
-| `make test` | Runs every test in Docker against an empty test database ([docs/testing.md](docs/testing.md)) |
+| `make test` | Runs every test in Docker against an empty test database; `make test args="path"` runs only some ([docs/testing.md](docs/testing.md)) |
 | `make test-nginx` | Checks that NGINX is the only way in, over HTTPS (needs `make` or `make dev` running) |
 | `make migrate name=<name>` | Creates a Prisma migration from `web/prisma/schema.prisma` and applies it (needs `make dev` running) |
 | `make logs` / `make ps` | Follows the logs / lists the containers |
@@ -62,7 +62,7 @@ With rootless Docker (as on the 42 campus computers), `make dev` and `make test`
 ### Conventions
 - **Frontend tests**: automated frontend tests live in `web/tests/`, grouped by component or feature. Component tests go in `web/tests/components/` and import the code through the `@/` alias.
 - **Test mail inbox**: mail sent by the app goes to a test inbox at `/mailpit/`, and nothing leaves Docker. See [docs/mail.md](docs/mail.md).
-- **Running the tests**: `make test` runs every test in Docker against an empty PostgreSQL test database. See [docs/testing.md](docs/testing.md).
+- **Running the tests**: `make test` runs every test in Docker against an empty PostgreSQL test database (`args="path"` limits it to some). See [docs/testing.md](docs/testing.md).
 
 ## Resources
 - [Next.js Documentation](https://nextjs.org/docs)
