@@ -186,7 +186,7 @@ CONTENIDO:
 - sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de
   grupos que dejaste si registraste la sesión), una fila por sesión
 - session_logs.csv: resultados (completada, RPE, distancia, duración)
-- messages.csv: los mensajes que escribiste (los que borraste
+- messages.csv: los mensajes que escribiste (los borrados por moderación
   aparecen con la fecha de borrado si aún los conservamos)
 
 CAMPOS:

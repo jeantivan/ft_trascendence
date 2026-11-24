@@ -246,7 +246,7 @@ function buildReadme(email: string, now: Date): string {
     "  feedback recibido, contactos, notificaciones y registro de accesos",
     "- sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de",
     "  grupos que dejaste si registraste la sesión), una fila por sesión",
-    "- messages.csv: los mensajes que escribiste (los que borraste",
+    "- messages.csv: los mensajes que escribiste (los borrados por moderación",
     "  aparecen con la fecha de borrado si aún los conservamos)",
     "",
     "ZONA HORARIA: UTC",
