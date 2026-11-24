@@ -35,7 +35,7 @@ If `make` or `make dev` fails to start, it prints the last lines of the `migrate
 
 | Command | What it does |
 |---|---|
-| `make test` | Runs every test (normal and `*.db.test.ts`) in Docker against an empty PostgreSQL test database. See [testing.md](testing.md). It can run while `make dev` is up and never touches `pgdata`. |
+| `make test` | Runs every test (normal and `*.db.test.ts`) in Docker against an empty PostgreSQL test database. To run only some, pass `args` (lowercase, like `name` in `make migrate`): `make test args="tests/unit/training/rpe.test.ts"`. Paths are relative to `web/`, and only file paths and `-t "name"` filters work: no single quotes or shell characters (see [testing.md](testing.md)). It can run while `make dev` is up and never touches `pgdata`. |
 | `make test-nginx` | Checks that nginx is the only way in, over HTTPS. Needs `make` or `make dev` running. |
 | `make check-compose` | Checks that the three Compose setups (production, development, test) parse. The CI runs it too. |
 
