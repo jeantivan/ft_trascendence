@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { recordAdminAction } from "@/lib/gdpr/record-admin-action";
 import { notify as realNotify } from "@/lib/notifications/notify";
 import { notifyAdminsOfClubsWithoutManager, type Notify } from "./club-without-manager";
+import { cancelPendingContactsWithoutSharedGroup } from "../social/cancel-pending-contacts";
 
 export const MEMBERSHIP_REMOVED = "membership_removed";
 
@@ -22,12 +23,7 @@ export class CannotExpelSelfError extends Error {
   }
 }
 
-// Same signature as cancelPendingContactsWithoutSharedGroup of #154: deletes the user's pending
-// Contacts that no longer share a Group with the other person; returns how many.
 export type CancelPendingContacts = (tx: Prisma.TransactionClient, userId: string) => Promise<number>;
-
-// Stand-in until #154 is merged
-const cancelNothing: CancelPendingContacts = async () => 0;
 
 // Leaving a club (membership.leave) and expelling a member (member.expel), #150.
 // Precondition: callers check the permission first (requireOrgRole); this class does not.
@@ -39,7 +35,7 @@ export class PrismaClubExit {
     private readonly db: PrismaClient = prisma,
     ports: { cancelPendingContacts?: CancelPendingContacts; notify?: Notify } = {},
   ) {
-    this.cancelPendingContacts = ports.cancelPendingContacts ?? cancelNothing;
+    this.cancelPendingContacts = ports.cancelPendingContacts ?? cancelPendingContactsWithoutSharedGroup;
     this.notify = ports.notify ?? realNotify;
   }
 
