@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { requireAdmin } from "@/lib/permissions/require-admin";
 import { requireAuth } from "@/lib/permissions/require-auth";
@@ -394,6 +395,8 @@ export async function requestToJoinAction(orgId: string): Promise<MembershipRequ
   } catch (error) {
     return membershipRequestErrorResult(error, true);
   }
+  // The /club view shows these rows
+  revalidatePath("/club");
   return { success: true };
 }
 
@@ -413,6 +416,8 @@ export async function withdrawRequestAction(
   } catch (error) {
     return membershipRequestErrorResult(error, true);
   }
+  // The /club view shows these rows
+  revalidatePath("/club");
   return { success: true };
 }
 
@@ -433,5 +438,7 @@ export async function answerInvitationAction(
   } catch (error) {
     return membershipRequestErrorResult(error, true);
   }
+  // The /club view shows these rows
+  revalidatePath("/club");
   return { success: true };
 }

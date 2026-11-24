@@ -607,6 +607,48 @@ export function runOrganizationRepositoryContract(
 
         expect((await repo.listPendingRequests(orgId)).map((r) => r.id)).toEqual([first.id, last.id]);
       });
+
+      it("listUserRequests returns the user's own invitations and requests with the club name, of every status", async () => {
+        const { repo, orgId, managerId, userId, createUsers, createClub } = await setup();
+        const [other] = await createUsers(1);
+        const otherOrgId = await createClub(newClub({ members: 0 }));
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        const rejected = await repo.requestToJoin(userId, otherOrgId);
+        await repo.reviewRequest(otherOrgId, rejected.id, false);
+        await repo.requestToJoin(other, orgId);
+        const clubName = (id: string) => repo.listCatalog().then((clubs) => clubs.find((club) => club.id === id)?.name);
+
+        const own = await repo.listUserRequests(userId);
+
+        expect(own.map((r) => r.id).sort()).toEqual([invitation.id, rejected.id].sort());
+        expect(own.find((r) => r.id === invitation.id)).toMatchObject({
+          orgId,
+          orgName: await clubName(orgId),
+          kind: "invite",
+          status: "pending",
+        });
+        expect(own.find((r) => r.id === rejected.id)).toMatchObject({
+          orgId: otherOrgId,
+          orgName: await clubName(otherOrgId),
+          kind: "request",
+          status: "rejected",
+        });
+      });
+
+      it("hasClub is true for a member of any club and false for a user with none", async () => {
+        const { repo, managerId, userId, memberId } = await setup();
+
+        expect(await repo.hasClub(managerId)).toBe(true);
+        expect(await repo.hasClub(memberId)).toBe(true);
+        expect(await repo.hasClub(userId)).toBe(false);
+        expect(await repo.hasClub(UNKNOWN_ID)).toBe(false);
+      });
+
+      it("listUserRequests is empty for a user with none", async () => {
+        const { repo, userId } = await setup();
+
+        expect(await repo.listUserRequests(userId)).toEqual([]);
+      });
     });
 
     // Scheduled deletion (#217): both implementations count 30 days from `now`
