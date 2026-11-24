@@ -3,6 +3,7 @@ import { AccountBlockForm } from "@/components/admin/AccountBlockForm";
 import { AccountDeleteForm } from "@/components/admin/AccountDeleteForm";
 import { AccountNickForm } from "@/components/admin/AccountNickForm";
 import { AccountProfile } from "@/components/admin/AccountProfile";
+import { AccountRoleForm } from "@/components/admin/AccountRoleForm";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { getAccountForAdmin } from "@/lib/admin/queries";
@@ -31,11 +32,14 @@ export default async function AdminAccountPage({ params }: { params: Promise<{ i
         </h2>
         <AccountNickForm accountId={account.id} nick={account.nick} />
         {account.isSelf ? (
-          // Blocking yourself would lock you out of the panel; your own account is deleted
-          // with the email code (#34), never from here
-          <p className="text-sm text-text-secondary">Es tu cuenta: no puedes bloquearla ni borrarla desde aquí.</p>
+          // Removing your own Admin role or blocking yourself would lock you out of the panel;
+          // your own account is deleted with the email code (#34), never from here
+          <p className="text-sm text-text-secondary">
+            Es tu cuenta: no puedes quitarte el rol de administrador, bloquearla ni borrarla desde aquí.
+          </p>
         ) : (
           <>
+            <AccountRoleForm accountId={account.id} roleGlobal={account.roleGlobal} />
             <AccountBlockForm accountId={account.id} blockedAt={account.blockedAt} />
             <AccountDeleteForm accountId={account.id} />
           </>

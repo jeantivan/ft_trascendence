@@ -62,7 +62,8 @@ export type AccessLogEntry = {
 export async function listAccessesToUser(db: PrismaClient, subjectId: string): Promise<AccessLogEntry[]> {
   const rows = await db.auditLog.findMany({
     where: { subjectId, actorRole: { not: null }, action: { notIn: [...SELF_ACTIONS] } },
-    orderBy: { createdAt: "asc" },
+    // id breaks the tie between rows written in the same millisecond
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: { createdAt: true, action: true, resource: true, actorRole: true },
   });
 
