@@ -10,14 +10,22 @@ import { Select } from "@/components/ui/Select";
 import { assignTrainingTemplateAction } from "@/lib/training/actions";
 import type { GroupOption } from "@/lib/training/queries";
 import type { TrainingTemplateData } from "@/lib/training/types";
+import { getTrainingActionError } from "./action-error";
+
+export interface AssignmentFeedback {
+  templateName: string;
+  groupName: string;
+  startDate: string;
+}
 
 interface AssignTemplateModalProps {
   open: boolean;
   orgId: string;
   template: TrainingTemplateData | null;
   groups: GroupOption[];
+  defaultStartDate: string;
   onClose: () => void;
-  onAssigned: () => void;
+  onAssigned: (details: AssignmentFeedback) => void;
 }
 
 function formatGroupLabel(group: GroupOption): string {
@@ -25,23 +33,26 @@ function formatGroupLabel(group: GroupOption): string {
   return details ? `${group.name} — ${details}` : group.name;
 }
 
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function AssignTemplateModal({
   open,
   orgId,
   template,
   groups,
+  defaultStartDate,
   onClose,
   onAssigned,
 }: AssignTemplateModalProps) {
   const formId = useId();
   const [groupId, setGroupId] = useState(() => groups[0]?.id ?? "");
-  const [startDate, setStartDate] = useState(() => todayIsoDate());
+  const [startDate, setStartDate] = useState(defaultStartDate);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function handleSafeClose() {
+    if (!submitting) {
+      onClose();
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,8 +80,20 @@ export function AssignTemplateModal({
         return;
       }
 
-      onAssigned();
+      const selectedGroup = groups.find((group) => group.id === groupId);
+      onAssigned({
+        templateName: template.name,
+        groupName: selectedGroup?.name ?? "el grupo",
+        startDate,
+      });
       onClose();
+    } catch (actionError) {
+      setError(
+        getTrainingActionError(
+          actionError,
+          "No se pudo asignar la plantilla. Inténtalo de nuevo.",
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -79,16 +102,16 @@ export function AssignTemplateModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleSafeClose}
       title="Asignar plantilla a grupo"
       footer={
         groups.length === 0 ? (
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={handleSafeClose}>
             Cerrar
           </Button>
         ) : (
           <>
-            <Button variant="ghost" onClick={onClose} disabled={submitting}>
+            <Button variant="ghost" onClick={handleSafeClose} disabled={submitting}>
               Cancelar
             </Button>
             <Button type="submit" form={formId} disabled={submitting}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import type { SessionType } from "@/generated/prisma/client";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -25,6 +25,7 @@ import {
   parseKmToMeters,
   parsePaceToSecondsPerKm,
 } from "@/lib/training/units";
+import { getTrainingActionError } from "./action-error";
 import {
   recomputeSessionMetrics,
   type MetricField,
@@ -91,6 +92,7 @@ export function TemplateFormModal({
   onSaved,
 }: TemplateFormModalProps) {
   const formId = useId();
+  const nextSessionKeyRef = useRef(0);
 
   const [name, setName] = useState(() => template?.name ?? "");
   const [sessions, setSessions] = useState<SessionDraft[]>(() =>
@@ -98,6 +100,12 @@ export function TemplateFormModal({
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function handleSafeClose() {
+    if (!submitting) {
+      onClose();
+    }
+  }
 
   function updateSession(index: number, patch: Partial<SessionDraft>) {
     setSessions((prev) =>
@@ -194,6 +202,13 @@ export function TemplateFormModal({
 
       onSaved();
       onClose();
+    } catch (actionError) {
+      setError(
+        getTrainingActionError(
+          actionError,
+          "No se pudo guardar la plantilla. Inténtalo de nuevo.",
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -204,11 +219,11 @@ export function TemplateFormModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleSafeClose}
       title={title}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={submitting}>
+          <Button variant="ghost" onClick={handleSafeClose} disabled={submitting}>
             Cancelar
           </Button>
           <Button type="submit" form={formId} disabled={submitting}>
@@ -252,7 +267,7 @@ export function TemplateFormModal({
                 >
                   <Card
                     accent={row.sessionType}
-                    className="flex flex-col gap-3 rounded bg-surface-overlay p-4"
+                    className="flex flex-col gap-3 rounded p-4"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-heading text-label-badge text-text-primary">
@@ -262,7 +277,7 @@ export function TemplateFormModal({
                         <Button
                           variant="ghost"
                           className="px-3 text-body-sm"
-                          disabled={index === 0}
+                          disabled={submitting || index === 0}
                           onClick={() => moveSession(index, -1)}
                         >
                           Subir
@@ -270,7 +285,7 @@ export function TemplateFormModal({
                         <Button
                           variant="ghost"
                           className="px-3 text-body-sm"
-                          disabled={index === sessions.length - 1}
+                          disabled={submitting || index === sessions.length - 1}
                           onClick={() => moveSession(index, 1)}
                         >
                           Bajar
@@ -278,7 +293,7 @@ export function TemplateFormModal({
                         <Button
                           variant="destructive"
                           className="px-3 text-body-sm"
-                          disabled={sessions.length <= 1}
+                          disabled={submitting || sessions.length <= 1}
                           onClick={() => removeSession(index)}
                         >
                           Eliminar sesión
@@ -357,12 +372,14 @@ export function TemplateFormModal({
             <Button
               variant="ghost"
               className="gap-2 px-4"
-              onClick={() =>
+              disabled={submitting}
+              onClick={() => {
+                nextSessionKeyRef.current += 1;
                 setSessions((prev) => [
                   ...prev,
-                  makeEmptySession(crypto.randomUUID()),
-                ])
-              }
+                  makeEmptySession(`added-${nextSessionKeyRef.current}`),
+                ]);
+              }}
             >
               <Icon name="plus" size={18} />
               <span>Añadir sesión</span>

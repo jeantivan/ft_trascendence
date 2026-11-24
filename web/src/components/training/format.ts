@@ -17,13 +17,9 @@ export const SESSION_TYPE_LABELS: Record<SessionType, string> = {
 export const SESSION_TYPE_OPTIONS: ReadonlyArray<{
   value: SessionType;
   label: string;
-}> = [
-  { value: "rodaje", label: "Rodaje" },
-  { value: "intervalos", label: "Intervalos" },
-  { value: "cuestas", label: "Cuestas" },
-  { value: "tirada_larga", label: "Tirada larga" },
-  { value: "fartlek", label: "Fartlek" },
-];
+}> = (Object.entries(SESSION_TYPE_LABELS) as Array<[SessionType, string]>).map(
+  ([value, label]) => ({ value, label }),
+);
 
 export function formatSessionMetrics(session: TemplateSessionData): string {
   const parts: string[] = [];

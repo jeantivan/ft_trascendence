@@ -1,9 +1,11 @@
 import "server-only";
 import { notFound } from "next/navigation";
+import { normalizeId } from "@/lib/org/schemas";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { requireAuth } from "@/lib/permissions/require-auth";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
 import { prisma } from "@/lib/prisma";
+import { clubDateOf } from "@/lib/time/club-time";
 import { trainingRepository } from "./prisma-training-repository";
 import { TrainingService } from "./training-service";
 import type { TrainingTemplateData } from "./types";
@@ -29,9 +31,18 @@ export type TrainingPageData =
       role: "manager" | "athlete";
       templates: TrainingTemplateData[];
       groups: GroupOption[];
+      defaultStartDate: string;
     };
 
 const trainingService = new TrainingService(trainingRepository);
+
+function formatClubToday(timezone: string, now: Date = new Date()): string {
+  const today = clubDateOf(now, timezone);
+  const year = String(today.year).padStart(4, "0");
+  const month = String(today.month).padStart(2, "0");
+  const day = String(today.day).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function normalizeOrgIdParam(orgIdParam?: string | string[]): string | undefined {
   const raw = Array.isArray(orgIdParam) ? orgIdParam[0] : orgIdParam;
@@ -64,8 +75,7 @@ export async function getTrainingPageData(
     where: { userId: user.id },
     select: {
       orgId: true,
-      role: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, timezone: true } },
     },
     orderBy: { organization: { name: "asc" } },
   });
@@ -84,9 +94,20 @@ export async function getTrainingPageData(
     checkedRole = await requireTemplateReadRole(activeOrgId);
   }
 
-  const activeClub =
-    clubs.find((c) => c.id.toLowerCase() === activeOrgId.toLowerCase()) ?? clubs[0];
+  const normalizedActiveId = normalizeId(activeOrgId);
+  const activeMembership = memberships.find(
+    (m) => normalizeId(m.orgId) === normalizedActiveId,
+  );
+  if (!activeMembership) {
+    notFound();
+  }
+
+  const activeClub: ClubOption = {
+    id: activeMembership.orgId,
+    name: activeMembership.organization.name,
+  };
   const role = checkedRole ?? "athlete";
+  const defaultStartDate = formatClubToday(activeMembership.organization.timezone);
 
   const [templates, groups] = await Promise.all([
     trainingService.listTemplates(user.id, activeClub.id),
@@ -106,5 +127,6 @@ export async function getTrainingPageData(
     role,
     templates,
     groups,
+    defaultStartDate,
   };
 }

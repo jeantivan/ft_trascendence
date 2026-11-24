@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTrainingPageData } from "@/lib/training/queries";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { requireAuth } from "@/lib/permissions/require-auth";
@@ -57,6 +57,12 @@ const GROUP = {
 describe("getTrainingPageData", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-24T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns no-club when the user belongs to no organization and no orgId is provided", async () => {
@@ -71,8 +77,7 @@ describe("getTrainingPageData", () => {
       where: { userId: USER.id },
       select: {
         orgId: true,
-        role: true,
-        organization: { select: { name: true } },
+        organization: { select: { name: true, timezone: true } },
       },
       orderBy: { organization: { name: "asc" } },
     });
@@ -81,8 +86,8 @@ describe("getTrainingPageData", () => {
   it("picks the first club by name ASC and loads templates and groups for a manager", async () => {
     vi.mocked(requireAuth).mockResolvedValue(USER);
     vi.mocked(prisma.membership.findMany).mockResolvedValue([
-      { orgId: CLUB_A.id, role: "manager", organization: { name: CLUB_A.name } },
-      { orgId: CLUB_B.id, role: "athlete", organization: { name: CLUB_B.name } },
+      { orgId: CLUB_A.id, organization: { name: CLUB_A.name, timezone: "Europe/Madrid" } },
+      { orgId: CLUB_B.id, organization: { name: CLUB_B.name, timezone: "Europe/Madrid" } },
     ] as never);
     vi.mocked(requireOrgRole).mockResolvedValue({ user: USER, role: "manager" });
     listTemplates.mockResolvedValue([TEMPLATE]);
@@ -107,13 +112,14 @@ describe("getTrainingPageData", () => {
       role: "manager",
       templates: [TEMPLATE],
       groups: [GROUP],
+      defaultStartDate: "2026-11-24",
     });
   });
 
   it("loads only templates (and no groups) when active role is athlete", async () => {
     vi.mocked(requireAuth).mockResolvedValue(USER);
     vi.mocked(prisma.membership.findMany).mockResolvedValue([
-      { orgId: CLUB_B.id, role: "athlete", organization: { name: CLUB_B.name } },
+      { orgId: CLUB_B.id, organization: { name: CLUB_B.name, timezone: "Europe/Madrid" } },
     ] as never);
     vi.mocked(requireOrgRole).mockResolvedValue({ user: USER, role: "athlete" });
     listTemplates.mockResolvedValue([TEMPLATE]);
@@ -130,7 +136,39 @@ describe("getTrainingPageData", () => {
       role: "athlete",
       templates: [TEMPLATE],
       groups: [],
+      defaultStartDate: "2026-11-24",
     });
+  });
+
+  it("computes defaultStartDate in the club timezone rather than UTC", async () => {
+    // 23:30 UTC on Nov 24 is already 00:30 on Nov 25 in Europe/Madrid (CET, UTC+1)
+    vi.setSystemTime(new Date("2026-11-24T23:30:00Z"));
+    vi.mocked(requireAuth).mockResolvedValue(USER);
+    vi.mocked(prisma.membership.findMany).mockResolvedValue([
+      { orgId: CLUB_A.id, organization: { name: CLUB_A.name, timezone: "Europe/Madrid" } },
+    ] as never);
+    vi.mocked(requireOrgRole).mockResolvedValue({ user: USER, role: "manager" });
+    listTemplates.mockResolvedValue([]);
+    vi.mocked(prisma.group.findMany).mockResolvedValue([] as never);
+
+    const result = await getTrainingPageData(CLUB_A.id.toUpperCase());
+
+    expect(result.status).toBe("ready");
+    if (result.status === "ready") {
+      expect(result.defaultStartDate).toBe("2026-11-25");
+      expect(result.activeClub).toEqual(CLUB_A);
+    }
+  });
+
+  it("calls notFound instead of falling back to clubs[0] if activeOrgId is missing from memberships", async () => {
+    vi.mocked(requireAuth).mockResolvedValue(USER);
+    vi.mocked(requireOrgRole).mockResolvedValue({ user: USER, role: "manager" });
+    vi.mocked(prisma.membership.findMany).mockResolvedValue([
+      { orgId: CLUB_A.id, organization: { name: CLUB_A.name, timezone: "Europe/Madrid" } },
+    ] as never);
+
+    await expect(getTrainingPageData(CLUB_B.id)).rejects.toBeInstanceOf(NotFoundSignal);
+    expect(listTemplates).not.toHaveBeenCalled();
   });
 
   it("propagates notFound when an explicit orgId is invalid or belongs to another club", async () => {

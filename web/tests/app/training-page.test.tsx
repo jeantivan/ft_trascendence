@@ -64,6 +64,7 @@ describe("/training page", () => {
         },
       ],
       groups: [],
+      defaultStartDate: "2026-11-24",
     });
 
     render(await TrainingPage({ searchParams: Promise.resolve({ orgId: CLUB_2.id }) }));

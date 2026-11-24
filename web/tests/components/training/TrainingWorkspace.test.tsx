@@ -50,6 +50,8 @@ const SAMPLE_TEMPLATE = {
   ],
 };
 
+const DEFAULT_START_DATE = "2026-11-24";
+
 const SAMPLE_GROUPS = [
   { id: "grp-1", name: "Grupo Avanzado", level: "Avanzado", objective: "10K" },
   { id: "grp-2", name: "Grupo Base", level: "Iniciación", objective: "Rodaje" },
@@ -68,6 +70,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -91,6 +94,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -160,6 +164,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -211,6 +216,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -244,16 +250,20 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /asignar a grupo/i }));
 
     const dialog = screen.getByRole("dialog", { name: /asignar plantilla/i });
+    const startDateInput = within(dialog).getByLabelText(/fecha de inicio/i);
+    expect(startDateInput).toHaveValue(DEFAULT_START_DATE);
+
     fireEvent.change(within(dialog).getByLabelText(/grupo del club/i), {
       target: { value: "grp-2" },
     });
-    fireEvent.change(within(dialog).getByLabelText(/fecha de inicio/i), {
+    fireEvent.change(startDateInput, {
       target: { value: "2026-12-01" },
     });
 
@@ -267,6 +277,9 @@ describe("TrainingWorkspace", () => {
       startDate: "2026-12-01",
     });
     expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /Preparación 10K.*Grupo Base.*2026-12-01/,
+    );
   });
 
   it("muestra EmptyState adecuado sin plantillas para Manager y para Atleta", () => {
@@ -277,6 +290,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -292,6 +306,7 @@ describe("TrainingWorkspace", () => {
         role="athlete"
         templates={[]}
         groups={[]}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -309,6 +324,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={[]}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -332,6 +348,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -380,6 +397,7 @@ describe("TrainingWorkspace", () => {
         role="manager"
         templates={[SAMPLE_TEMPLATE]}
         groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
       />,
     );
 
@@ -402,5 +420,142 @@ describe("TrainingWorkspace", () => {
     fireEvent.change(durationInput, { target: { value: "48:00" } });
     fireEvent.change(paceInput, { target: { value: "4:30" } });
     expect(durationInput.value).toBe("48:00");
+  });
+
+  it("deshabilita el envío y evita doble llamada mientras una asignación está en curso (#238)", async () => {
+    let resolveAssign: ((value: { success: true; data: never[] }) => void) | undefined;
+    vi.mocked(assignTrainingTemplateAction).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveAssign = resolve;
+        }),
+    );
+
+    render(
+      <TrainingWorkspace
+        clubs={[CLUB_A]}
+        activeClub={CLUB_A}
+        role="manager"
+        templates={[SAMPLE_TEMPLATE]}
+        groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /asignar a grupo/i }));
+    const dialog = screen.getByRole("dialog", { name: /asignar plantilla/i });
+    const submitButton = within(dialog).getByRole("button", { name: /confirmar asignación/i });
+
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+
+    expect(within(dialog).getByRole("button", { name: /asignando/i })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: /cancelar/i })).toBeDisabled();
+
+    // Intentar cerrar o reenviar mientras está pendiente no debe duplicar ni cerrar el modal
+    fireEvent.click(within(dialog).getByRole("button", { name: /^cerrar$/i }));
+    fireEvent.submit(dialog.querySelector("form")!);
+    expect(assignTrainingTemplateAction).toHaveBeenCalledTimes(1);
+    expect(dialog).toHaveAttribute("open");
+
+    await act(async () => {
+      resolveAssign?.({ success: true, data: [] });
+    });
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("muestra el error del servidor sin cerrar el modal cuando una acción devuelve success: false", async () => {
+    vi.mocked(assignTrainingTemplateAction).mockResolvedValue({
+      success: false,
+      error: "Esta plantilla ya estaba asignada a este grupo en esa fecha",
+    });
+
+    render(
+      <TrainingWorkspace
+        clubs={[CLUB_A]}
+        activeClub={CLUB_A}
+        role="manager"
+        templates={[SAMPLE_TEMPLATE]}
+        groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /asignar a grupo/i }));
+    const dialog = screen.getByRole("dialog", { name: /asignar plantilla/i });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: /confirmar asignación/i }));
+    });
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/ya estaba asignada/i);
+    expect(dialog).toHaveAttribute("open");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("captura rechazos de Server Actions (404/red) y muestra alerta en el modal", async () => {
+    const notFoundError = Object.assign(new Error("NEXT_HTTP_ERROR_FALLBACK;404"), {
+      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+    });
+    vi.mocked(deleteTrainingTemplateAction).mockRejectedValue(notFoundError);
+
+    render(
+      <TrainingWorkspace
+        clubs={[CLUB_A]}
+        activeClub={CLUB_A}
+        role="manager"
+        templates={[SAMPLE_TEMPLATE]}
+        groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^eliminar$/i }));
+    const dialog = screen.getByRole("dialog", { name: /eliminar plantilla/i });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: /confirmar eliminación/i }));
+    });
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/ya no existe/i);
+    expect(dialog).toHaveAttribute("open");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("valida nombre, día y métricas en cliente antes de llamar a createTrainingTemplateAction", async () => {
+    render(
+      <TrainingWorkspace
+        clubs={[CLUB_A]}
+        activeClub={CLUB_A}
+        role="manager"
+        templates={[SAMPLE_TEMPLATE]}
+        groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /nueva plantilla/i }));
+    const dialog = screen.getByRole("dialog", { name: /nueva plantilla/i });
+    const nameInput = within(dialog).getByLabelText(/nombre de la plantilla/i);
+    const row1 = within(dialog).getByRole("group", { name: "Sesión 1" });
+
+    // Nombre con solo espacios
+    fireEvent.change(nameInput, { target: { value: "   " } });
+    await act(async () => {
+      fireEvent.submit(dialog.querySelector("form")!);
+    });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/nombre.*obligatorio/i);
+    expect(createTrainingTemplateAction).not.toHaveBeenCalled();
+
+    // Ritmo con formato inválido
+    fireEvent.change(nameInput, { target: { value: "Plan Test" } });
+    fireEvent.change(within(row1).getByLabelText(/ritmo/i), { target: { value: "abc" } });
+    await act(async () => {
+      fireEvent.submit(dialog.querySelector("form")!);
+    });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/ritmo inválido/i);
+    expect(createTrainingTemplateAction).not.toHaveBeenCalled();
   });
 });

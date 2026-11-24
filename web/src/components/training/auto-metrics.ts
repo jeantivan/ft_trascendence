@@ -63,49 +63,54 @@ function resolveTargetField(
   return null;
 }
 
+type ComputeResult =
+  | { status: "ok"; value: string }
+  | { status: "incomplete" }
+  | { status: "out-of-range" };
+
 function computeTargetValue(
   state: SessionMetricsState,
   targetField: MetricField,
-): string | null {
+): ComputeResult {
   if (targetField === "duration") {
     const distanceM = tryParse(state.distanceKm, parseKmToMeters);
     const paceS = tryParse(state.pace, parsePaceToSecondsPerKm);
     if (distanceM === null || paceS === null) {
-      return null;
+      return { status: "incomplete" };
     }
 
     const durationS = Math.round((distanceM * paceS) / 1000);
     if (durationS < 1 || durationS > MAX_DURATION_SECONDS) {
-      return null;
+      return { status: "out-of-range" };
     }
-    return formatSecondsToDuration(durationS);
+    return { status: "ok", value: formatSecondsToDuration(durationS) };
   }
 
   if (targetField === "pace") {
     const distanceM = tryParse(state.distanceKm, parseKmToMeters);
     const durationS = tryParse(state.duration, parseDurationToSeconds);
     if (distanceM === null || durationS === null) {
-      return null;
+      return { status: "incomplete" };
     }
 
     const paceS = calculateAveragePaceSecondsPerKm(distanceM, durationS);
     if (paceS === null || paceS < 1 || paceS > MAX_PACE_SECONDS) {
-      return null;
+      return { status: "out-of-range" };
     }
-    return formatSecondsPerKmToPace(paceS);
+    return { status: "ok", value: formatSecondsPerKmToPace(paceS) };
   }
 
   const durationS = tryParse(state.duration, parseDurationToSeconds);
   const paceS = tryParse(state.pace, parsePaceToSecondsPerKm);
   if (durationS === null || paceS === null) {
-    return null;
+    return { status: "incomplete" };
   }
 
   const distanceM = Math.round((durationS * 1000) / paceS);
   if (distanceM < 1 || distanceM > POSTGRES_INT_MAX) {
-    return null;
+    return { status: "out-of-range" };
   }
-  return formatMetersToKm(distanceM);
+  return { status: "ok", value: formatMetersToKm(distanceM) };
 }
 
 /**
@@ -138,13 +143,23 @@ export function recomputeSessionMetrics(
   }
 
   const computed = computeTargetValue(next, targetField);
-  if (computed === null) {
+  if (computed.status === "incomplete") {
+    return next;
+  }
+  if (computed.status === "out-of-range") {
+    if (next.autoField === targetField) {
+      return {
+        ...next,
+        [targetField]: "",
+        autoField: null,
+      };
+    }
     return next;
   }
 
   return {
     ...next,
-    [targetField]: computed,
+    [targetField]: computed.value,
     autoField: targetField,
   };
 }

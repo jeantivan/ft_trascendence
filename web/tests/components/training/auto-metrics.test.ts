@@ -136,4 +136,36 @@ describe("recomputeSessionMetrics", () => {
       autoField: null,
     });
   });
+
+  it("limpia un campo automático obsoleto si el recálculo se sale de rango, sin tocar valores manuales", () => {
+    const autoDuration: SessionMetricsState = {
+      distanceKm: "10",
+      pace: "4:30",
+      duration: "45:00",
+      autoField: "duration",
+    };
+
+    const overflowed = recomputeSessionMetrics(autoDuration, "distanceKm", "10000");
+    expect(overflowed).toEqual({
+      distanceKm: "10000",
+      pace: "4:30",
+      duration: "",
+      autoField: null,
+    });
+
+    const manualDuration: SessionMetricsState = {
+      distanceKm: "10",
+      pace: "4:30",
+      duration: "45:00",
+      autoField: null,
+    };
+
+    const preserved = recomputeSessionMetrics(manualDuration, "distanceKm", "10000");
+    expect(preserved).toEqual({
+      distanceKm: "10000",
+      pace: "4:30",
+      duration: "45:00",
+      autoField: null,
+    });
+  });
 });

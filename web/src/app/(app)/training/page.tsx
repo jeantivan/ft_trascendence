@@ -40,6 +40,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
       role={data.role}
       templates={data.templates}
       groups={data.groups}
+      defaultStartDate={data.defaultStartDate}
     />
   );
 }

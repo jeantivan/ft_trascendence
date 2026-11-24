@@ -12,7 +12,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Select } from "@/components/ui/Select";
 import type { ClubOption, GroupOption } from "@/lib/training/queries";
 import type { TrainingTemplateData } from "@/lib/training/types";
-import { AssignTemplateModal } from "./AssignTemplateModal";
+import { AssignTemplateModal, type AssignmentFeedback } from "./AssignTemplateModal";
 import { DeleteTemplateModal } from "./DeleteTemplateModal";
 import { TemplateFormModal } from "./TemplateFormModal";
 import { SESSION_TYPE_LABELS, formatSessionMetrics } from "./format";
@@ -23,6 +23,7 @@ interface TrainingWorkspaceProps {
   role: "manager" | "athlete";
   templates: TrainingTemplateData[];
   groups: GroupOption[];
+  defaultStartDate: string;
 }
 
 export function TrainingWorkspace({
@@ -31,6 +32,7 @@ export function TrainingWorkspace({
   role,
   templates,
   groups,
+  defaultStartDate,
 }: TrainingWorkspaceProps) {
   const router = useRouter();
   const isManager = role === "manager";
@@ -45,26 +47,43 @@ export function TrainingWorkspace({
   const [deletingTemplate, setDeletingTemplate] = useState<TrainingTemplateData | null>(null);
   const [deleteModalKey, setDeleteModalKey] = useState(0);
 
+  const [assignmentNotice, setAssignmentNotice] = useState<{
+    orgId: string;
+    message: string;
+  } | null>(null);
+
   function openCreateModal() {
+    setAssignmentNotice(null);
     setEditingTemplate(null);
     setFormModalKey((k) => k + 1);
     setFormOpen(true);
   }
 
   function openEditModal(template: TrainingTemplateData) {
+    setAssignmentNotice(null);
     setEditingTemplate(template);
     setFormModalKey((k) => k + 1);
     setFormOpen(true);
   }
 
   function openAssignModal(template: TrainingTemplateData) {
+    setAssignmentNotice(null);
     setAssigningTemplate(template);
     setAssignModalKey((k) => k + 1);
   }
 
   function openDeleteModal(template: TrainingTemplateData) {
+    setAssignmentNotice(null);
     setDeletingTemplate(template);
     setDeleteModalKey((k) => k + 1);
+  }
+
+  function handleAssigned({ templateName, groupName, startDate }: AssignmentFeedback) {
+    setAssignmentNotice({
+      orgId: activeClub.id,
+      message: `Plantilla "${templateName}" asignada a ${groupName} a partir del ${startDate}.`,
+    });
+    router.refresh();
   }
 
   return (
@@ -119,6 +138,12 @@ export function TrainingWorkspace({
             Vista de consulta de plantillas. Tu agenda personal de sesiones estará
             disponible en la próxima actualización.
           </p>
+        </Alert>
+      )}
+
+      {isManager && assignmentNotice?.orgId === activeClub.id && (
+        <Alert variant="success">
+          <p>{assignmentNotice.message}</p>
         </Alert>
       )}
 
@@ -229,7 +254,7 @@ export function TrainingWorkspace({
       {isManager && (
         <>
           <TemplateFormModal
-            key={formModalKey}
+            key={`${activeClub.id}-form-${formModalKey}`}
             open={formOpen}
             orgId={activeClub.id}
             template={editingTemplate}
@@ -237,17 +262,18 @@ export function TrainingWorkspace({
             onSaved={() => router.refresh()}
           />
           <AssignTemplateModal
-            key={`assign-${assignModalKey}`}
-            open={assigningTemplate !== null}
+            key={`${activeClub.id}-assign-${assignModalKey}`}
+            open={assigningTemplate !== null && assigningTemplate.orgId === activeClub.id}
             orgId={activeClub.id}
             template={assigningTemplate}
             groups={groups}
+            defaultStartDate={defaultStartDate}
             onClose={() => setAssigningTemplate(null)}
-            onAssigned={() => router.refresh()}
+            onAssigned={handleAssigned}
           />
           <DeleteTemplateModal
-            key={`delete-${deleteModalKey}`}
-            open={deletingTemplate !== null}
+            key={`${activeClub.id}-delete-${deleteModalKey}`}
+            open={deletingTemplate !== null && deletingTemplate.orgId === activeClub.id}
             orgId={activeClub.id}
             template={deletingTemplate}
             onClose={() => setDeletingTemplate(null)}

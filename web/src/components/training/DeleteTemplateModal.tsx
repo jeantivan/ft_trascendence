@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { deleteTrainingTemplateAction } from "@/lib/training/actions";
 import type { TrainingTemplateData } from "@/lib/training/types";
+import { getTrainingActionError } from "./action-error";
 
 interface DeleteTemplateModalProps {
   open: boolean;
@@ -25,6 +26,12 @@ export function DeleteTemplateModal({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  function handleSafeClose() {
+    if (!deleting) {
+      onClose();
+    }
+  }
+
   async function handleConfirm() {
     if (!template || deleting) return;
     setError(null);
@@ -37,6 +44,13 @@ export function DeleteTemplateModal({
       }
       onDeleted();
       onClose();
+    } catch (actionError) {
+      setError(
+        getTrainingActionError(
+          actionError,
+          "No se pudo eliminar la plantilla. Inténtalo de nuevo.",
+        ),
+      );
     } finally {
       setDeleting(false);
     }
@@ -45,11 +59,11 @@ export function DeleteTemplateModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleSafeClose}
       title="Eliminar plantilla"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={deleting}>
+          <Button variant="ghost" onClick={handleSafeClose} disabled={deleting}>
             Cancelar
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={deleting}>
