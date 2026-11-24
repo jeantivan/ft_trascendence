@@ -228,12 +228,14 @@ export class TrainingService {
   // Decision (#238 row 10): to prevent accidental duplicate copies on double-click / concurrent
   // retries without adding a schema migration, the repository serializes assignments on the Group
   // row (FOR NO KEY UPDATE) and rejects with TrainingConflictError when the exact same template
-  // already has all planned (scheduledAt, sessionType) copies in that group for the same startDate.
-  // Intentional reassignments of the same template to the same group on another startDate remain allowed.
+  // already has all planned (scheduledAt, sessionType) copies in that group.
   //
   // Known limit (#238):
-  // - actor role is checked before the transaction; concurrent demotion or group membership edits
-  //   in the same millisecond are out of scope.
+  // - because each assignment's startDate is not stored in a separate column, reassigning a
+  //   periodic template (e.g. rodaje on dayOffset 0 and 7) on an intermediate startDate whose
+  //   planned (scheduledAt, sessionType) signatures are all already covered by surrounding
+  //   assignments (e.g. 2026-06-01 and 2026-06-15, then 2026-06-08) also raises TrainingConflictError.
+  // - concurrent group membership edits in the same millisecond are out of scope.
   // - notifying group Athletes inside the transaction acquires FOR KEY SHARE on users(id); a
   //   concurrent account deletion (users FOR UPDATE) can fail with P2003 (notifications_user_id_fkey)
   //   or deadlock (40P01 / P2034) if that user created the template (created_by ON DELETE SET NULL).
