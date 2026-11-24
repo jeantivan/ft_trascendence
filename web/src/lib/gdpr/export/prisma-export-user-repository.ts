@@ -167,8 +167,8 @@ export function createPrismaExportUserRepository(db: PrismaClient = prisma): Exp
 
     // No removedAt or membership filter: a DM she left or an Event she was removed from
     // still holds messages she wrote (section 3.4 of the spec).
-    // Known limit: nothing writes Message.deletedAt yet, so deleted messages are only
-    // covered by hand-made rows in the tests (question to Jacobo in #172).
+    // Deleting a message keeps its body and sets deletedAt, so deleted ones are exported
+    // too, marked by deleted_at (answer to Jacobo in #172).
     async findMessages(userId) {
       const messages = await db.message.findMany({
         where: { authorId: userId },
