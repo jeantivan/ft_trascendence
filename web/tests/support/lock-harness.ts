@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
-import { resolveTestDatabaseUrl } from "./test-database-url";
+import { resolveTestDatabaseUrl } from "./test-database-url.mjs";
 
 // Prisma's interactive transactions time out after 5 s by default (lock waits included;
 // Postgres itself sets no limit). The observation deadline is shorter to leave margin, but

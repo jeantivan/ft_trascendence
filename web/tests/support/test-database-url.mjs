@@ -2,7 +2,11 @@
 // Returns null when there is no test database (the *.db.test.ts files are then
 // skipped). Throws if the database name does not end in _test, so the tests
 // can never write to the development database by mistake.
-export function resolveTestDatabaseUrl(env: Record<string, string | undefined>): string | null {
+/**
+ * @param {Record<string, string | undefined>} env
+ * @returns {string | null}
+ */
+export function resolveTestDatabaseUrl(env) {
   const url = env.DATABASE_URL_TEST;
   // An empty value (e.g. DATABASE_URL_TEST= in a shell) also means "no test database"
   if (url === undefined || url === "") {

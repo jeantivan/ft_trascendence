@@ -1,0 +1,7 @@
+if [ ! -d web/node_modules ]; then
+  exit 0
+fi
+
+cd web
+./node_modules/.bin/lint-staged
+npm run typecheck

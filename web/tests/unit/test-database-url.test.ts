@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTestDatabaseUrl } from "../support/test-database-url";
+import { resolveTestDatabaseUrl } from "../support/test-database-url.mjs";
 
 describe("resolveTestDatabaseUrl", () => {
   it("returns null when DATABASE_URL_TEST is not set", () => {
