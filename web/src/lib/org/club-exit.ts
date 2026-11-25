@@ -72,7 +72,7 @@ export class PrismaClubExit {
     return this.db.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
   }
 
-  // Removes the user from the club, its Groups and its upcoming Events; warns the Admins if it was the
+  // Removes the user from the club, its Groups, its upcoming Events and its pending invitations; warns the Admins if it was the
   // last Manager
   private async removeMember(tx: Prisma.TransactionClient, orgId: string, userId: string): Promise<void> {
     // Same order as account deletion and role changes: user row, then the club, then the Events
@@ -92,6 +92,12 @@ export class PrismaClubExit {
     // (requestSpot refuses it), and an approved spot there is history, not a place to free
     await withdrawMemberSpots(tx, orgId, userId, this.now());
     await tx.membership.delete({ where: { userId_orgId: { userId, orgId } } });
+    // The club's pending invitations to this user: they leave the club, so they stop receiving
+    // them (privacy policy); revoked like a Manager's revokeInvitation, with no notification
+    await tx.membershipRequest.updateMany({
+      where: { orgId, userId, kind: "invite", status: "pending" },
+      data: { status: "revoked" },
+    });
     // After the removal, so its query already sees the updated Groups
     await this.cancelPendingContacts(tx, userId);
   }
