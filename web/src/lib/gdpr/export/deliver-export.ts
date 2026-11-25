@@ -3,6 +3,7 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { buildExportEmail } from "@/lib/gdpr/export/export-email";
+import { exportZipPath } from "@/lib/gdpr/export/export-zip-path";
 import { generateExport } from "@/lib/gdpr/export/generate-export";
 import type { MailSender } from "@/lib/mail/mail-sender";
 import { createSmtpMailSender } from "@/lib/mail/smtp-mail-sender";
@@ -60,7 +61,7 @@ export async function deliverExport(
         data: { status: "failed", tokenHash: null, path: null, expiresAt: null },
       })
       .catch(() => {});
-    await rm(path.join(uploadsDir, `exports/${exportId}.zip`), { force: true }).catch(() => {});
+    await rm(path.join(uploadsDir, exportZipPath(exportId)), { force: true }).catch(() => {});
     return false;
   }
 }
