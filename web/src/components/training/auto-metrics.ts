@@ -163,3 +163,37 @@ export function recomputeSessionMetrics(
     autoField: targetField,
   };
 }
+
+/**
+ * Infers which metric field should stay auto-computed when loading a saved
+ * session for editing. If all three metrics are present and consistent under
+ * rounding in any of the three calculation directions, marks "duration" so
+ * editing distance or pace keeps the session coherent.
+ */
+export function inferInitialAutoField(
+  distanceM: number | null | undefined,
+  paceS: number | null | undefined,
+  durationS: number | null | undefined,
+): MetricField | null {
+  if (
+    distanceM === null || distanceM === undefined ||
+    paceS === null || paceS === undefined ||
+    durationS === null || durationS === undefined ||
+    distanceM <= 0 ||
+    paceS <= 0 ||
+    durationS <= 0
+  ) {
+    return null;
+  }
+
+  const paceMatches =
+    calculateAveragePaceSecondsPerKm(distanceM, durationS) === paceS;
+  const durationMatches = Math.round((distanceM * paceS) / 1000) === durationS;
+  const distanceMatches = Math.round((durationS * 1000) / paceS) === distanceM;
+
+  if (paceMatches || durationMatches || distanceMatches) {
+    return "duration";
+  }
+
+  return null;
+}

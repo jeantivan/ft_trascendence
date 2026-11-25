@@ -28,6 +28,7 @@ import {
 import { getTrainingActionError } from "./action-error";
 import {
   recomputeSessionMetrics,
+  inferInitialAutoField,
   type MetricField,
 } from "./auto-metrics";
 import { SESSION_TYPE_OPTIONS } from "./format";
@@ -80,7 +81,7 @@ function templateToDrafts(template: TrainingTemplateData): SessionDraft[] {
       session.targetDurationS != null
         ? formatSecondsToDuration(session.targetDurationS)
         : "",
-    autoField: null,
+    autoField: inferInitialAutoField(session.targetDistanceM, session.targetPaceSPerKm, session.targetDurationS)
   }));
 }
 

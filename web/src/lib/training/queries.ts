@@ -52,10 +52,7 @@ function normalizeOrgIdParam(orgIdParam?: string | string[]): string | undefined
 
 async function requireTemplateReadRole(orgId: string): Promise<"manager" | "athlete"> {
   const { role } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.read"]);
-  if (role === "admin") {
-    notFound();
-  }
-  return role;
+  return role === "manager" ? "manager" : "athlete";
 }
 
 export async function getTrainingPageData(

@@ -203,6 +203,56 @@ describe("TrainingWorkspace", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it("recalcula la duración al editar la distancia de una sesión existente con métricas coherentes", async () => {
+    vi.mocked(updateTrainingTemplateAction).mockResolvedValue({
+      success: true,
+      data: SAMPLE_TEMPLATE,
+    });
+
+    render(
+      <TrainingWorkspace
+        clubs={[CLUB_A]}
+        activeClub={CLUB_A}
+        role="manager"
+        templates={[SAMPLE_TEMPLATE]}
+        groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^editar$/i }));
+
+    const dialog = screen.getByRole("dialog", { name: /editar plantilla/i });
+    const row1 = within(dialog).getByRole("group", { name: "Sesión 1" });
+
+    fireEvent.change(within(row1).getByLabelText(/distancia/i), {
+      target: { value: "12" },
+    });
+
+    expect(within(row1).getByLabelText(/duración/i)).toHaveValue("53:00");
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: /guardar plantilla/i }));
+    });
+
+    expect(updateTrainingTemplateAction).toHaveBeenCalledWith(
+      CLUB_A.id,
+      SAMPLE_TEMPLATE.id,
+      {
+        name: "Preparación 10K",
+        sessions: [
+          {
+            sessionType: "rodaje",
+            dayOffset: 0,
+            targetDistanceM: 12000,
+            targetPaceSPerKm: 265,
+            targetDurationS: 3180,
+          },
+        ],
+      },
+    );
+  });
+
   it("pide confirmación antes de eliminar una plantilla y ejecuta deleteTrainingTemplateAction", async () => {
     vi.mocked(deleteTrainingTemplateAction).mockResolvedValue({
       success: true,

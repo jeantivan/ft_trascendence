@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  inferInitialAutoField,
   recomputeSessionMetrics,
   type SessionMetricsState,
 } from "@/components/training/auto-metrics";
@@ -167,5 +168,22 @@ describe("recomputeSessionMetrics", () => {
       duration: "45:00",
       autoField: null,
     });
+  });
+});
+
+describe("inferInitialAutoField", () => {
+  it("marca duration cuando las tres métricas cuadran de forma exacta", () => {
+    expect(inferInitialAutoField(10000, 300, 3000)).toBe("duration");
+  });
+
+  it("marca duration cuando el ritmo guardado tiene redondeo respecto a distancia y duración", () => {
+    // 10 km en 47:23 (2843 s) -> ritmo promedio 284 s/km (4:44)
+    expect(inferInitialAutoField(10000, 284, 2843)).toBe("duration");
+  });
+
+  it("devuelve null cuando falta alguna métrica o no son coherentes entre sí", () => {
+    expect(inferInitialAutoField(10000, 300, null)).toBeNull();
+    expect(inferInitialAutoField(10000, 300, undefined)).toBeNull();
+    expect(inferInitialAutoField(10000, 300, 2400)).toBeNull();
   });
 });
