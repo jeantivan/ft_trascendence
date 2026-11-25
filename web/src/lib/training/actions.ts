@@ -101,3 +101,22 @@ export async function assignTrainingTemplateAction(
     trainingService.assignTemplateToGroup(user.id, orgId, input)
   );
 }
+
+export async function getAthleteScheduleAction(
+  orgId: string,
+  athleteId?: string
+): Promise<ActionResult<TrainingSessionData[]>> {
+  const { user } = await requireOrgRole(orgId, ORG_ROLES["session.read"]);
+  return runTrainingAction(() =>
+    trainingService.getAthleteSchedule(user.id, orgId, athleteId)
+  );
+}
+
+export async function listClubSessionsAction(
+  orgId: string
+): Promise<ActionResult<TrainingSessionData[]>> {
+  const { user } = await requireOrgRole(orgId, ORG_ROLES["freeSession.read"]);
+  return runTrainingAction(() =>
+    trainingService.listClubSessions(user.id, orgId)
+  );
+}

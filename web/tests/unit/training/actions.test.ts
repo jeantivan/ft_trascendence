@@ -9,6 +9,8 @@ import {
   updateTrainingTemplateAction,
   deleteTrainingTemplateAction,
   assignTrainingTemplateAction,
+  getAthleteScheduleAction,
+  listClubSessionsAction,
 } from "@/lib/training/actions";
 import { TRAINING_TEMPLATE_ASSIGNED } from "@/lib/training/types";
 import { notify } from "@/lib/notifications/notify";
@@ -461,6 +463,112 @@ describe("Training Server Actions", () => {
         expect(duplicate.error).toContain("ya está asignada");
       }
       expect(notify).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("getAthleteScheduleAction", () => {
+    const GROUP_1 = "13700000-0000-4000-8000-000000000041";
+
+    it("calls requireOrgRole with session.read and returns the athlete's substituted schedule", async () => {
+      repo.addGroup(ORG_A, GROUP_1);
+      repo.addAthleteToGroup(ATHLETE_USER.id, GROUP_1);
+
+      const groupSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-10-01T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+      const customized = repo.seedSession({
+        orgId: ORG_A,
+        origin: "customized",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-10-01T09:00:00.000Z"),
+        athleteId: ATHLETE_USER.id,
+        customizesSessionId: groupSession.id,
+      });
+      const freeSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-10-02T08:00:00.000Z"),
+        athleteId: ATHLETE_USER.id,
+      });
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: ATHLETE_USER,
+        role: "athlete",
+      });
+
+      const result = await getAthleteScheduleAction(ORG_A);
+
+      expect(requireOrgRole).toHaveBeenCalledWith(
+        ORG_A,
+        ORG_ROLES["session.read"]
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.map((s) => s.id)).toEqual([
+          customized.id,
+          freeSession.id,
+        ]);
+      }
+    });
+
+    it("triggers notFound() (404) when an athlete requests another athlete's schedule", async () => {
+      const OTHER_ATHLETE = "usr-ath2-4444-4444-4444-444444444444";
+      repo.addMember(ORG_A, OTHER_ATHLETE, "athlete");
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: ATHLETE_USER,
+        role: "athlete",
+      });
+
+      await expect(
+        getAthleteScheduleAction(ORG_A, OTHER_ATHLETE)
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFound).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("listClubSessionsAction", () => {
+    it("calls requireOrgRole with freeSession.read and returns all club sessions for a manager", async () => {
+      const freeSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "free",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-10-05T08:00:00.000Z"),
+        athleteId: ATHLETE_USER.id,
+      });
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+
+      const result = await listClubSessionsAction(ORG_A);
+
+      expect(requireOrgRole).toHaveBeenCalledWith(
+        ORG_A,
+        ORG_ROLES["freeSession.read"]
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.map((s) => s.id)).toEqual([freeSession.id]);
+      }
+    });
+
+    it("triggers forbidden() (403) when an athlete calls listClubSessionsAction", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: ATHLETE_USER,
+        role: "athlete",
+      });
+
+      await expect(listClubSessionsAction(ORG_A)).rejects.toThrow(
+        "NEXT_FORBIDDEN"
+      );
+      expect(forbidden).toHaveBeenCalledOnce();
     });
   });
 });

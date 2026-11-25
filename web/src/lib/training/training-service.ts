@@ -286,4 +286,46 @@ export class TrainingService {
       }
     );
   }
+
+  async getAthleteSchedule(
+    actorId: string,
+    orgId: string,
+    athleteId?: string
+  ): Promise<TrainingSessionData[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const targetAthleteId =
+      athleteId !== undefined ? normalizeId(athleteId) : normalizedActorId;
+
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+
+    if (role === "athlete") {
+      if (targetAthleteId !== normalizedActorId) {
+        throw new TrainingNotFoundError();
+      }
+      return this.repo.getAthleteSchedule(normalizedOrgId, normalizedActorId);
+    }
+
+    const targetRole = await this.repo.findRole(
+      normalizedOrgId,
+      targetAthleteId
+    );
+    if (targetRole !== "athlete") {
+      throw new TrainingNotFoundError();
+    }
+    return this.repo.getAthleteSchedule(normalizedOrgId, targetAthleteId);
+  }
+
+  async listClubSessions(
+    actorId: string,
+    orgId: string
+  ): Promise<TrainingSessionData[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+    return this.repo.listClubSessions(normalizedOrgId);
+  }
 }

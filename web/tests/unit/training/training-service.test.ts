@@ -502,4 +502,123 @@ describe("TrainingService", () => {
       ).rejects.toThrow(TrainingValidationError);
     });
   });
+
+  describe("getAthleteSchedule", () => {
+    it("returns the athlete's own chronological schedule with substitution and allows a manager to view it", async () => {
+      const groupSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-09-01T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+      const customizedSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "customized",
+        sessionType: "rodaje",
+        targetDistanceM: 5000,
+        scheduledAt: new Date("2026-09-01T09:00:00.000Z"),
+        athleteId: ATHLETE_1,
+        customizesSessionId: groupSession.id,
+      });
+      const freeSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-09-02T08:00:00.000Z"),
+        athleteId: ATHLETE_1,
+      });
+
+      const ownSchedule = await service.getAthleteSchedule(ATHLETE_1, ORG_A);
+      expect(ownSchedule.map((s) => s.id)).toEqual([
+        customizedSession.id,
+        freeSession.id,
+      ]);
+
+      const managerView = await service.getAthleteSchedule(
+        MANAGER_1,
+        ORG_A,
+        ATHLETE_1
+      );
+      expect(managerView.map((s) => s.id)).toEqual([
+        customizedSession.id,
+        freeSession.id,
+      ]);
+    });
+
+    it("rejects non-members, cross-athlete access, and non-athlete targets with 404", async () => {
+      const ATHLETE_2 = "13400000-0000-4000-8000-000000000022";
+      repo.addMember(ORG_A, ATHLETE_2, "athlete");
+
+      await expect(
+        service.getAthleteSchedule(ATHLETE_1, ORG_A, ATHLETE_2)
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        service.getAthleteSchedule(ATHLETE_1, ORG_A, "")
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        service.getAthleteSchedule(STRANGER, ORG_A)
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        service.getAthleteSchedule(MANAGER_1, ORG_A, STRANGER)
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        service.getAthleteSchedule(MANAGER_1, ORG_A, MANAGER_2)
+      ).rejects.toThrow(TrainingNotFoundError);
+    });
+  });
+
+  describe("listClubSessions", () => {
+    it("allows a manager to list template, customized, and free sessions of their club only", async () => {
+      const groupSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-09-10T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+      const customizedSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "customized",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-09-11T08:00:00.000Z"),
+        athleteId: ATHLETE_1,
+      });
+      const freeSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "free",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-09-12T08:00:00.000Z"),
+        athleteId: ATHLETE_1,
+      });
+      repo.seedSession({
+        orgId: ORG_OTHER,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-09-10T07:00:00.000Z"),
+        athleteId: STRANGER,
+      });
+
+      const sessions = await service.listClubSessions(MANAGER_1, ORG_A);
+      expect(sessions.map((s) => s.id)).toEqual([
+        groupSession.id,
+        customizedSession.id,
+        freeSession.id,
+      ]);
+    });
+
+    it("rejects athlete with 403 Forbidden and non-member with 404 NotFound", async () => {
+      await expect(
+        service.listClubSessions(ATHLETE_1, ORG_A)
+      ).rejects.toThrow(TrainingForbiddenError);
+
+      await expect(
+        service.listClubSessions(STRANGER, ORG_A)
+      ).rejects.toThrow(TrainingNotFoundError);
+    });
+  });
 });
