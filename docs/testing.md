@@ -6,8 +6,16 @@ The tests use [Vitest](https://vitest.dev/) and live in `web/tests/`.
 
 | Command | Where | Runs |
 |---|---|---|
-| `make test` | Docker, with an empty PostgreSQL test database | **Every test**: the normal ones and the `*.db.test.ts` files |
+| `make test` | Docker, with an empty PostgreSQL test database | **Every test**: the normal ones and the `*.db.test.ts` files (or only the ones in `args`, see below) |
 | `npm test` (inside `web/`) | Your machine, no database | The normal tests. The `*.db.test.ts` files are skipped and Vitest prints a warning saying so |
+
+To run only some files or tests, pass `args` (lowercase, like `name` in `make migrate`): `make test args="tests/integration/organization-repository.db.test.ts"`. Without `args` it runs everything.
+
+`args` is for file paths and test-name filters only (`-t "some name"`):
+
+- Paths are relative to `web/`: `tests/unit/training/rpe.test.ts`, not `web/tests/...` (that finds no files).
+- The value goes through `sh -c`, so it is not "anything `vitest run` accepts". A single quote breaks the command (a shell error such as `syntax error: unexpected end of file`; some test names contain one, like `avatar's`: filter with a part of the name without it), `;` runs whatever follows and `make` swallows `$`. Do not use shell characters.
+- An `ARGS` exported in your terminal is ignored; only `args` on the `make` line counts.
 
 Run `make test` before opening a pull request. The CI runs every test too, against its own PostgreSQL database.
 

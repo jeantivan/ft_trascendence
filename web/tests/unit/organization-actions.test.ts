@@ -17,6 +17,7 @@ import { requireAuth } from "@/lib/permissions/require-auth";
 import {
   AlreadyManagerError,
   AlreadyMemberError,
+  BlockedAccountError,
   LastManagerError,
   MembershipRequestNotFoundError,
   MembershipRequestNotPendingError,
@@ -48,7 +49,9 @@ const requestToJoin = vi.hoisted(() => vi.fn());
 const withdrawRequest = vi.hoisted(() => vi.fn());
 const answerInvitation = vi.hoisted(() => vi.fn());
 const reviewRequest = vi.hoisted(() => vi.fn());
+const revalidatePath = vi.hoisted(() => vi.fn());
 
+vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/permissions/require-org-role", () => ({ requireOrgRole: vi.fn() }));
 vi.mock("@/lib/permissions/require-admin", () => ({ requireAdmin: vi.fn() }));
 vi.mock("@/lib/permissions/require-auth", () => ({ requireAuth: vi.fn() }));
@@ -268,6 +271,7 @@ describe("createOrganizationAction", () => {
     ["a taken name", new OrganizationNameTakenError(), "Ya existe un club con ese nombre"],
     ["an Admin account as Manager", new AdminCannotBeManagerError(), "Ninguna cuenta Admin puede ser Manager de un club"],
     ["a Manager that does not exist", new UserNotFoundError(), "Alguno de los Managers ya no existe"],
+    ["a blocked Manager", new BlockedAccountError(), "Alguno de los Managers tiene la cuenta bloqueada"],
   ])("translates %s into a controlled error", async (_label, error, message) => {
     createOrganization.mockRejectedValue(error);
 
@@ -297,6 +301,7 @@ describe.each([
     assignManager,
     [
       ["an Admin account as Manager", new AdminCannotBeManagerError(), "Ninguna cuenta Admin puede ser Manager de un club"],
+      ["a blocked account", new BlockedAccountError(), "La cuenta está bloqueada y no puede ser Manager de un club"],
       ["a user who is already Manager", new AlreadyManagerError(), "El usuario ya es Manager del club"],
       ["a club whose deletion is scheduled", new OrganizationDeletionAlreadyScheduledError(), "El club tiene el borrado programado"],
     ],
@@ -595,5 +600,31 @@ describe("invitation and request actions", () => {
     await expect(
       answerInvitationAction(undefined, formWith({ requestId: REQUEST_ID, decision: "accept" })),
     ).rejects.toThrow("database down");
+  });
+});
+
+describe("the user's own request actions refresh /club", () => {
+  const REQUEST_ID = "22222222-2222-4222-8222-222222222222";
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(requireAuth).mockResolvedValue(MANAGER);
+  });
+
+  it("revalidates /club after a success", async () => {
+    await requestToJoinAction(ORG_ID);
+    await withdrawRequestAction(undefined, formWith({ requestId: REQUEST_ID }));
+    await answerInvitationAction(undefined, formWith({ requestId: REQUEST_ID, decision: "accept" }));
+
+    expect(revalidatePath).toHaveBeenCalledTimes(3);
+    expect(revalidatePath).toHaveBeenCalledWith("/club");
+  });
+
+  it("does not revalidate when the service fails", async () => {
+    requestToJoin.mockRejectedValue(new AlreadyMemberError());
+
+    await requestToJoinAction(ORG_ID);
+
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

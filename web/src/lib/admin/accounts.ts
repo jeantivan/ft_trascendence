@@ -79,10 +79,13 @@ export async function getAccount(db: PrismaClient, accountId: string): Promise<A
   };
 }
 
+// What a guard can refuse with, inside changeAccount's transaction
+type Refusal = "last-admin" | "club-manager";
+
 // changed: false when the account was already like that (see changeAccount)
 export type AccountActionResult =
   | { ok: true; changed: boolean }
-  | { ok: false; reason: "not-found" | "self" | "last-admin" };
+  | { ok: false; reason: "not-found" | "self" | Refusal };
 
 // The audit actions on an account, as record-admin-action.ts lists them
 type AccountAuditAction = Extract<AdminActionEntry, { resource: "account" }>["action"];
@@ -134,7 +137,7 @@ async function setBlocked(
 // block. A missing account is left to changeAccount, which says not-found.
 // It also locks for an account that is not an Admin: reading the role without the lock
 // first would race with a role change (#103) between the read and the block
-async function refuseLastAdmin(tx: Prisma.TransactionClient, accountId: string): Promise<"last-admin" | null> {
+async function refuseLastAdmin(tx: Prisma.TransactionClient, accountId: string): Promise<Refusal | null> {
   const { isLastAdmin } = await lockAccountAndAdmins(tx, accountId);
   return isLastAdmin ? "last-admin" : null;
 }
@@ -142,16 +145,17 @@ async function refuseLastAdmin(tx: Prisma.TransactionClient, accountId: string):
 // The common part of every change the panel makes to an account: change it only
 // if it is not like that already, and write the audit row in the same transaction.
 // guard runs first, in that transaction, and refuses with its reason (the last-Admin
-// rule, for blocking). where narrows the account to the rows that would change; when
-// none does, the account does not exist (not-found) or is already like that
-// (changed: false, and no audit row, since nothing happened). So two Admins doing
-// the same thing at once write one audit row, not two
+// rule for blocking and removing the Admin role, the Manager one for giving it).
+// where narrows the account to the rows that would change; when none does, the
+// account does not exist (not-found) or is already like that (changed: false, and
+// no audit row, since nothing happened). So two Admins doing the same thing at once
+// write one audit row, not two
 async function changeAccount(
   db: PrismaClient,
   { adminId, accountId }: AccountAction,
   auditAction: AccountAuditAction,
   { where, data }: { where: Prisma.UserWhereInput; data: Prisma.UserUpdateManyMutationInput },
-  { guard }: { guard?: (tx: Prisma.TransactionClient, accountId: string) => Promise<"last-admin" | null> } = {},
+  { guard }: { guard?: (tx: Prisma.TransactionClient, accountId: string) => Promise<Refusal | null> } = {},
 ): Promise<AccountActionResult> {
   if (!isDbId(accountId)) return { ok: false, reason: "not-found" };
   return db.$transaction(async (tx) => {
@@ -207,4 +211,39 @@ export async function updateAccountNick(
     where: { OR: [{ nick: null }, { NOT: { nick: parsed.data } }] },
     data: { nick: parsed.data },
   });
+}
+
+// Makes an account an Admin or a normal user (#103): Roles management in Advanced permissions
+// Known limit: requireAdmin reads the acting Admin's role before this transaction. If
+// another Admin removes their Admin role (or blocks them) in that instant, this change
+// still goes through. It never breaks the last-Admin rule: the guard reads after the
+// lock. Every panel action (block, unblock, nick, delete) has the same window
+export async function changeGlobalRole(
+  db: PrismaClient,
+  { adminId, accountId, role }: AccountAction & { role: GlobalRole },
+): Promise<AccountActionResult> {
+  // Never on the own account, so the web is never left without its Admin. Compared in
+  // lowercase, like blockAccount: Postgres compares uuids by value
+  if (accountId.toLowerCase() === adminId.toLowerCase()) return { ok: false, reason: "self" };
+  // Removing the role: the last-Admin rule goes first (docs/adr/0004). Giving it: no such
+  // rule (an Admin more never leaves fewer), only the Manager one
+  return changeAccount(
+    db,
+    { adminId, accountId },
+    "role_change",
+    { where: { roleGlobal: { not: role } }, data: { roleGlobal: role } },
+    { guard: role === "admin" ? refuseClubManager : refuseLastAdmin },
+  );
+}
+
+// An Admin is never a Manager of a club (CONTEXT.md, Admin; decided in #214): naming a Manager
+// refuses the other way round. Read after lockAccountAndAdmins has locked the account
+// FOR UPDATE: assignManager (lockUserThenClub) and createClub (lockUsersExist) lock the same
+// row FOR NO KEY UPDATE, and the two conflict, so a Manager named at the same time waits for
+// this commit and then sees the Admin, or this waits and sees the Manager. Its isLastAdmin is
+// not used: giving the role cannot break it
+async function refuseClubManager(tx: Prisma.TransactionClient, accountId: string): Promise<Refusal | null> {
+  await lockAccountAndAdmins(tx, accountId);
+  const manager = await tx.membership.findFirst({ where: { userId: accountId, role: "manager" }, select: { userId: true } });
+  return manager ? "club-manager" : null;
 }

@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { MembershipRole, Prisma } from "@/generated/prisma/client";
 import { normalizeId } from "@/lib/org/schemas";
+import {
+  isDuplicateTemplateAssignment,
+  type SessionSignature,
+} from "@/lib/training/duplicate-assignment";
 import { TrainingConflictError, TrainingNotFoundError } from "@/lib/training/errors";
 import { computeScheduledAtUtc } from "@/lib/training/units";
 import type {
@@ -287,12 +291,7 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     }));
 
     if (created.length > 0) {
-      const plannedCounts = new Map<string, number>();
-      for (const session of created) {
-        const key = `${session.scheduledAt.getTime()}:${session.sessionType}`;
-        plannedCounts.set(key, (plannedCounts.get(key) ?? 0) + 1);
-      }
-      const existingCounts = new Map<string, number>();
+      const existingSessions: SessionSignature[] = [];
       for (const session of this.copiedSessions) {
         if (
           session.orgId === normalizedOrgId &&
@@ -302,18 +301,13 @@ export class InMemoryTrainingRepository implements TrainingRepository {
           session.scheduledAt &&
           session.sessionType
         ) {
-          const key = `${session.scheduledAt.getTime()}:${session.sessionType}`;
-          existingCounts.set(key, (existingCounts.get(key) ?? 0) + 1);
+          existingSessions.push({
+            scheduledAt: session.scheduledAt,
+            sessionType: session.sessionType,
+          });
         }
       }
-      let isDuplicate = true;
-      for (const [key, requiredCount] of plannedCounts.entries()) {
-        if ((existingCounts.get(key) ?? 0) < requiredCount) {
-          isDuplicate = false;
-          break;
-        }
-      }
-      if (isDuplicate) {
+      if (isDuplicateTemplateAssignment(created, existingSessions)) {
         throw new TrainingConflictError();
       }
     }

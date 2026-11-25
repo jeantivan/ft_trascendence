@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { requireAdmin } from "@/lib/permissions/require-admin";
 import { requireAuth } from "@/lib/permissions/require-auth";
@@ -8,6 +9,7 @@ import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { idSchema } from "./schemas";
 import {
   AlreadyManagerError,
+  BlockedAccountError,
   LastManagerError,
   NotManagerError,
   OrganizationNameTakenError,
@@ -119,6 +121,9 @@ export async function createOrganizationAction(
     if (error instanceof UserNotFoundError) {
       return { success: false, error: "Alguno de los Managers ya no existe" };
     }
+    if (error instanceof BlockedAccountError) {
+      return { success: false, error: "Alguno de los Managers tiene la cuenta bloqueada" };
+    }
     throw error;
   }
 }
@@ -191,11 +196,14 @@ export async function removeManagerAction(
 
 // Expected errors of assigning or removing a Manager; anything else propagates.
 // Shared, but not all reachable from both: assign throws AdminCannotBeManagerError,
-// AlreadyManagerError and OrganizationDeletionAlreadyScheduledError (a new member during the
-// notice period), remove throws NotManagerError and LastManagerError
+// BlockedAccountError, AlreadyManagerError and OrganizationDeletionAlreadyScheduledError (a new
+// member during the notice period), remove throws NotManagerError and LastManagerError
 function managerErrorResult(error: unknown): ManagerActionResult {
   if (error instanceof AdminCannotBeManagerError) {
     return { success: false, error: "Ninguna cuenta Admin puede ser Manager de un club" };
+  }
+  if (error instanceof BlockedAccountError) {
+    return { success: false, error: "La cuenta está bloqueada y no puede ser Manager de un club" };
   }
   if (error instanceof AlreadyManagerError) {
     return { success: false, error: "El usuario ya es Manager del club" };
@@ -394,6 +402,8 @@ export async function requestToJoinAction(orgId: string): Promise<MembershipRequ
   } catch (error) {
     return membershipRequestErrorResult(error, true);
   }
+  // The /club view shows these rows
+  revalidatePath("/club");
   return { success: true };
 }
 
@@ -413,6 +423,8 @@ export async function withdrawRequestAction(
   } catch (error) {
     return membershipRequestErrorResult(error, true);
   }
+  // The /club view shows these rows
+  revalidatePath("/club");
   return { success: true };
 }
 
@@ -433,5 +445,7 @@ export async function answerInvitationAction(
   } catch (error) {
     return membershipRequestErrorResult(error, true);
   }
+  // The /club view shows these rows
+  revalidatePath("/club");
   return { success: true };
 }

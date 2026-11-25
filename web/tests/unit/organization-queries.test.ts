@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getCatalog, getOrganizationPage } from "@/lib/org/queries";
+import { getCatalog, getMyMembershipRequests, getOrganizationPage, userHasClub } from "@/lib/org/queries";
 import { OrganizationNotFoundError } from "@/lib/org/organization-service";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { requireAuth } from "@/lib/permissions/require-auth";
@@ -7,6 +7,8 @@ import { requireOrgRole } from "@/lib/permissions/require-org-role";
 
 const listCatalog = vi.hoisted(() => vi.fn());
 const getOrganization = vi.hoisted(() => vi.fn());
+const listUserRequests = vi.hoisted(() => vi.fn());
+const hasClub = vi.hoisted(() => vi.fn());
 
 // The real "server-only" throws outside a server bundle, as in Vitest: replaced by an empty module
 vi.mock("server-only", () => ({}));
@@ -25,6 +27,8 @@ vi.mock("@/lib/org/organization-service", async (importOriginal) => ({
   OrganizationService: class {
     listCatalog = listCatalog;
     getOrganization = getOrganization;
+    listUserRequests = listUserRequests;
+    hasClub = hasClub;
   },
 }));
 
@@ -95,5 +99,67 @@ describe("getOrganizationPage", () => {
     getOrganization.mockRejectedValue(unexpected);
 
     await expect(getOrganizationPage(ORG_ID)).rejects.toBe(unexpected);
+  });
+});
+
+describe("getMyMembershipRequests", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const row = (id: string, kind: "invite" | "request", status: "pending" | "rejected") => ({
+    id,
+    orgId: ORG_ID,
+    orgName: CLUB.name,
+    kind,
+    status,
+    createdAt: new Date("2026-11-24T10:00:00Z"),
+  });
+
+  it("asks for the session user's rows and splits pending invitations from sent requests", async () => {
+    vi.mocked(requireAuth).mockResolvedValue(USER);
+    const invitation = row("a", "invite", "pending");
+    const answeredInvitation = row("b", "invite", "rejected");
+    const pending = row("c", "request", "pending");
+    const rejected = row("d", "request", "rejected");
+    listUserRequests.mockResolvedValue([invitation, answeredInvitation, pending, rejected]);
+
+    await expect(getMyMembershipRequests()).resolves.toEqual({
+      invitations: [invitation],
+      sentRequests: [pending, rejected],
+    });
+
+    expect(listUserRequests).toHaveBeenCalledWith(USER.id);
+  });
+
+  it("propagates the rejection of requireAuth and does not call the service", async () => {
+    vi.mocked(requireAuth).mockRejectedValue(new RejectionSignal());
+
+    await expect(getMyMembershipRequests()).rejects.toBeInstanceOf(RejectionSignal);
+
+    expect(listUserRequests).not.toHaveBeenCalled();
+  });
+});
+
+describe("userHasClub", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("asks the service about the session user", async () => {
+    vi.mocked(requireAuth).mockResolvedValue(USER);
+    hasClub.mockResolvedValue(true);
+
+    await expect(userHasClub()).resolves.toBe(true);
+
+    expect(hasClub).toHaveBeenCalledWith(USER.id);
+  });
+
+  it("propagates the rejection of requireAuth and does not call the service", async () => {
+    vi.mocked(requireAuth).mockRejectedValue(new RejectionSignal());
+
+    await expect(userHasClub()).rejects.toBeInstanceOf(RejectionSignal);
+
+    expect(hasClub).not.toHaveBeenCalled();
   });
 });

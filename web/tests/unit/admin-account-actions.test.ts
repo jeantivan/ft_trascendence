@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { blockAccountAction, deleteAccountAction, unblockAccountAction, updateAccountNickAction } from "@/lib/admin/actions";
-import { blockAccount, deleteAccount, unblockAccount, updateAccountNick } from "@/lib/admin/accounts";
+import {
+  blockAccountAction,
+  deleteAccountAction,
+  makeAdminAction,
+  removeAdminAction,
+  unblockAccountAction,
+  updateAccountNickAction,
+} from "@/lib/admin/actions";
+import { blockAccount, changeGlobalRole, deleteAccount, unblockAccount, updateAccountNick } from "@/lib/admin/accounts";
 import { requireAdmin } from "@/lib/permissions/require-admin";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -9,6 +16,7 @@ import { redirect } from "next/navigation";
 vi.mock("@/lib/permissions/require-admin", () => ({ requireAdmin: vi.fn() }));
 vi.mock("@/lib/admin/accounts", () => ({
   blockAccount: vi.fn(),
+  changeGlobalRole: vi.fn(),
   deleteAccount: vi.fn(),
   unblockAccount: vi.fn(),
   updateAccountNick: vi.fn(),
@@ -116,6 +124,8 @@ describe("Admin account actions", () => {
     ["unblock", () => unblockAccountAction(null, formWith({ accountId: ACCOUNT_ID })), unblockAccount],
     ["nick", () => updateAccountNickAction(null, formWith({ accountId: ACCOUNT_ID, nick: "X1" })), updateAccountNick],
     ["delete", () => deleteAccountAction(null, formWith({ accountId: ACCOUNT_ID })), deleteAccount],
+    ["make Admin", () => makeAdminAction(null, formWith({ accountId: ACCOUNT_ID })), changeGlobalRole],
+    ["remove Admin", () => removeAdminAction(null, formWith({ accountId: ACCOUNT_ID })), changeGlobalRole],
   ] as const)("%s: someone who is not an Admin stops at requireAdmin and changes nothing", async (_, action, service) => {
     vi.mocked(requireAdmin).mockRejectedValue(new ForbiddenSignal());
 
@@ -129,6 +139,8 @@ describe("Admin account actions", () => {
     ["block", blockAccountAction, blockAccount],
     ["unblock", unblockAccountAction, unblockAccount],
     ["nick", updateAccountNickAction, updateAccountNick],
+    ["make Admin", makeAdminAction, changeGlobalRole],
+    ["remove Admin", removeAdminAction, changeGlobalRole],
   ] as const)("%s: a change redraws the panel pages", async (_name, action, service) => {
     vi.mocked(service).mockResolvedValue({ ok: true, changed: true });
 
@@ -142,6 +154,8 @@ describe("Admin account actions", () => {
     ["block", blockAccountAction, blockAccount],
     ["unblock", unblockAccountAction, unblockAccount],
     ["nick", updateAccountNickAction, updateAccountNick],
+    ["make Admin", makeAdminAction, changeGlobalRole],
+    ["remove Admin", removeAdminAction, changeGlobalRole],
   ] as const)("%s: already like that (another Admin was first) also redraws the panel", async (_name, action, service) => {
     vi.mocked(service).mockResolvedValue({ ok: true, changed: false });
 
@@ -166,6 +180,8 @@ describe("Admin account actions", () => {
     ["block", blockAccountAction, blockAccount, "self"],
     ["block", blockAccountAction, blockAccount, "not-found"],
     ["unblock", unblockAccountAction, unblockAccount, "not-found"],
+    ["remove Admin", removeAdminAction, changeGlobalRole, "self"],
+    ["make Admin", makeAdminAction, changeGlobalRole, "not-found"],
   ] as const)("%s refused (%s): nothing to redraw", async (_name, action, service, reason) => {
     vi.mocked(service).mockResolvedValue({ ok: false, reason });
 
@@ -180,5 +196,31 @@ describe("Admin account actions", () => {
     await updateAccountNickAction(null, formWith({ accountId: ACCOUNT_ID, nick: "A" }));
 
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  // Two actions, like block and unblock: the role never comes from the form
+  it.each([
+    ["make Admin", makeAdminAction, "admin"],
+    ["remove Admin", removeAdminAction, "user"],
+  ] as const)("%s: the Admin comes from the session, the account from the form, the role from the action", async (_name, action, role) => {
+    vi.mocked(changeGlobalRole).mockResolvedValue({ ok: true, changed: true });
+
+    const result = await action(null, formWith({ accountId: ACCOUNT_ID, adminId: "someone-else", role: "admin" }));
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(changeGlobalRole).toHaveBeenCalledWith(prisma, { adminId: "admin-from-session", accountId: ACCOUNT_ID, role });
+  });
+
+  // Refused for being a Manager of a club: the account page lists its clubs, so it was
+  // named Manager after the page was drawn and the page shows an old state
+  it.each([
+    ["remove Admin", "last-admin", removeAdminAction],
+    ["make Admin", "club-manager", makeAdminAction],
+  ] as const)("%s refused (%s) redraws the panel", async (_name, reason, action) => {
+    vi.mocked(changeGlobalRole).mockResolvedValue({ ok: false, reason });
+
+    await action(null, formWith({ accountId: ACCOUNT_ID }));
+
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/accounts", "layout");
   });
 });

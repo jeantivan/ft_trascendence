@@ -8,6 +8,7 @@ import type {
   MembershipRole,
   SessionType,
 } from "@/generated/prisma/client";
+import { isDuplicateTemplateAssignment } from "./duplicate-assignment";
 import { TrainingConflictError, TrainingNotFoundError } from "./errors";
 import type {
   AssignTrainingTemplateInput,
@@ -52,33 +53,55 @@ function toTemplateData(template: PrismaTemplateWithSessions): TrainingTemplateD
   };
 }
 
+function toSessionData(row: TrainingSessionData): TrainingSessionData {
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    origin: row.origin,
+    sessionType: row.sessionType,
+    targetDistanceM: row.targetDistanceM,
+    targetDurationS: row.targetDurationS,
+    targetPaceSPerKm: row.targetPaceSPerKm,
+    scheduledAt: row.scheduledAt,
+    groupId: row.groupId,
+    athleteId: row.athleteId,
+    sourceTemplateId: row.sourceTemplateId,
+  };
+}
+
 // Locks the template row inside the transaction so concurrent updates/deletes/assignments
 // serialize cleanly without P2002, P2003, or P2025 under READ COMMITTED.
 // - "update": FOR NO KEY UPDATE (allows external FOR KEY SHARE FK checks while blocking updates/deletes/assigns)
 // - "delete": FOR UPDATE (blocks FK references while removing the primary key)
-// - "share": FOR SHARE (allows concurrent assignments while waiting for update/delete)
+// - "assign": FOR SHARE (allows concurrent assignments while waiting for update/delete)
 async function lockTemplate(
   tx: Prisma.TransactionClient,
   orgId: string,
   id: string,
-  mode: "update" | "delete" | "share"
+  mode: "update" | "delete" | "assign"
 ): Promise<void> {
   if (!isDbId(orgId) || !isDbId(id)) {
     throw new TrainingNotFoundError();
   }
   const normalizedId = normalizeId(id);
-  const rows =
-    mode === "update"
-      ? await tx.$queryRaw<{ id: string; org_id: string }[]>`
-          SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR NO KEY UPDATE
-        `
-      : mode === "share"
-        ? await tx.$queryRaw<{ id: string; org_id: string }[]>`
-            SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR SHARE
-          `
-        : await tx.$queryRaw<{ id: string; org_id: string }[]>`
-            SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR UPDATE
-          `;
+  let rows: { id: string; org_id: string }[];
+  switch (mode) {
+    case "update":
+      rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+        SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR NO KEY UPDATE
+      `;
+      break;
+    case "assign":
+      rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+        SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR SHARE
+      `;
+      break;
+    case "delete":
+      rows = await tx.$queryRaw<{ id: string; org_id: string }[]>`
+        SELECT id, org_id FROM training_templates WHERE id = ${normalizedId}::uuid FOR UPDATE
+      `;
+      break;
+  }
   if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
     throw new TrainingNotFoundError();
   }
@@ -103,38 +126,6 @@ async function lockGroupForAssign(
   if (rows.length === 0 || normalizeId(rows[0].org_id) !== normalizeId(orgId)) {
     throw new TrainingNotFoundError();
   }
-}
-
-function countSessionSignatures(
-  sessions: ReadonlyArray<{ scheduledAt: Date; sessionType: SessionType }>
-): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const session of sessions) {
-    const key = `${session.scheduledAt.getTime()}:${session.sessionType}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return counts;
-}
-
-// Decision (#238 row 10): prevents double-submit / concurrent duplicate copies for the exact same
-// (groupId, sourceTemplateId, startDate) without requiring a schema migration, while still
-// allowing intentional reassignments of the same template to the same group on another startDate
-// (even when later sessions partially overlap).
-function isDuplicateTemplateAssignment(
-  planned: ReadonlyArray<{ scheduledAt: Date; sessionType: SessionType }>,
-  existing: ReadonlyArray<{ scheduledAt: Date; sessionType: SessionType }>
-): boolean {
-  if (planned.length === 0) {
-    return false;
-  }
-  const plannedCounts = countSessionSignatures(planned);
-  const existingCounts = countSessionSignatures(existing);
-  for (const [signature, requiredCount] of plannedCounts.entries()) {
-    if ((existingCounts.get(signature) ?? 0) < requiredCount) {
-      return false;
-    }
-  }
-  return true;
 }
 
 export class PrismaTrainingRepository implements TrainingRepository {
@@ -355,7 +346,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
 
     return await this.db.$transaction(async (tx) => {
       // Lock template then group in fixed order so concurrent delete/update and double-submits serialize cleanly.
-      await lockTemplate(tx, normalizedOrgId, normalizedTemplateId, "share");
+      await lockTemplate(tx, normalizedOrgId, normalizedTemplateId, "assign");
       await lockGroupForAssign(tx, normalizedOrgId, normalizedGroupId);
 
       const org = await tx.organization.findUnique({
@@ -433,19 +424,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
         tx
       );
 
-      return created.map((row) => ({
-        id: row.id,
-        orgId: row.orgId,
-        origin: row.origin,
-        sessionType: row.sessionType,
-        targetDistanceM: row.targetDistanceM,
-        targetDurationS: row.targetDurationS,
-        targetPaceSPerKm: row.targetPaceSPerKm,
-        scheduledAt: row.scheduledAt,
-        groupId: row.groupId,
-        athleteId: row.athleteId,
-        sourceTemplateId: row.sourceTemplateId,
-      }));
+      return created.map(toSessionData);
     });
   }
 }

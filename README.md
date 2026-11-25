@@ -47,13 +47,15 @@ The passwords in `.env` are generated randomly the first time and are never prin
 | `make` | Production mode: builds the images and starts everything in the background |
 | `make dev` | Development mode: same, but `./web` is mounted and the app reloads on save; loads the demo data |
 | `make seed` | Loads the demo data with the app in `make` mode (demo users, Club Demo, sessions); safe to run twice |
-| `make test` | Runs every test in Docker against an empty test database ([docs/testing.md](docs/testing.md)) |
+| `make test` | Runs every test in Docker against an empty test database; `make test args="path"` runs only some ([docs/testing.md](docs/testing.md)) |
 | `make test-nginx` | Checks that NGINX is the only way in, over HTTPS (needs `make` or `make dev` running) |
 | `make migrate name=<name>` | Creates a Prisma migration from `web/prisma/schema.prisma` and applies it (needs `make dev` running) |
 | `make logs` / `make ps` | Follows the logs / lists the containers |
 | `make down` / `make clean` | Stops and removes the containers; the data is kept |
 | `make fclean` | Removes everything the project created: the containers and the network; the volumes, that is **the database, the uploaded files** and the HTTPS certificate (the next start makes a new one); and the images it built (`app`, `migrate`, `nginx` and `transcendence-app-dev`), plus the old untagged versions of those images that rebuilding left behind (about 1.5 GB each). Those untagged versions are found by the project names `transcendence` and `transcendence-test`, which every clone on the computer shares, so the ones from other clones are removed too. `transcendence-app-dev` is the `make dev` / `make test` image, shared by every clone on the computer, so it is removed for all of them (the next `make dev` or `make test` rebuilds it). Downloaded images (PostgreSQL, Mailpit) are kept, since other projects may use them |
 | `make re` | `make clean` followed by `make` |
+
+Every command, with its warnings, is in [docs/make.md](docs/make.md).
 
 The port can be changed with `HTTPS_PORT` in `.env`.
 
@@ -62,7 +64,7 @@ With rootless Docker (as on the 42 campus computers), `make dev` and `make test`
 ### Conventions
 - **Frontend tests**: automated frontend tests live in `web/tests/`, grouped by component or feature. Component tests go in `web/tests/components/` and import the code through the `@/` alias.
 - **Test mail inbox**: mail sent by the app goes to a test inbox at `/mailpit/`, and nothing leaves Docker. See [docs/mail.md](docs/mail.md).
-- **Running the tests**: `make test` runs every test in Docker against an empty PostgreSQL test database. See [docs/testing.md](docs/testing.md).
+- **Running the tests**: `make test` runs every test in Docker against an empty PostgreSQL test database (`args="path"` limits it to some). See [docs/testing.md](docs/testing.md).
 
 ## Resources
 - [Next.js Documentation](https://nextjs.org/docs)

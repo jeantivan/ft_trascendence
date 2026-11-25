@@ -3,6 +3,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import {
   blockAccount,
+  changeGlobalRole,
   deleteAccount,
   getAccount,
   listAccounts,
@@ -508,5 +509,148 @@ describe("Integration: deleteAccount", () => {
     expect(result).toEqual({ ok: false, reason: "last-admin" });
     expect(await exists(target)).toBe(true);
     await expect(auditRows()).resolves.toEqual([]);
+  });
+});
+
+describe("Integration: changeGlobalRole", () => {
+  const target = IDS.middle;
+  const auditRows = () => prisma.auditLog.findMany({ where: { actorId: ADMIN_ID } });
+  const roleOf = async (id: string) =>
+    (await prisma.user.findUniqueOrThrow({ where: { id }, select: { roleGlobal: true } })).roleGlobal;
+
+  afterEach(async () => {
+    await prisma.auditLog.deleteMany({ where: { actorId: ADMIN_ID } });
+    await prisma.user.deleteMany({ where: { email: { endsWith: "@admin-accounts.test" } } });
+    await prisma.organization.deleteMany({ where: { id: { in: Object.values(CLUBS) } } });
+  });
+
+  it("makes a normal account an Admin and writes one role_change row in audit_log", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z");
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "admin" });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await roleOf(target)).toBe("admin");
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorRole: "admin", action: "role_change", resource: "account", subjectId: target });
+  });
+
+  it("removes the Admin role while another unblocked Admin is left, and writes one row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "user" });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await roleOf(target)).toBe("user");
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ action: "role_change", subjectId: target });
+  });
+
+  it("changes nothing and writes no row when the account already has that role", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z");
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "user" });
+
+    expect(result).toEqual({ ok: true, changed: false });
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  it("says not-found for an account that does not exist or a malformed id, and writes no row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+
+    for (const accountId of [IDS.newest, "not-a-uuid"]) {
+      await expect(changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId, role: "admin" })).resolves.toEqual({
+        ok: false,
+        reason: "not-found",
+      });
+    }
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  it("does not let the Admin remove their own Admin role, also with the id in upper or mixed case", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+    const mixed = ADMIN_ID.slice(0, 18) + ADMIN_ID.slice(18).toUpperCase();
+
+    for (const accountId of [ADMIN_ID, ADMIN_ID.toUpperCase(), mixed]) {
+      await expect(changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId, role: "user" })).resolves.toEqual({
+        ok: false,
+        reason: "self",
+      });
+    }
+    expect(await roleOf(ADMIN_ID)).toBe("admin");
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  // Two Admins removing each other's role at once: the second one runs after the first
+  // commit, so the Admin acting is no Admin any more and the target is the last one.
+  // Here the Admin acting is blocked, which leaves the target last in the same way
+  it("does not remove the Admin role from the last unblocked Admin, and writes no row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin", blockedAt: new Date("2099-01-05T00:00:00Z") });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "user" });
+
+    expect(result).toEqual({ ok: false, reason: "last-admin" });
+    expect(await roleOf(target)).toBe("admin");
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  // Decision B of #214: an Admin is never a Manager, the other way round from assignManager
+  it("does not make a Manager of a club an Admin, and writes no row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z");
+    await prisma.organization.create({ data: { id: CLUBS.alpha, name: "Alpha 103", timezone: "Europe/Madrid" } });
+    await prisma.membership.create({ data: { userId: target, orgId: CLUBS.alpha, role: "manager" } });
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "admin" });
+
+    expect(result).toEqual({ ok: false, reason: "club-manager" });
+    expect(await roleOf(target)).toBe("user");
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  // A blocked Admin does not count as an unblocked one, so removing its role leaves the
+  // number of unblocked Admins unchanged, even when the Admin acting is the only one
+  it("removes the Admin role from a blocked Admin, and writes one row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin", blockedAt: new Date("2099-01-05T00:00:00Z") });
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "user" });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await roleOf(target)).toBe("user");
+    await expect(auditRows()).resolves.toHaveLength(1);
+  });
+
+  // A page drawn before another Admin made the target an Admin, sent by an Admin who no
+  // longer counts (blocked meanwhile): it is already as wanted, never a last-Admin refusal
+  it("making an Admin of an account that already is one says so, even when it is the last unblocked Admin", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin", blockedAt: new Date("2099-01-05T00:00:00Z") });
+    await createUser(target, "2099-01-02T00:00:00Z", { roleGlobal: "admin" });
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "admin" });
+
+    expect(result).toEqual({ ok: true, changed: false });
+    await expect(auditRows()).resolves.toEqual([]);
+  });
+
+  // Only a Manager is refused: an Athlete of a club can be an Admin (CONTEXT.md, Admin)
+  it("makes an Athlete of a club an Admin, and writes one row", async () => {
+    await createUser(ADMIN_ID, "2099-01-04T00:00:00Z", { roleGlobal: "admin" });
+    await createUser(target, "2099-01-02T00:00:00Z");
+    await prisma.organization.create({ data: { id: CLUBS.alpha, name: "Alpha 103", timezone: "Europe/Madrid" } });
+    await prisma.membership.create({ data: { userId: target, orgId: CLUBS.alpha, role: "athlete" } });
+
+    const result = await changeGlobalRole(prisma, { adminId: ADMIN_ID, accountId: target, role: "admin" });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(await roleOf(target)).toBe("admin");
+    await expect(auditRows()).resolves.toHaveLength(1);
   });
 });

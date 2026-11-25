@@ -2,6 +2,7 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { CannotExpelSelfError, NotMemberError, PrismaClubExit, type CancelPendingContacts } from "@/lib/org/club-exit";
+import { orderedPair } from "@/lib/social/contact-pair";
 import { withLockHarness } from "../support/lock-harness";
 import type { Notify } from "@/lib/org/club-without-manager";
 
@@ -85,6 +86,22 @@ describe("PrismaClubExit.leave", () => {
     await new PrismaClubExit(prisma, { cancelPendingContacts }).leave(athlete, club.orgId);
 
     expect(seen).toEqual([{ userId: athlete, memberships: 0, groupMembers: 0 }]);
+  });
+
+  it("deletes a pending Contact with a Group mate by default, and keeps an accepted one (#154)", async () => {
+    const [athlete, pendingMate, acceptedMate] = [await createUser(), await createUser(), await createUser()];
+    const club = await createClub([[athlete, "athlete"], [pendingMate, "athlete"], [acceptedMate, "athlete"]]);
+    await prisma.contact.createMany({
+      data: [
+        { ...orderedPair(athlete, pendingMate), requestedBy: athlete, status: "pending" },
+        { ...orderedPair(athlete, acceptedMate), requestedBy: athlete, status: "accepted" },
+      ],
+    });
+
+    await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+    const left = await prisma.contact.findMany({ where: { OR: [{ userA: athlete }, { userB: athlete }] } });
+    expect(left).toMatchObject([{ status: "accepted" }]);
   });
 
   it("does not warn when an Athlete leaves a club that has no Manager", async () => {

@@ -3,6 +3,7 @@ import {
   AdminCannotBeManagerError,
   AlreadyManagerError,
   AlreadyMemberError,
+  BlockedAccountError,
   LastManagerError,
   MembershipRequestNotFoundError,
   MembershipRequestNotPendingError,
@@ -233,6 +234,34 @@ export function runOrganizationRepositoryContract(
       expect(catalog.some((club) => club.name === data.name)).toBe(false);
     });
 
+    it("createWithManagers throws BlockedAccountError if a Manager is blocked and creates no club", async () => {
+      const { repo, createUsers, blockUser } = createFixture();
+      const data = newClub();
+      const [adminId, managerId, blockedId] = await createUsers(3);
+      await blockUser(blockedId);
+
+      await expect(
+        repo.createWithManagers(adminId, { ...data, managerIds: [managerId, blockedId] }),
+      ).rejects.toBeInstanceOf(BlockedAccountError);
+
+      const catalog = await repo.listCatalog();
+      expect(catalog.some((club) => club.name === data.name)).toBe(false);
+    });
+
+    it("createWithManagers reports a missing user, then an Admin account, before a blocked one", async () => {
+      const { repo, createUsers, createAdmins, blockUser } = createFixture();
+      const [adminId, blockedId] = await createUsers(2);
+      const [otherAdminId] = await createAdmins(1);
+      await blockUser(blockedId);
+
+      await expect(
+        repo.createWithManagers(adminId, { ...newClub(), managerIds: [blockedId, UNKNOWN_ID] }),
+      ).rejects.toBeInstanceOf(UserNotFoundError);
+      await expect(
+        repo.createWithManagers(adminId, { ...newClub(), managerIds: [blockedId, otherAdminId] }),
+      ).rejects.toBeInstanceOf(AdminCannotBeManagerError);
+    });
+
     it("createWithManagers treats the same Manager in different capitalization as one", async () => {
       const { repo, createUsers } = createFixture();
       const data = newClub();
@@ -260,12 +289,12 @@ export function runOrganizationRepositoryContract(
 
     // A club with one Manager, plus an admin and an athlete member to work with
     async function clubWithAthlete() {
-      const { repo, createUsers, addAthlete } = createFixture();
+      const { repo, createUsers, addAthlete, blockUser } = createFixture();
       const [adminId, managerId, athleteId, strangerId] = await createUsers(4);
       const data = newClub();
       const club = await repo.createWithManagers(adminId, { ...data, managerIds: [managerId] });
       await addAthlete(club.id, athleteId);
-      return { repo, adminId, managerId, athleteId, strangerId, orgId: club.id };
+      return { repo, adminId, managerId, athleteId, strangerId, orgId: club.id, blockUser };
     }
 
     it("assignManager promotes a member to Manager and keeps the previous Manager", async () => {
@@ -292,6 +321,49 @@ export function runOrganizationRepositoryContract(
       await expect(repo.assignManager(adminId, orgId, managerId)).rejects.toBeInstanceOf(
         AlreadyManagerError,
       );
+    });
+
+    it("assignManager throws BlockedAccountError for a blocked non-member and changes nothing", async () => {
+      const { repo, adminId, strangerId, orgId, blockUser } = await clubWithAthlete();
+      await blockUser(strangerId);
+
+      await expect(repo.assignManager(adminId, orgId, strangerId)).rejects.toBeInstanceOf(
+        BlockedAccountError,
+      );
+      expect(await repo.listManagerIds(orgId)).not.toContain(strangerId);
+      const catalog = await repo.listCatalog();
+      expect(catalog.find((club) => club.id === orgId)?.memberCount).toBe(2);
+    });
+
+    it("assignManager throws BlockedAccountError for a blocked athlete member and keeps them an athlete", async () => {
+      const { repo, adminId, athleteId, orgId, blockUser } = await clubWithAthlete();
+      await blockUser(athleteId);
+
+      await expect(repo.assignManager(adminId, orgId, athleteId)).rejects.toBeInstanceOf(
+        BlockedAccountError,
+      );
+      expect(await repo.listManagerIds(orgId)).not.toContain(athleteId);
+    });
+
+    it("removeManager does not count a blocked Manager as another Manager", async () => {
+      const { repo, adminId, managerId, athleteId, orgId, blockUser } = await clubWithAthlete();
+      await repo.assignManager(adminId, orgId, athleteId);
+      await blockUser(athleteId);
+
+      await expect(repo.removeManager(adminId, orgId, managerId)).rejects.toBeInstanceOf(
+        LastManagerError,
+      );
+      expect((await repo.listManagerIds(orgId)).sort()).toEqual([managerId, athleteId].sort());
+    });
+
+    it("removeManager can remove a blocked Manager while an active one remains", async () => {
+      const { repo, adminId, managerId, athleteId, orgId, blockUser } = await clubWithAthlete();
+      await repo.assignManager(adminId, orgId, athleteId);
+      await blockUser(athleteId);
+
+      await repo.removeManager(adminId, orgId, athleteId);
+
+      expect(await repo.listManagerIds(orgId)).toEqual([managerId]);
     });
 
     it("removeManager leaves the Manager as an athlete member of the club", async () => {
@@ -606,6 +678,48 @@ export function runOrganizationRepositoryContract(
         const last = await repo.requestToJoin(second, orgId);
 
         expect((await repo.listPendingRequests(orgId)).map((r) => r.id)).toEqual([first.id, last.id]);
+      });
+
+      it("listUserRequests returns the user's own invitations and requests with the club name, of every status", async () => {
+        const { repo, orgId, managerId, userId, createUsers, createClub } = await setup();
+        const [other] = await createUsers(1);
+        const otherOrgId = await createClub(newClub({ members: 0 }));
+        const invitation = await repo.inviteUser(managerId, orgId, userId);
+        const rejected = await repo.requestToJoin(userId, otherOrgId);
+        await repo.reviewRequest(otherOrgId, rejected.id, false);
+        await repo.requestToJoin(other, orgId);
+        const clubName = (id: string) => repo.listCatalog().then((clubs) => clubs.find((club) => club.id === id)?.name);
+
+        const own = await repo.listUserRequests(userId);
+
+        expect(own.map((r) => r.id).sort()).toEqual([invitation.id, rejected.id].sort());
+        expect(own.find((r) => r.id === invitation.id)).toMatchObject({
+          orgId,
+          orgName: await clubName(orgId),
+          kind: "invite",
+          status: "pending",
+        });
+        expect(own.find((r) => r.id === rejected.id)).toMatchObject({
+          orgId: otherOrgId,
+          orgName: await clubName(otherOrgId),
+          kind: "request",
+          status: "rejected",
+        });
+      });
+
+      it("hasClub is true for a member of any club and false for a user with none", async () => {
+        const { repo, managerId, userId, memberId } = await setup();
+
+        expect(await repo.hasClub(managerId)).toBe(true);
+        expect(await repo.hasClub(memberId)).toBe(true);
+        expect(await repo.hasClub(userId)).toBe(false);
+        expect(await repo.hasClub(UNKNOWN_ID)).toBe(false);
+      });
+
+      it("listUserRequests is empty for a user with none", async () => {
+        const { repo, userId } = await setup();
+
+        expect(await repo.listUserRequests(userId)).toEqual([]);
       });
     });
 

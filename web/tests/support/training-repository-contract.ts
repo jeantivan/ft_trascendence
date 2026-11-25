@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { TrainingConflictError, TrainingNotFoundError } from "@/lib/training/errors";
 import type { TrainingRepository } from "@/lib/training/types";
+import { computeScheduledAtUtc } from "@/lib/training/units";
 
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
+
+function formatUtcDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export interface TrainingRepositoryFixture {
   repo: TrainingRepository;
@@ -457,6 +465,88 @@ export function runTrainingRepositoryContract(
         startDate: "2026-06-04",
       });
       expect(overlappingBatch).toHaveLength(2);
+    });
+
+    it("accepts today and future startDate values", async () => {
+      const { repo, orgId, manager1Id, groupId } = getFixture();
+
+      const template = await repo.create({
+        orgId,
+        name: "Today & Future Plan",
+        createdBy: manager1Id,
+        sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 5000 }],
+      });
+
+      const now = new Date();
+      const today = formatUtcDate(now);
+      const future = formatUtcDate(
+        new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 30)
+        )
+      );
+
+      const todayBatch = await repo.assignTemplateToGroup({
+        orgId,
+        templateId: template.id,
+        groupId,
+        startDate: today,
+      });
+      const futureBatch = await repo.assignTemplateToGroup({
+        orgId,
+        templateId: template.id,
+        groupId,
+        startDate: future,
+      });
+
+      expect(todayBatch).toHaveLength(1);
+      expect(todayBatch[0].scheduledAt).toEqual(
+        computeScheduledAtUtc(today, 0, "Europe/Madrid")
+      );
+      expect(futureBatch).toHaveLength(1);
+      expect(futureBatch[0].scheduledAt).toEqual(
+        computeScheduledAtUtc(future, 0, "Europe/Madrid")
+      );
+      expect(todayBatch[0].id).not.toBe(futureBatch[0].id);
+    });
+
+    it("documents known limit: rejects intermediate startDate when surrounding assignments already cover all planned signatures", async () => {
+      const { repo, orgId, manager1Id, groupId } = getFixture();
+
+      const template = await repo.create({
+        orgId,
+        name: "Periodic Weekly Rodaje",
+        createdBy: manager1Id,
+        sessions: [
+          { sessionType: "rodaje", dayOffset: 0, targetDistanceM: 8000 },
+          { sessionType: "rodaje", dayOffset: 7, targetDistanceM: 8000 },
+        ],
+      });
+
+      // Creates 2026-06-01 and 2026-06-08
+      await repo.assignTemplateToGroup({
+        orgId,
+        templateId: template.id,
+        groupId,
+        startDate: "2026-06-01",
+      });
+      // Creates 2026-06-15 and 2026-06-22
+      await repo.assignTemplateToGroup({
+        orgId,
+        templateId: template.id,
+        groupId,
+        startDate: "2026-06-15",
+      });
+
+      // Known limit (#238): 2026-06-08 plans 2026-06-08 + 2026-06-15, which already exist
+      // from the surrounding assignments, so signature-based duplicate detection rejects it.
+      await expect(
+        repo.assignTemplateToGroup({
+          orgId,
+          templateId: template.id,
+          groupId,
+          startDate: "2026-06-08",
+        })
+      ).rejects.toThrow(TrainingConflictError);
     });
   });
 }

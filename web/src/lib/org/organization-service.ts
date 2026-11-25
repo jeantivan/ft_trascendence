@@ -12,6 +12,7 @@ import {
   RequestAlreadyPendingError,
   UserNotFoundError,
   type MembershipRequestDetail,
+  type UserMembershipRequest,
   type OrganizationDetail,
   type OrganizationRepository,
   type OrganizationSummary,
@@ -180,5 +181,15 @@ export class OrganizationService {
   // Manager only: requireOrgRole(orgId, ORG_ROLES["membershipRequest.review"])
   listPendingRequests(orgId: string): Promise<MembershipRequestDetail[]> {
     return this.repo.listPendingRequests(orgId);
+  }
+
+  // The signed-in user's own state: requireAuth(), and userId is the session's
+  hasClub(userId: string): Promise<boolean> {
+    return this.repo.hasClub(userId);
+  }
+
+  // The signed-in user's own rows: requireAuth(), and userId is the session's, never a parameter
+  listUserRequests(userId: string): Promise<UserMembershipRequest[]> {
+    return this.repo.listUserRequests(userId);
   }
 }

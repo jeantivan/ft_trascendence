@@ -37,6 +37,15 @@ export class AdminCannotBeManagerError extends Error {
   }
 }
 
+// A blocked account cannot be made Manager. Not UserNotFoundError: the Admin may see that the
+// account exists (blocked is their own action, #102), unlike a user acting on someone else's
+export class BlockedAccountError extends Error {
+  constructor(message = "A blocked account cannot be made Manager of a club") {
+    super(message);
+    this.name = "BlockedAccountError";
+  }
+}
+
 export class AlreadyManagerError extends Error {
   constructor(message = "The user is already a Manager of the club") {
     super(message);
@@ -162,6 +171,16 @@ export interface MembershipRequestDetail {
   createdAt: Date;
 }
 
+// A user's own invitation or request, with the club's name for the /club view
+export interface UserMembershipRequest {
+  id: string;
+  orgId: string;
+  orgName: string;
+  kind: MembershipRequestKind;
+  status: MembershipRequestStatus;
+  createdAt: Date;
+}
+
 export interface OrganizationRepository {
   // Every club, for the catalog
   listCatalog(): Promise<OrganizationSummary[]>;
@@ -172,10 +191,13 @@ export interface OrganizationRepository {
   // Admin only: creates the club and makes each of managerIds its Manager, all or
   // nothing (UserNotFoundError if one does not exist, then AdminCannotBeManagerError if one
   // is an Admin account; neither creates anything). adminId is who does it, for the audit rows written in the same transaction.
-  // Known limit: a blocked account (users.blocked_at) is accepted as Manager, and
-  // removeManager counts a blocked Manager as "another Manager". #148 says "otro Manager activo",
-  // which Marta reads as excluding blocked Managers (15-nov); not implemented because the
-  // condition is complex and the 42 demo does not reach it.
+  // Known limit: a blocked account is refused as Manager (BlockedAccountError) and removeManager
+  // does not count blocked Managers as "another Manager" (#264), but the blocked state of the
+  // other Managers is read without locking their user rows: an Admin blocking one at the same
+  // time (#102) can slip past removeManager. The matrix (#2) says nothing about a club whose
+  // Manager gets blocked, so blocking does not touch the club either.
+  // Known limit: delete-account.ts and club-without-manager.ts (#242) still count a blocked
+  // Manager as "another Manager", so the Admins are not warned when the last active one leaves.
   // Known limit: "a club has at least one Manager" is enforced by createOrganizationSchema
   // (min 1 managerId), not here: a caller that skips the schema could create a club with none.
   createWithManagers(adminId: string, input: CreateOrganizationInput): Promise<OrganizationDetail>;
@@ -222,6 +244,11 @@ export interface OrganizationRepository {
   reviewRequest(orgId: string, requestId: string, approve: boolean): Promise<void>;
   // The club's pending requests (kind "request"), oldest first
   listPendingRequests(orgId: string): Promise<MembershipRequestDetail[]>;
+  // The user's own invitations and requests, of every kind and status, newest first
+  // Known limit: not paginated; a user has few (one pending per club).
+  listUserRequests(userId: string): Promise<UserMembershipRequest[]>;
+  // Whether the user is a member of any club (as Manager or athlete)
+  hasClub(userId: string): Promise<boolean>;
 }
 
 // Prisma errors carry a `code` (P2025, P2002...); checked structurally, like update does
@@ -250,11 +277,12 @@ export function isNameViolation(error: unknown): boolean {
 // deletion's FOR UPDATE, but not with the KEY SHARE that a foreign key check takes (see
 // lockUserThenClub).
 async function lockUsersExist(tx: Prisma.TransactionClient, userIds: string[]): Promise<void> {
-  const users = await tx.$queryRaw<{ id: string; is_admin: boolean }[]>`
-    SELECT id, role_global = 'admin' AS is_admin FROM users
+  const users = await tx.$queryRaw<{ id: string; is_admin: boolean; is_blocked: boolean }[]>`
+    SELECT id, role_global = 'admin' AS is_admin, blocked_at IS NOT NULL AS is_blocked FROM users
     WHERE id = ANY(${userIds}::uuid[]) ORDER BY id FOR NO KEY UPDATE`;
   if (users.length !== userIds.length) throw new UserNotFoundError();
   if (users.some((user) => user.is_admin)) throw new AdminCannotBeManagerError();
+  if (users.some((user) => user.is_blocked)) throw new BlockedAccountError();
 }
 
 export const DELETION_NOTICE_DAYS = 30;
@@ -293,17 +321,18 @@ async function lockOrganization(
 // row. With FOR UPDATE, an Admin being assigned here (rejected only after its row is locked: row held, waiting for the club the deletion
 // already holds) and that deletion would wait for each other (40P01). FOR NO KEY UPDATE does not
 // conflict with KEY SHARE, and still conflicts with the FOR UPDATE of the user's own deletion.
-// Returns whether the user is an Admin account, read under the lock.
+// Returns whether the user is an Admin account and whether it is blocked, read under the lock.
 async function lockUserThenClub(
   tx: Prisma.TransactionClient,
   orgId: string,
   userId: string,
-): Promise<{ isAdmin: boolean; clubDeleteAt: Date | null }> {
-  const users = await tx.$queryRaw<{ is_admin: boolean }[]>`
-    SELECT role_global = 'admin' AS is_admin FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+): Promise<{ isAdmin: boolean; isBlocked: boolean; clubDeleteAt: Date | null }> {
+  const users = await tx.$queryRaw<{ is_admin: boolean; is_blocked: boolean }[]>`
+    SELECT role_global = 'admin' AS is_admin, blocked_at IS NOT NULL AS is_blocked
+    FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
   if (users.length === 0) throw new UserNotFoundError();
   const club = await lockOrganization(tx, orgId);
-  return { isAdmin: users[0].is_admin, clubDeleteAt: club.delete_at };
+  return { isAdmin: users[0].is_admin, isBlocked: users[0].is_blocked, clubDeleteAt: club.delete_at };
 }
 
 // The partial unique index on (org_id, user_id) WHERE status = 'pending' (exported for its test)
@@ -407,8 +436,9 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     userId = normalizeId(userId);
     await this.db.$transaction(
       async (tx) => {
-        const { isAdmin, clubDeleteAt } = await lockUserThenClub(tx, orgId, userId);
+        const { isAdmin, isBlocked, clubDeleteAt } = await lockUserThenClub(tx, orgId, userId);
         if (isAdmin) throw new AdminCannotBeManagerError();
+        if (isBlocked) throw new BlockedAccountError();
         const membership = await tx.membership.findUnique({
           where: { userId_orgId: { userId, orgId } },
           select: { role: true },
@@ -448,7 +478,8 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
         });
         if (membership?.role !== "manager") throw new NotManagerError();
         const otherManagers = await tx.membership.count({
-          where: { orgId, role: "manager", userId: { not: userId } },
+          // Only active Managers count: a blocked account cannot act as one (#264)
+          where: { orgId, role: "manager", userId: { not: userId }, user: { blockedAt: null } },
         });
         if (otherManagers === 0) throw new LastManagerError();
         await tx.membership.update({
@@ -627,6 +658,26 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
       where: { orgId: normalizeId(orgId), kind: "request", status: "pending" },
       orderBy: { createdAt: "asc" },
     });
+  }
+
+  async listUserRequests(userId: string): Promise<UserMembershipRequest[]> {
+    const rows = await this.db.membershipRequest.findMany({
+      where: { userId: normalizeId(userId) },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        orgId: true,
+        kind: true,
+        status: true,
+        createdAt: true,
+        organization: { select: { name: true } },
+      },
+    });
+    return rows.map(({ organization, ...request }) => ({ ...request, orgName: organization.name }));
+  }
+
+  async hasClub(userId: string): Promise<boolean> {
+    return (await this.db.membership.count({ where: { userId: normalizeId(userId) } })) > 0;
   }
 
   async update(orgId: string, data: OrganizationEdit): Promise<OrganizationDetail | null> {
