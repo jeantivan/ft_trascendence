@@ -2,18 +2,21 @@ import { z } from "zod";
 import type { Prisma } from "@/generated/prisma/client";
 import { normalizeId } from "@/lib/org/schemas";
 import {
+  assignTrainingTemplateSchema,
   trainingTemplateSchema,
   templateSessionSchema,
   trainingTemplateNameSchema,
 } from "./schemas";
 import {
+  TRAINING_TEMPLATE_ASSIGNED,
   TRAINING_TEMPLATE_CREATED,
   TRAINING_TEMPLATE_DELETED,
   TRAINING_TEMPLATE_UPDATED,
-  type TrainingNotificationType,
   type TrainingNotify,
   type TrainingRepository,
+  type TrainingSessionData,
   type TrainingTemplateData,
+  type TrainingTemplateManagerNotificationType,
 } from "./types";
 import {
   TrainingForbiddenError,
@@ -59,7 +62,7 @@ export class TrainingService {
     orgId: string,
     actorId: string,
     templateId: string,
-    type: TrainingNotificationType,
+    type: TrainingTemplateManagerNotificationType,
     tx: Prisma.TransactionClient
   ): Promise<void> {
     if (!this.notifier) {
@@ -219,6 +222,68 @@ export class TrainingService {
         TRAINING_TEMPLATE_DELETED,
         tx
       )
+    );
+  }
+
+  // Decision (#238 row 10): to prevent accidental duplicate copies on double-click / concurrent
+  // retries without adding a schema migration, the repository serializes assignments on the Group
+  // row (FOR NO KEY UPDATE) and rejects with TrainingConflictError when the exact same template
+  // already has all planned (scheduledAt, sessionType) copies in that group.
+  //
+  // Known limit (#238):
+  // - because each assignment's startDate is not stored in a separate column, reassigning a
+  //   periodic template (e.g. rodaje on dayOffset 0 and 7) on an intermediate startDate whose
+  //   planned (scheduledAt, sessionType) signatures are all already covered by surrounding
+  //   assignments (e.g. 2026-06-01 and 2026-06-15, then 2026-06-08) also raises TrainingConflictError.
+  // - concurrent group membership edits in the same millisecond are out of scope.
+  // - notifying group Athletes inside the transaction acquires FOR KEY SHARE on users(id); a
+  //   concurrent account deletion (users FOR UPDATE) can fail with P2003 (notifications_user_id_fkey)
+  //   or deadlock (40P01 / P2034) if that user created the template (created_by ON DELETE SET NULL).
+  // - locking training_templates -> groups before inserting sessions (FOR KEY SHARE on organizations)
+  //   is the inverse order of purgeExpiredOrganizations (organizations FOR UPDATE -> CASCADE), so a
+  //   concurrent club purge in the same millisecond can deadlock (40P01 / P2034) or fail with P2003.
+  async assignTemplateToGroup(
+    actorId: string,
+    orgId: string,
+    input: unknown
+  ): Promise<TrainingSessionData[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    const parseResult = assignTrainingTemplateSchema.safeParse(input);
+    if (!parseResult.success) {
+      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
+      throw new TrainingValidationError(message);
+    }
+
+    return this.repo.assignTemplateToGroup(
+      {
+        orgId: normalizedOrgId,
+        templateId: parseResult.data.templateId,
+        groupId: parseResult.data.groupId,
+        startDate: parseResult.data.startDate,
+      },
+      async (athleteIds, tx) => {
+        if (!this.notifier) {
+          return;
+        }
+        for (const userId of athleteIds) {
+          await this.notifier(tx, {
+            userId,
+            type: TRAINING_TEMPLATE_ASSIGNED,
+            payload: {
+              orgId: normalizedOrgId,
+              templateId: parseResult.data.templateId,
+              groupId: parseResult.data.groupId,
+            },
+          });
+        }
+      }
     );
   }
 }

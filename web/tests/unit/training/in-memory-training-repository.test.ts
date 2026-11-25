@@ -10,12 +10,17 @@ describe("InMemoryTrainingRepository", () => {
   const MANAGER_2 = "13400000-0000-4000-8000-000000000012";
   const ATHLETE_1 = "13400000-0000-4000-8000-000000000021";
   const GROUP_1 = "13400000-0000-4000-8000-000000000041";
+  const EMPTY_GROUP = "13400000-0000-4000-8000-000000000042";
+  const OTHER_GROUP = "13400000-0000-4000-8000-000000000043";
 
   beforeEach(() => {
     repo = new InMemoryTrainingRepository();
     repo.addMember(ORG_A, MANAGER_1, "manager");
     repo.addMember(ORG_A, MANAGER_2, "manager");
     repo.addMember(ORG_A, ATHLETE_1, "athlete");
+    repo.addGroup(ORG_A, GROUP_1);
+    repo.addGroup(ORG_A, EMPTY_GROUP);
+    repo.addGroup(ORG_B, OTHER_GROUP);
     repo.addAthleteToGroup(ATHLETE_1, GROUP_1);
   });
 
@@ -27,8 +32,10 @@ describe("InMemoryTrainingRepository", () => {
     manager2Id: MANAGER_2,
     athleteId: ATHLETE_1,
     groupId: GROUP_1,
-    assignTemplateToGroup: async (groupId, templateId) => {
-      repo.assignTemplateToGroup(groupId, templateId);
+    emptyGroupId: EMPTY_GROUP,
+    otherOrgGroupId: OTHER_GROUP,
+    seedTemplateAssignment: async (groupId, templateId) => {
+      repo.seedTemplateAssignment(groupId, templateId);
     },
   }));
 
@@ -40,7 +47,7 @@ describe("InMemoryTrainingRepository", () => {
       sessions: [{ sessionType: "rodaje", dayOffset: 0, targetDistanceM: 5000 }],
     });
 
-    repo.assignTemplateToGroup(GROUP_1, template.id);
+    repo.seedTemplateAssignment(GROUP_1, template.id);
     expect(repo.copiedSessions).toHaveLength(1);
     const copiedBefore = { ...repo.copiedSessions[0] };
 
@@ -64,7 +71,7 @@ describe("InMemoryTrainingRepository", () => {
       sessions: [{ sessionType: "rodaje", dayOffset: 0 }],
     });
 
-    repo.assignTemplateToGroup(GROUP_1, template.id);
+    repo.seedTemplateAssignment(GROUP_1, template.id);
     expect(repo.copiedSessions[0].sourceTemplateId).toBe(template.id);
 
     await repo.delete(ORG_A, template.id);
