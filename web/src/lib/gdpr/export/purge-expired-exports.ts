@@ -3,24 +3,23 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { EXPORTS_DIR, exportZipPath } from "@/lib/gdpr/export/export-zip-path";
+import { EXPORT_TTL_MS } from "@/lib/gdpr/export/generate-export";
 import { STUCK_PENDING_MS } from "@/lib/gdpr/export/request-export";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-// A failed export has no expiry date, so it is dropped 7 days after it was requested
-const FAILED_TTL_MS = 7 * DAY_MS;
 // A file without a row may belong to a generator still running (an account deleted
 // mid-generation), so it is only removed once it is older than this
 const ORPHAN_GRACE_MS = 10 * 60 * 1000;
 const EXPORT_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.zip(\.tmp)?$/;
 
 // Periodic cleanup of the exports (#170). Returns how many rows and files it removed.
-// 1. Rows past their expiry, failed ones older than 7 days and pending ones stuck for
+// 1. Rows past their expiry, failed ones (they have no expiry date) older than EXPORT_TTL_MS and pending ones stuck for
 //    more than STUCK_PENDING_MS: the ZIP goes first, then the row. If the ZIP cannot be
 //    removed the row stays, so the next run retries (the download is already refused
 //    by expiresAt, whatever this job does).
 // 2. ZIPs and .tmp files with no row at all (see Known limit in delete-account.ts).
-// Known limit: one app process, like cleanupInterruptedExports.
+// Known limit: one app process, like cleanupInterruptedExports. A generation that really
+// lasts more than STUCK_PENDING_MS loses its row (requestExport already treats it as stuck).
 export async function purgeExpiredExports(
   db: PrismaClient = prisma,
   uploadsDir: string = UPLOADS_DIR,
@@ -30,7 +29,7 @@ export async function purgeExpiredExports(
     where: {
       OR: [
         { expiresAt: { lte: now } },
-        { status: "failed", createdAt: { lt: new Date(now.getTime() - FAILED_TTL_MS) } },
+        { status: "failed", createdAt: { lt: new Date(now.getTime() - EXPORT_TTL_MS) } },
         { status: "pending", createdAt: { lt: new Date(now.getTime() - STUCK_PENDING_MS) } },
       ],
     },
