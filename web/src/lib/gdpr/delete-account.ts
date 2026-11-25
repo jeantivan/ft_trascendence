@@ -55,8 +55,9 @@ class AccountNotFoundError extends Error {}
 //    A file that cannot be deleted does not undo the deletion: the result stays
 //    deleted: true (the session must be closed) and carries fileCleanupFailed.
 //    Known limit: an export still being generated when the account goes can finish writing
-//    its ZIP after this cleanup (generateExport then fails to mark the missing row ready),
-//    and nothing removes it. It is a rare race; the ZIP is never served (no row, no token).
+//    its ZIP after this cleanup (generateExport then fails to mark the missing row ready).
+//    It is a rare race; the ZIP is never served (no row, no token), and the daily
+//    purgeExpiredExports job removes it once it is older than 10 minutes (#170).
 export async function deleteAccountWithOtp(
   userId: string,
   code: string,
