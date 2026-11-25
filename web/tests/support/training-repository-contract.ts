@@ -38,8 +38,11 @@ export interface TrainingRepositoryFixture {
   manager2Id: string;
   athleteId: string;
   secondAthleteId: string;
+  // Contains only athleteId (assignment notification tests assert [athleteId]).
   groupId: string;
+  // Shared by athleteId and secondAthleteId.
   secondGroupId: string;
+  // Contains no members.
   emptyGroupId: string;
   otherOrgGroupId: string;
   seedTemplateAssignment(groupId: string, templateId: string): Promise<void>;
