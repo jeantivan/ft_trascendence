@@ -9,18 +9,30 @@ import {
   isDuplicateTemplateAssignment,
   type SessionSignature,
 } from "@/lib/training/duplicate-assignment";
-import { TrainingConflictError, TrainingNotFoundError } from "@/lib/training/errors";
+import {
+  CUSTOMIZED_SESSION_ALREADY_EXISTS,
+  SESSION_ALREADY_LOGGED,
+  TrainingConflictError,
+  TrainingForbiddenError,
+  TrainingNotFoundError,
+  TrainingValidationError,
+} from "@/lib/training/errors";
 import { excludeSubstitutedGroupSessions } from "@/lib/training/schedule";
 import { computeScheduledAtUtc } from "@/lib/training/units";
 import type {
   AssignTrainingTemplateInput,
+  CreateCustomizedSessionInput,
   CreateTrainingTemplateInput,
+  CustomizedSessionCreateCallback,
   TemplateSessionData,
   TrainingAssignCallback,
   TrainingMutationCallback,
   TrainingRepository,
   TrainingSessionData,
+  TrainingSessionMutationCallback,
+  TrainingSessionMutationTarget,
   TrainingTemplateData,
+  UpdateManagerSessionInput,
   UpdateTrainingTemplateInput,
 } from "@/lib/training/types";
 import type { SeedSessionInput } from "./training-repository-contract";
@@ -523,5 +535,315 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     }
 
     return results.sort(compareSessions);
+  }
+
+  private isActiveClubAthlete(orgId: string, userId: string): boolean {
+    return (
+      this.memberships.get(`${normalizeId(orgId)}:${normalizeId(userId)}`) ===
+      "athlete"
+    );
+  }
+
+  private hasAnySessionLog(sessionId: string): boolean {
+    const prefix = `${normalizeId(sessionId)}:`;
+    for (const key of this.sessionLogs) {
+      if (key.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private findGroupAthletesToNotify(
+    orgId: string,
+    groupId: string,
+    sessionId: string
+  ): string[] {
+    const normalizedOrgId = normalizeId(orgId);
+    const substitutedAthleteIds = new Set<string>();
+    for (const stored of this.copiedSessions) {
+      if (
+        stored.orgId === normalizedOrgId &&
+        stored.origin === "customized" &&
+        stored.customizesSessionId === sessionId &&
+        stored.athleteId
+      ) {
+        substitutedAthleteIds.add(normalizeId(stored.athleteId));
+      }
+    }
+
+    const athleteIds: string[] = [];
+    for (const [athleteId, groups] of this.athleteGroups.entries()) {
+      if (
+        groups.has(groupId) &&
+        this.isActiveClubAthlete(normalizedOrgId, athleteId) &&
+        !substitutedAthleteIds.has(athleteId)
+      ) {
+        athleteIds.push(athleteId);
+      }
+    }
+    return athleteIds;
+  }
+
+  private resolveManagerWritableSession(
+    orgId: string,
+    sessionId: string
+  ): {
+    index: number;
+    session: TrainingSessionData;
+    target: TrainingSessionMutationTarget;
+  } {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedSessionId = normalizeId(sessionId);
+
+    let index = -1;
+    let session: TrainingSessionData | null = null;
+    for (let i = 0; i < this.copiedSessions.length; i++) {
+      const stored = this.copiedSessions[i];
+      if (stored.id === normalizedSessionId) {
+        session = toClubSessionData(stored, normalizedOrgId);
+        index = i;
+        break;
+      }
+    }
+
+    if (!session || index === -1) {
+      throw new TrainingNotFoundError();
+    }
+
+    if (session.origin === "free") {
+      if (
+        session.athleteId !== null &&
+        this.isActiveClubAthlete(normalizedOrgId, session.athleteId)
+      ) {
+        throw new TrainingForbiddenError(
+          "Un Manager no puede modificar ni eliminar una Free Session"
+        );
+      }
+      throw new TrainingNotFoundError();
+    }
+
+    if (session.origin === "customized") {
+      if (
+        session.athleteId === null ||
+        !this.isActiveClubAthlete(normalizedOrgId, session.athleteId)
+      ) {
+        throw new TrainingNotFoundError();
+      }
+    } else if (session.athleteId !== null) {
+      throw new TrainingNotFoundError();
+    }
+
+    if (this.hasAnySessionLog(session.id)) {
+      throw new TrainingConflictError(
+        "No se puede modificar ni eliminar una sesión que ya tiene registros",
+        SESSION_ALREADY_LOGGED
+      );
+    }
+
+    let target: TrainingSessionMutationTarget;
+    if (session.origin === "customized") {
+      target = {
+        kind: "customized",
+        sessionId: session.id,
+        athleteId: session.athleteId!,
+      };
+    } else if (session.groupId !== null) {
+      target = {
+        kind: "group",
+        sessionId: session.id,
+        groupId: session.groupId,
+        athleteIds: this.findGroupAthletesToNotify(
+          normalizedOrgId,
+          session.groupId,
+          session.id
+        ),
+      };
+    } else {
+      target = {
+        kind: "group_orphan",
+        sessionId: session.id,
+      };
+    }
+
+    return { index, session, target };
+  }
+
+  async createCustomizedSession(
+    input: CreateCustomizedSessionInput,
+    afterCreate?: CustomizedSessionCreateCallback
+  ): Promise<TrainingSessionData> {
+    const normalizedOrgId = normalizeId(input.orgId);
+    const normalizedAthleteId = normalizeId(input.athleteId);
+    const normalizedCustomizesSessionId =
+      input.customizesSessionId !== null
+        ? normalizeId(input.customizesSessionId)
+        : null;
+
+    if (!this.isActiveClubAthlete(normalizedOrgId, normalizedAthleteId)) {
+      throw new TrainingNotFoundError();
+    }
+
+    if (normalizedCustomizesSessionId !== null) {
+      let parentSession: TrainingSessionData | null = null;
+      for (const stored of this.copiedSessions) {
+        if (stored.id === normalizedCustomizesSessionId) {
+          parentSession = toClubSessionData(stored, normalizedOrgId);
+          break;
+        }
+      }
+      if (!parentSession) {
+        throw new TrainingNotFoundError();
+      }
+
+      if (parentSession.origin !== "template" || parentSession.athleteId !== null) {
+        if (
+          parentSession.athleteId !== null &&
+          !this.isActiveClubAthlete(normalizedOrgId, parentSession.athleteId)
+        ) {
+          throw new TrainingNotFoundError();
+        }
+        throw new TrainingValidationError(
+          "Solo se pueden adaptar sesiones de grupo"
+        );
+      }
+
+      if (parentSession.groupId === null) {
+        throw new TrainingValidationError(
+          "No se puede adaptar una sesión cuyo grupo ya no existe"
+        );
+      }
+
+      const memberGroups =
+        this.athleteGroups.get(normalizedAthleteId) ?? new Set<string>();
+      if (!memberGroups.has(parentSession.groupId)) {
+        throw new TrainingValidationError(
+          "El atleta no pertenece al grupo de la sesión a adaptar"
+        );
+      }
+
+      if (this.sessionLogs.has(`${parentSession.id}:${normalizedAthleteId}`)) {
+        throw new TrainingConflictError(
+          "No se puede adaptar una sesión de grupo que este atleta ya ha registrado",
+          SESSION_ALREADY_LOGGED
+        );
+      }
+
+      const alreadyCustomized = this.copiedSessions.some(
+        (stored) =>
+          stored.orgId === normalizedOrgId &&
+          stored.origin === "customized" &&
+          stored.athleteId === normalizedAthleteId &&
+          stored.customizesSessionId === parentSession.id
+      );
+      if (alreadyCustomized) {
+        throw new TrainingConflictError(
+          "Ya existe una sesión personalizada para este atleta sobre esta sesión de grupo",
+          CUSTOMIZED_SESSION_ALREADY_EXISTS
+        );
+      }
+    }
+
+    const timezone = this.orgTimezones.get(normalizedOrgId) ?? "Europe/Madrid";
+    const record: TrainingSessionData = {
+      id: randomUUID(),
+      orgId: normalizedOrgId,
+      origin: "customized",
+      sessionType: input.sessionType,
+      targetDistanceM: input.targetDistanceM,
+      targetDurationS: input.targetDurationS,
+      targetPaceSPerKm: input.targetPaceSPerKm,
+      scheduledAt: computeScheduledAtUtc(input.scheduledAt, 0, timezone),
+      groupId: null,
+      athleteId: normalizedAthleteId,
+      sourceTemplateId: null,
+      customizesSessionId: normalizedCustomizesSessionId,
+    };
+
+    this.copiedSessions.push(record);
+    try {
+      await afterCreate?.(record.id, IN_MEMORY_TX_TOKEN);
+    } catch (error) {
+      this.copiedSessions.pop();
+      throw error;
+    }
+
+    return { ...record };
+  }
+
+  async updateManagerSession(
+    orgId: string,
+    sessionId: string,
+    input: UpdateManagerSessionInput,
+    afterWrite?: TrainingSessionMutationCallback
+  ): Promise<TrainingSessionData> {
+    const normalizedOrgId = normalizeId(orgId);
+    const { index, session, target } = this.resolveManagerWritableSession(
+      normalizedOrgId,
+      sessionId
+    );
+    const previous = this.copiedSessions[index];
+
+    const timezone = this.orgTimezones.get(normalizedOrgId) ?? "Europe/Madrid";
+    const updated: TrainingSessionData = {
+      ...session,
+      sessionType:
+        input.sessionType !== undefined ? input.sessionType : session.sessionType,
+      scheduledAt:
+        input.scheduledAt !== undefined
+          ? computeScheduledAtUtc(input.scheduledAt, 0, timezone)
+          : session.scheduledAt,
+      targetDistanceM:
+        input.targetDistanceM !== undefined
+          ? input.targetDistanceM
+          : session.targetDistanceM,
+      targetDurationS:
+        input.targetDurationS !== undefined
+          ? input.targetDurationS
+          : session.targetDurationS,
+      targetPaceSPerKm:
+        input.targetPaceSPerKm !== undefined
+          ? input.targetPaceSPerKm
+          : session.targetPaceSPerKm,
+    };
+
+    this.copiedSessions[index] = updated;
+    try {
+      await afterWrite?.(target, IN_MEMORY_TX_TOKEN);
+    } catch (error) {
+      this.copiedSessions[index] = previous;
+      throw error;
+    }
+
+    return { ...updated };
+  }
+
+  async deleteManagerSession(
+    orgId: string,
+    sessionId: string,
+    afterDelete?: TrainingSessionMutationCallback
+  ): Promise<void> {
+    const { index, session, target } = this.resolveManagerWritableSession(
+      orgId,
+      sessionId
+    );
+    const [removed] = this.copiedSessions.splice(index, 1);
+    const affectedChildren: StoredSession[] = [];
+    for (const child of this.copiedSessions) {
+      if (child.customizesSessionId === session.id) {
+        affectedChildren.push(child);
+        child.customizesSessionId = null;
+      }
+    }
+
+    try {
+      await afterDelete?.(target, IN_MEMORY_TX_TOKEN);
+    } catch (error) {
+      this.copiedSessions.splice(index, 0, removed);
+      for (const child of affectedChildren) {
+        child.customizesSessionId = session.id;
+      }
+      throw error;
+    }
   }
 }

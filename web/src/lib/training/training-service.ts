@@ -3,11 +3,18 @@ import type { Prisma } from "@/generated/prisma/client";
 import { normalizeId } from "@/lib/org/schemas";
 import {
   assignTrainingTemplateSchema,
+  createCustomizedSessionSchema,
   trainingTemplateSchema,
   templateSessionSchema,
   trainingTemplateNameSchema,
+  updateManagerSessionSchema,
 } from "./schemas";
 import {
+  CUSTOMIZED_SESSION_CREATED,
+  CUSTOMIZED_SESSION_DELETED,
+  CUSTOMIZED_SESSION_UPDATED,
+  TRAINING_SESSION_DELETED,
+  TRAINING_SESSION_UPDATED,
   TRAINING_TEMPLATE_ASSIGNED,
   TRAINING_TEMPLATE_CREATED,
   TRAINING_TEMPLATE_DELETED,
@@ -15,6 +22,7 @@ import {
   type TrainingNotify,
   type TrainingRepository,
   type TrainingSessionData,
+  type TrainingSessionMutationTarget,
   type TrainingTemplateData,
   type TrainingTemplateManagerNotificationType,
 } from "./types";
@@ -327,5 +335,157 @@ export class TrainingService {
       throw new TrainingForbiddenError();
     }
     return this.repo.listClubSessions(normalizedOrgId);
+  }
+
+  private async notifySessionMutation(
+    orgId: string,
+    target: TrainingSessionMutationTarget,
+    event: "updated" | "deleted",
+    tx: Prisma.TransactionClient
+  ): Promise<void> {
+    if (!this.notifier || target.kind === "group_orphan") {
+      return;
+    }
+
+    if (target.kind === "customized") {
+      const type =
+        event === "updated"
+          ? CUSTOMIZED_SESSION_UPDATED
+          : CUSTOMIZED_SESSION_DELETED;
+      await this.notifier(tx, {
+        userId: target.athleteId,
+        type,
+        payload: {
+          orgId,
+          sessionId: target.sessionId,
+          athleteId: target.athleteId,
+        },
+      });
+      return;
+    }
+
+    const type =
+      event === "updated"
+        ? TRAINING_SESSION_UPDATED
+        : TRAINING_SESSION_DELETED;
+    for (const userId of target.athleteIds) {
+      await this.notifier(tx, {
+        userId,
+        type,
+        payload: {
+          orgId,
+          sessionId: target.sessionId,
+          groupId: target.groupId,
+        },
+      });
+    }
+  }
+
+  // Known limit (#238):
+  // - concurrent membership removal or group membership edits in the same millisecond
+  //   are independent events and out of scope.
+  // - notifying the target Athlete inside the transaction acquires FOR KEY SHARE on
+  //   users(id); a concurrent account deletion or club purge can fail with P2003 / 40P01.
+  // - direct Customized Sessions (customizesSessionId: null) allow multiple sessions on
+  //   the same day; accidental double-clicks are handled in UI (rule 1 of #238).
+  async createCustomizedSession(
+    actorId: string,
+    orgId: string,
+    input: unknown
+  ): Promise<TrainingSessionData> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    const parseResult = createCustomizedSessionSchema.safeParse(input);
+    if (!parseResult.success) {
+      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
+      throw new TrainingValidationError(message);
+    }
+
+    const data = parseResult.data;
+    return this.repo.createCustomizedSession(
+      {
+        orgId: normalizedOrgId,
+        athleteId: data.athleteId,
+        customizesSessionId: data.customizesSessionId,
+        sessionType: data.sessionType,
+        scheduledAt: data.scheduledAt,
+        targetDistanceM: data.targetDistanceM,
+        targetDurationS: data.targetDurationS,
+        targetPaceSPerKm: data.targetPaceSPerKm,
+      },
+      async (sessionId, tx) => {
+        if (!this.notifier) {
+          return;
+        }
+        await this.notifier(tx, {
+          userId: data.athleteId,
+          type: CUSTOMIZED_SESSION_CREATED,
+          payload: {
+            orgId: normalizedOrgId,
+            sessionId,
+            athleteId: data.athleteId,
+          },
+        });
+      }
+    );
+  }
+
+  // Known limit (#238): concurrent group membership edits, account deletions, or club
+  // purges in the same millisecond as a Manager session edit can race on FK locks.
+  async updateManagerSession(
+    actorId: string,
+    orgId: string,
+    sessionId: string,
+    input: unknown
+  ): Promise<TrainingSessionData> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedSessionId = normalizeId(sessionId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    const parseResult = updateManagerSessionSchema.safeParse(input);
+    if (!parseResult.success) {
+      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
+      throw new TrainingValidationError(message);
+    }
+
+    return this.repo.updateManagerSession(
+      normalizedOrgId,
+      normalizedSessionId,
+      parseResult.data,
+      (target, tx) =>
+        this.notifySessionMutation(normalizedOrgId, target, "updated", tx)
+    );
+  }
+
+  // Known limit (#238): concurrent group membership edits, account deletions, club
+  // purges, or Event creation linking this session in the same millisecond can race on FK locks.
+  async deleteManagerSession(
+    actorId: string,
+    orgId: string,
+    sessionId: string
+  ): Promise<void> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedActorId = normalizeId(actorId);
+    const normalizedSessionId = normalizeId(sessionId);
+    const role = await this.assertRole(normalizedOrgId, normalizedActorId);
+    if (role !== "manager") {
+      throw new TrainingForbiddenError();
+    }
+
+    await this.repo.deleteManagerSession(
+      normalizedOrgId,
+      normalizedSessionId,
+      (target, tx) =>
+        this.notifySessionMutation(normalizedOrgId, target, "deleted", tx)
+    );
   }
 }

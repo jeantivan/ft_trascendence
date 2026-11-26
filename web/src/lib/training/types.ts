@@ -56,19 +56,54 @@ export interface AssignTrainingTemplateInput {
   startDate: string;
 }
 
+export interface CreateCustomizedSessionInput {
+  orgId: string;
+  athleteId: string;
+  customizesSessionId: string | null;
+  sessionType: SessionType;
+  scheduledAt: string;
+  targetDistanceM: number | null;
+  targetDurationS: number | null;
+  targetPaceSPerKm: number | null;
+}
+
+export interface UpdateManagerSessionInput {
+  sessionType?: SessionType;
+  scheduledAt?: string;
+  targetDistanceM?: number | null;
+  targetDurationS?: number | null;
+  targetPaceSPerKm?: number | null;
+}
+
 export const TRAINING_TEMPLATE_CREATED = "training_template_created";
 export const TRAINING_TEMPLATE_UPDATED = "training_template_updated";
 export const TRAINING_TEMPLATE_DELETED = "training_template_deleted";
 export const TRAINING_TEMPLATE_ASSIGNED = "training_template_assigned";
+export const TRAINING_SESSION_UPDATED = "training_session_updated";
+export const TRAINING_SESSION_DELETED = "training_session_deleted";
+export const CUSTOMIZED_SESSION_CREATED = "customized_session_created";
+export const CUSTOMIZED_SESSION_UPDATED = "customized_session_updated";
+export const CUSTOMIZED_SESSION_DELETED = "customized_session_deleted";
 
 export type TrainingTemplateManagerNotificationType =
   | typeof TRAINING_TEMPLATE_CREATED
   | typeof TRAINING_TEMPLATE_UPDATED
   | typeof TRAINING_TEMPLATE_DELETED;
 
+export type TrainingSessionGroupNotificationType =
+  | typeof TRAINING_SESSION_UPDATED
+  | typeof TRAINING_SESSION_DELETED;
+
+export type CustomizedSessionNotificationType =
+  | typeof CUSTOMIZED_SESSION_CREATED
+  | typeof CUSTOMIZED_SESSION_UPDATED
+  | typeof CUSTOMIZED_SESSION_DELETED;
+
 export type TrainingNotificationType =
   | TrainingTemplateManagerNotificationType
-  | typeof TRAINING_TEMPLATE_ASSIGNED;
+  | typeof TRAINING_TEMPLATE_ASSIGNED
+  | TrainingSessionGroupNotificationType
+  | CustomizedSessionNotificationType;
 
 export type TrainingNotifyInput =
   | {
@@ -87,6 +122,24 @@ export type TrainingNotifyInput =
         templateId: string;
         groupId: string;
       };
+    }
+  | {
+      userId: string;
+      type: TrainingSessionGroupNotificationType;
+      payload: {
+        orgId: string;
+        sessionId: string;
+        groupId: string;
+      };
+    }
+  | {
+      userId: string;
+      type: CustomizedSessionNotificationType;
+      payload: {
+        orgId: string;
+        sessionId: string;
+        athleteId: string;
+      };
     };
 
 export type TrainingNotify = (
@@ -102,6 +155,33 @@ export type TrainingMutationCallback = (
 
 export type TrainingAssignCallback = (
   athleteIds: string[],
+  tx: Prisma.TransactionClient
+) => Promise<void>;
+
+export type CustomizedSessionCreateCallback = (
+  sessionId: string,
+  tx: Prisma.TransactionClient
+) => Promise<void>;
+
+export type TrainingSessionMutationTarget =
+  | {
+      kind: "group";
+      sessionId: string;
+      groupId: string;
+      athleteIds: string[];
+    }
+  | {
+      kind: "group_orphan";
+      sessionId: string;
+    }
+  | {
+      kind: "customized";
+      sessionId: string;
+      athleteId: string;
+    };
+
+export type TrainingSessionMutationCallback = (
+  target: TrainingSessionMutationTarget,
   tx: Prisma.TransactionClient
 ) => Promise<void>;
 
@@ -139,4 +219,19 @@ export interface TrainingRepository {
     athleteId: string
   ): Promise<TrainingSessionData[]>;
   listClubSessions(orgId: string): Promise<TrainingSessionData[]>;
+  createCustomizedSession(
+    input: CreateCustomizedSessionInput,
+    afterCreate?: CustomizedSessionCreateCallback
+  ): Promise<TrainingSessionData>;
+  updateManagerSession(
+    orgId: string,
+    sessionId: string,
+    input: UpdateManagerSessionInput,
+    afterWrite?: TrainingSessionMutationCallback
+  ): Promise<TrainingSessionData>;
+  deleteManagerSession(
+    orgId: string,
+    sessionId: string,
+    afterDelete?: TrainingSessionMutationCallback
+  ): Promise<void>;
 }

@@ -5,11 +5,18 @@ import {
 } from "../../support/in-memory-training-repository";
 import { TrainingService } from "@/lib/training/training-service";
 import {
+  SESSION_ALREADY_LOGGED,
+  TrainingConflictError,
   TrainingForbiddenError,
   TrainingNotFoundError,
   TrainingValidationError,
 } from "@/lib/training/errors";
 import {
+  CUSTOMIZED_SESSION_CREATED,
+  CUSTOMIZED_SESSION_DELETED,
+  CUSTOMIZED_SESSION_UPDATED,
+  TRAINING_SESSION_DELETED,
+  TRAINING_SESSION_UPDATED,
   TRAINING_TEMPLATE_ASSIGNED,
   TRAINING_TEMPLATE_CREATED,
   TRAINING_TEMPLATE_DELETED,
@@ -619,6 +626,199 @@ describe("TrainingService", () => {
       await expect(
         service.listClubSessions(STRANGER, ORG_A)
       ).rejects.toThrow(TrainingNotFoundError);
+    });
+  });
+
+  describe("createCustomizedSession, updateManagerSession, and deleteManagerSession", () => {
+    const ATHLETE_2 = "13400000-0000-4000-8000-000000000022";
+
+    it("notifies target athlete on Customized Session CRUD with IDs only and notifies non-substituted group athletes on group session update/delete", async () => {
+      repo.addMember(ORG_A, ATHLETE_2, "athlete");
+      repo.addAthleteToGroup(ATHLETE_2, GROUP_1);
+
+      const groupSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "rodaje",
+        targetDistanceM: 10000,
+        scheduledAt: new Date("2026-10-01T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+
+      const created = await service.createCustomizedSession(MANAGER_1, ORG_A, {
+        athleteId: ATHLETE_1,
+        customizesSessionId: groupSession.id,
+        sessionType: "rodaje",
+        scheduledAt: "2026-10-01",
+        targetDistanceM: 6000,
+      });
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].tx).toBe(IN_MEMORY_TX_TOKEN);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: ATHLETE_1,
+        type: CUSTOMIZED_SESSION_CREATED,
+        payload: {
+          orgId: ORG_A,
+          sessionId: created.id,
+          athleteId: ATHLETE_1,
+        },
+      });
+
+      // Updating groupSession notifies only ATHLETE_2 (ATHLETE_1 has a substitution)
+      notifiedCalls = [];
+      const updatedGroup = await service.updateManagerSession(
+        MANAGER_1,
+        ORG_A,
+        groupSession.id,
+        { sessionType: "intervalos", targetDistanceM: 12000 }
+      );
+      expect(updatedGroup.sessionType).toBe("intervalos");
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: ATHLETE_2,
+        type: TRAINING_SESSION_UPDATED,
+        payload: {
+          orgId: ORG_A,
+          sessionId: groupSession.id,
+          groupId: GROUP_1,
+        },
+      });
+
+      // Deleting groupSession also notifies only ATHLETE_2
+      notifiedCalls = [];
+      await service.deleteManagerSession(MANAGER_1, ORG_A, groupSession.id);
+      expect(notifiedCalls).toHaveLength(1);
+      expect(notifiedCalls[0].input).toEqual({
+        userId: ATHLETE_2,
+        type: TRAINING_SESSION_DELETED,
+        payload: {
+          orgId: ORG_A,
+          sessionId: groupSession.id,
+          groupId: GROUP_1,
+        },
+      });
+
+      // Updating and deleting the Customized Session notifies ATHLETE_1
+      notifiedCalls = [];
+      await service.updateManagerSession(MANAGER_1, ORG_A, created.id, {
+        targetDistanceM: 7000,
+      });
+      await service.deleteManagerSession(MANAGER_1, ORG_A, created.id);
+      expect(notifiedCalls.map((c) => c.input)).toEqual([
+        {
+          userId: ATHLETE_1,
+          type: CUSTOMIZED_SESSION_UPDATED,
+          payload: {
+            orgId: ORG_A,
+            sessionId: created.id,
+            athleteId: ATHLETE_1,
+          },
+        },
+        {
+          userId: ATHLETE_1,
+          type: CUSTOMIZED_SESSION_DELETED,
+          payload: {
+            orgId: ORG_A,
+            sessionId: created.id,
+            athleteId: ATHLETE_1,
+          },
+        },
+      ]);
+      for (const call of notifiedCalls) {
+        expect(
+          Object.keys(call.input.payload).every((key) => key.endsWith("Id"))
+        ).toBe(true);
+      }
+    });
+
+    it("emits zero notifications when deleting an orphan template session whose group was deleted", async () => {
+      const orphanSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-10-05T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+      repo.deleteGroup(GROUP_1);
+
+      await service.deleteManagerSession(MANAGER_1, ORG_A, orphanSession.id);
+      expect(notifiedCalls).toHaveLength(0);
+    });
+
+    it("enforces role permissions (403 athlete, 404 outsider, 403 manager on free session) and validation/conflict errors", async () => {
+      const groupSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-10-10T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+      const freeSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-10-11T08:00:00.000Z"),
+        athleteId: ATHLETE_1,
+      });
+
+      await expect(
+        service.createCustomizedSession(ATHLETE_1, ORG_A, {
+          athleteId: ATHLETE_1,
+          sessionType: "rodaje",
+          scheduledAt: "2026-10-12",
+        })
+      ).rejects.toThrow(TrainingForbiddenError);
+      await expect(
+        service.updateManagerSession(ATHLETE_1, ORG_A, groupSession.id, {
+          sessionType: "cuestas",
+        })
+      ).rejects.toThrow(TrainingForbiddenError);
+      await expect(
+        service.deleteManagerSession(ATHLETE_1, ORG_A, groupSession.id)
+      ).rejects.toThrow(TrainingForbiddenError);
+
+      await expect(
+        service.createCustomizedSession(STRANGER, ORG_A, {
+          athleteId: ATHLETE_1,
+          sessionType: "rodaje",
+          scheduledAt: "2026-10-12",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+      await expect(
+        service.updateManagerSession(STRANGER, ORG_A, groupSession.id, {
+          sessionType: "cuestas",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+      await expect(
+        service.deleteManagerSession(STRANGER, ORG_A, groupSession.id)
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      // Manager cannot edit/delete Free Session (403)
+      await expect(
+        service.updateManagerSession(MANAGER_1, ORG_A, freeSession.id, {
+          sessionType: "rodaje",
+        })
+      ).rejects.toThrow(TrainingForbiddenError);
+      await expect(
+        service.deleteManagerSession(MANAGER_1, ORG_A, freeSession.id)
+      ).rejects.toThrow(TrainingForbiddenError);
+
+      // Empty update fails validation (400)
+      await expect(
+        service.updateManagerSession(MANAGER_1, ORG_A, groupSession.id, {})
+      ).rejects.toThrow(TrainingValidationError);
+
+      // Logged session returns 409 SESSION_ALREADY_LOGGED
+      repo.seedSessionLog(groupSession.id, ATHLETE_1);
+      await expect(
+        service.updateManagerSession(MANAGER_1, ORG_A, groupSession.id, {
+          sessionType: "cuestas",
+        })
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          err instanceof TrainingConflictError &&
+          err.code === SESSION_ALREADY_LOGGED
+      );
     });
   });
 });

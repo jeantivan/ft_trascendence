@@ -26,6 +26,11 @@ function optionalPositiveInt(max: number) {
   return z.number().int().positive().max(max).nullable().default(null);
 }
 
+/** Builds a nullable positive integer target schema for partial updates (omitted stays undefined). */
+function updatablePositiveInt(max: number) {
+  return z.number().int().positive().max(max).nullable().optional();
+}
+
 export const templateSessionSchema = z
   .object({
     sessionType: sessionTypeSchema,
@@ -58,22 +63,63 @@ export type TrainingTemplateInput = z.infer<typeof trainingTemplateSchema>;
 export type NormalizedTemplateSessionInput =
   TrainingTemplateInput["sessions"][number];
 
+export const calendarDateSchema = z
+  .string()
+  .trim()
+  .pipe(z.iso.date("Fecha inválida (usa YYYY-MM-DD válido)"))
+  .refine((value) => Number(value.slice(0, 4)) >= 1970, {
+    message: "El año debe ser igual o posterior a 1970",
+  });
+
 export const assignTrainingTemplateSchema = z
   .object({
     templateId: idSchema,
     groupId: idSchema,
-    startDate: z
-      .string()
-      .trim()
-      .pipe(z.iso.date("Fecha inválida (usa YYYY-MM-DD válido)"))
-      .refine((value) => Number(value.slice(0, 4)) >= 1970, {
-        message: "El año debe ser igual o posterior a 1970",
-      }),
+    startDate: calendarDateSchema,
   })
   .strict();
 
 export type AssignTrainingTemplatePayload = z.infer<
   typeof assignTrainingTemplateSchema
+>;
+
+export const createCustomizedSessionSchema = z
+  .object({
+    athleteId: idSchema,
+    customizesSessionId: idSchema.nullable().default(null),
+    sessionType: sessionTypeSchema,
+    scheduledAt: calendarDateSchema,
+    targetDistanceM: optionalPositiveInt(POSTGRES_INT_MAX),
+    targetDurationS: optionalPositiveInt(MAX_DURATION_SECONDS),
+    targetPaceSPerKm: optionalPositiveInt(MAX_PACE_SECONDS),
+  })
+  .strict();
+
+export type CreateCustomizedSessionPayload = z.infer<
+  typeof createCustomizedSessionSchema
+>;
+
+export const updateManagerSessionSchema = z
+  .object({
+    sessionType: sessionTypeSchema.optional(),
+    scheduledAt: calendarDateSchema.optional(),
+    targetDistanceM: updatablePositiveInt(POSTGRES_INT_MAX),
+    targetDurationS: updatablePositiveInt(MAX_DURATION_SECONDS),
+    targetPaceSPerKm: updatablePositiveInt(MAX_PACE_SECONDS),
+  })
+  .strict()
+  .refine(
+    (data) =>
+      data.sessionType !== undefined ||
+      data.scheduledAt !== undefined ||
+      data.targetDistanceM !== undefined ||
+      data.targetDurationS !== undefined ||
+      data.targetPaceSPerKm !== undefined,
+    { message: "Debe proporcionar al menos un campo para actualizar" },
+  );
+
+export type UpdateManagerSessionPayload = z.infer<
+  typeof updateManagerSessionSchema
 >;
 
 export const incompletionReasonSchema = z.enum([

@@ -11,8 +11,17 @@ import {
   assignTrainingTemplateAction,
   getAthleteScheduleAction,
   listClubSessionsAction,
+  createCustomizedSessionAction,
+  updateManagerSessionAction,
+  deleteManagerSessionAction,
 } from "@/lib/training/actions";
-import { TRAINING_TEMPLATE_ASSIGNED } from "@/lib/training/types";
+import { SESSION_ALREADY_LOGGED } from "@/lib/training/errors";
+import {
+  CUSTOMIZED_SESSION_CREATED,
+  TRAINING_SESSION_DELETED,
+  TRAINING_SESSION_UPDATED,
+  TRAINING_TEMPLATE_ASSIGNED,
+} from "@/lib/training/types";
 import { notify } from "@/lib/notifications/notify";
 import { InMemoryTrainingRepository } from "../../support/in-memory-training-repository";
 
@@ -573,6 +582,169 @@ describe("Training Server Actions", () => {
         "NEXT_FORBIDDEN"
       );
       expect(forbidden).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("Manager session write actions (#138)", () => {
+    const GROUP_1 = "13800000-0000-4000-8000-000000000041";
+    const VALID_ATHLETE_ID = "13800000-0000-4000-8000-000000000021";
+
+    beforeEach(() => {
+      repo.addMember(ORG_A, VALID_ATHLETE_ID, "athlete");
+      repo.addGroup(ORG_A, GROUP_1);
+      repo.addAthleteToGroup(VALID_ATHLETE_ID, GROUP_1);
+    });
+
+    it("createCustomizedSessionAction uses session.write, creates customized session, and notifies athlete", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+
+      const result = await createCustomizedSessionAction(ORG_A, {
+        athleteId: VALID_ATHLETE_ID,
+        sessionType: "intervalos",
+        scheduledAt: "2026-10-15",
+        targetDistanceM: 8000,
+      });
+
+      expect(requireOrgRole).toHaveBeenCalledWith(
+        ORG_A,
+        ORG_ROLES["session.write"]
+      );
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.origin).toBe("customized");
+        expect(result.data.athleteId).toBe(VALID_ATHLETE_ID);
+        expect(notify).toHaveBeenCalledWith(expect.anything(), {
+          userId: VALID_ATHLETE_ID,
+          type: CUSTOMIZED_SESSION_CREATED,
+          payload: {
+            orgId: ORG_A,
+            sessionId: result.data.id,
+            athleteId: VALID_ATHLETE_ID,
+          },
+        });
+      }
+    });
+
+    it("updateManagerSessionAction and deleteManagerSessionAction notify group athletes and return SESSION_ALREADY_LOGGED code when logged", async () => {
+      const groupSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-10-20T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      const updated = await updateManagerSessionAction(ORG_A, groupSession.id, {
+        sessionType: "cuestas",
+      });
+      expect(requireOrgRole).toHaveBeenCalledWith(
+        ORG_A,
+        ORG_ROLES["session.write"]
+      );
+      expect(updated.success).toBe(true);
+      expect(notify).toHaveBeenCalledWith(expect.anything(), {
+        userId: VALID_ATHLETE_ID,
+        type: TRAINING_SESSION_UPDATED,
+        payload: {
+          orgId: ORG_A,
+          sessionId: groupSession.id,
+          groupId: GROUP_1,
+        },
+      });
+
+      // Once logged, both update and delete return { success: false, code: SESSION_ALREADY_LOGGED }
+      repo.seedSessionLog(groupSession.id, VALID_ATHLETE_ID);
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      const blockedUpdate = await updateManagerSessionAction(
+        ORG_A,
+        groupSession.id,
+        { sessionType: "fartlek" }
+      );
+      expect(blockedUpdate.success).toBe(false);
+      if (!blockedUpdate.success) {
+        expect(blockedUpdate.code).toBe(SESSION_ALREADY_LOGGED);
+      }
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      const blockedDelete = await deleteManagerSessionAction(
+        ORG_A,
+        groupSession.id
+      );
+      expect(blockedDelete.success).toBe(false);
+      if (!blockedDelete.success) {
+        expect(blockedDelete.code).toBe(SESSION_ALREADY_LOGGED);
+      }
+
+      // Unlogged session can be deleted and emits TRAINING_SESSION_DELETED
+      const deletableSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-10-21T08:00:00.000Z"),
+        groupId: GROUP_1,
+      });
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      const deleted = await deleteManagerSessionAction(
+        ORG_A,
+        deletableSession.id
+      );
+      expect(deleted.success).toBe(true);
+      expect(notify).toHaveBeenCalledWith(expect.anything(), {
+        userId: VALID_ATHLETE_ID,
+        type: TRAINING_SESSION_DELETED,
+        payload: {
+          orgId: ORG_A,
+          sessionId: deletableSession.id,
+          groupId: GROUP_1,
+        },
+      });
+    });
+
+    it("triggers forbidden() on active athlete free session and notFound() on missing or other-club session", async () => {
+      const freeSession = repo.seedSession({
+        orgId: ORG_A,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-10-25T08:00:00.000Z"),
+        athleteId: VALID_ATHLETE_ID,
+      });
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      await expect(
+        updateManagerSessionAction(ORG_A, freeSession.id, {
+          sessionType: "rodaje",
+        })
+      ).rejects.toThrow("NEXT_FORBIDDEN");
+      expect(forbidden).toHaveBeenCalledOnce();
+
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+      await expect(
+        deleteManagerSessionAction(ORG_A, "13800000-0000-4000-8000-000000000999")
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFound).toHaveBeenCalledOnce();
     });
   });
 });
