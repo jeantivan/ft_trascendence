@@ -172,6 +172,29 @@ describe("Integration: PrismaTrainingRepository", () => {
         },
       });
     },
+    removeMember: async (targetOrgId, userId) => {
+      await prisma.groupMember.deleteMany({
+        where: { userId, group: { orgId: targetOrgId } },
+      });
+      await prisma.membership.deleteMany({
+        where: { orgId: targetOrgId, userId },
+      });
+    },
+    setMemberRole: async (targetOrgId, userId, role) => {
+      await prisma.membership.upsert({
+        where: { userId_orgId: { userId, orgId: targetOrgId } },
+        create: { orgId: targetOrgId, userId, role },
+        update: { role },
+      });
+    },
+    removeAthleteFromGroup: async (targetGroupId, targetAthleteId) => {
+      await prisma.groupMember.deleteMany({
+        where: { groupId: targetGroupId, userId: targetAthleteId },
+      });
+    },
+    deleteGroup: async (targetGroupId) => {
+      await prisma.group.delete({ where: { id: targetGroupId } });
+    },
   }));
 
   it("updates template name and replaces sessions in database transaction without altering existing TrainingSession copies", async () => {

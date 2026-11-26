@@ -49,6 +49,18 @@ describe("InMemoryTrainingRepository", () => {
     seedSessionLog: async (sessionId, athleteId) => {
       repo.seedSessionLog(sessionId, athleteId);
     },
+    removeMember: async (orgId, userId) => {
+      repo.removeMember(orgId, userId);
+    },
+    setMemberRole: async (orgId, userId, role) => {
+      repo.addMember(orgId, userId, role);
+    },
+    removeAthleteFromGroup: async (groupId, athleteId) => {
+      repo.removeAthleteFromGroup(athleteId, groupId);
+    },
+    deleteGroup: async (groupId) => {
+      repo.deleteGroup(groupId);
+    },
   }));
 
   it("updates template without altering previously copied sessions", async () => {

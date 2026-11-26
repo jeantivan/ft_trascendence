@@ -440,11 +440,8 @@ export class PrismaTrainingRepository implements TrainingRepository {
     const normalizedOrgId = normalizeId(orgId);
     const normalizedAthleteId = normalizeId(athleteId);
 
-    // Known limit: group template sessions come only from the athlete's current groups
-    // (group.members.some). If an athlete leaves a group or the group is deleted
-    // (groupId becomes null), previously logged template sessions from it disappear
-    // from the schedule. Also, customizesSessionId has no DB CHECK constraint tying it
-    // to the same org or origin "template"; org/athlete filters prevent cross-club leaks.
+    // Known limit: customizesSessionId has no DB CHECK constraint tying it to the
+    // same org or origin "template"; org/athlete filters prevent cross-club leaks.
     const sessions = await this.db.trainingSession.findMany({
       where: {
         orgId: normalizedOrgId,
@@ -456,6 +453,13 @@ export class PrismaTrainingRepository implements TrainingRepository {
               members: {
                 some: { userId: normalizedAthleteId },
               },
+            },
+          },
+          {
+            origin: "template",
+            athleteId: null,
+            logs: {
+              some: { athleteId: normalizedAthleteId },
             },
           },
           {
@@ -490,11 +494,28 @@ export class PrismaTrainingRepository implements TrainingRepository {
     if (!isDbId(orgId)) {
       return [];
     }
-    // Known limit: returns every session in the club (including customized and free
-    // sessions of former members, since club exit only removes Membership and
-    // GroupMember rows without deleting sessions).
+    const normalizedOrgId = normalizeId(orgId);
     const sessions = await this.db.trainingSession.findMany({
-      where: { orgId: normalizeId(orgId) },
+      where: {
+        orgId: normalizedOrgId,
+        OR: [
+          {
+            origin: "template",
+            athleteId: null,
+          },
+          {
+            origin: { in: ["customized", "free"] },
+            athlete: {
+              memberships: {
+                some: {
+                  orgId: normalizedOrgId,
+                  role: "athlete",
+                },
+              },
+            },
+          },
+        ],
+      },
       orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
     });
     return sessions.map(toSessionData);

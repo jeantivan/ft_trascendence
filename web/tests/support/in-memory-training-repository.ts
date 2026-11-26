@@ -105,11 +105,44 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     this.memberships.set(`${normalizeId(orgId)}:${normalizeId(userId)}`, role);
   }
 
+  removeMember(orgId: string, userId: string): void {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedUserId = normalizeId(userId);
+    this.memberships.delete(`${normalizedOrgId}:${normalizedUserId}`);
+    const groups = this.athleteGroups.get(normalizedUserId);
+    if (groups) {
+      for (const groupId of [...groups]) {
+        if (this.groups.get(groupId) === normalizedOrgId) {
+          groups.delete(groupId);
+        }
+      }
+    }
+  }
+
   addAthleteToGroup(athleteId: string, groupId: string): void {
     const normalizedAthleteId = normalizeId(athleteId);
     const groups = this.athleteGroups.get(normalizedAthleteId) ?? new Set();
     groups.add(normalizeId(groupId));
     this.athleteGroups.set(normalizedAthleteId, groups);
+  }
+
+  removeAthleteFromGroup(athleteId: string, groupId: string): void {
+    const groups = this.athleteGroups.get(normalizeId(athleteId));
+    groups?.delete(normalizeId(groupId));
+  }
+
+  deleteGroup(groupId: string): void {
+    const normalizedGroupId = normalizeId(groupId);
+    this.groups.delete(normalizedGroupId);
+    this.groupTemplates.delete(normalizedGroupId);
+    for (const groups of this.athleteGroups.values()) {
+      groups.delete(normalizedGroupId);
+    }
+    for (const session of this.copiedSessions) {
+      if (session.groupId === normalizedGroupId) {
+        session.groupId = null;
+      }
+    }
   }
 
   seedSession(input: SeedSessionInput): TrainingSessionData {
@@ -440,11 +473,16 @@ export class InMemoryTrainingRepository implements TrainingRepository {
         memberGroups.has(session.groupId) &&
         this.groups.get(session.groupId) === normalizedOrgId;
 
+      const isLoggedTemplate =
+        session.origin === "template" &&
+        session.athleteId === null &&
+        this.sessionLogs.has(`${session.id}:${normalizedAthleteId}`);
+
       const isPersonalSession =
         (session.origin === "customized" || session.origin === "free") &&
         session.athleteId === normalizedAthleteId;
 
-      if (isGroupTemplate || isPersonalSession) {
+      if (isGroupTemplate || isLoggedTemplate || isPersonalSession) {
         results.push(session);
       }
     }
@@ -467,7 +505,19 @@ export class InMemoryTrainingRepository implements TrainingRepository {
 
     for (const stored of this.copiedSessions) {
       const session = toClubSessionData(stored, normalizedOrgId);
-      if (session) {
+      if (!session) {
+        continue;
+      }
+
+      const isClubTemplate =
+        session.origin === "template" && session.athleteId === null;
+      const isActiveAthleteSession =
+        (session.origin === "customized" || session.origin === "free") &&
+        session.athleteId !== null &&
+        this.memberships.get(`${normalizedOrgId}:${session.athleteId}`) ===
+          "athlete";
+
+      if (isClubTemplate || isActiveAthleteSession) {
         results.push(session);
       }
     }
