@@ -6,8 +6,10 @@
 #   sh scripts/check-no-coauthor.sh origin/main HEAD
 # Exit code: 0 no commit has the line, 1 some do (listed on stderr),
 # 2 wrong usage or git cannot read base..head.
-# Known limit: a squash merge can add Co-authored-by to the commit it creates in
-# main, after this check has run on the pull request. The team merges with merge.
+# Known limit: the repository allows squash merges, and a squash can add
+# Co-authored-by to the new commit it writes in main, after this check has run.
+# Merge and rebase keep the messages checked here. So far the team has always
+# merged with merge; turning squash off is for whoever has admin (out of #299).
 
 if [ "$#" -ne 2 ]; then
   echo "check-no-coauthor: usage: sh scripts/check-no-coauthor.sh <base> <head>" >&2
