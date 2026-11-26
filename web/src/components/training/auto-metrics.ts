@@ -4,6 +4,7 @@ import {
   POSTGRES_INT_MAX,
 } from "@/lib/training/schemas";
 import {
+  areSessionMetricsConsistent,
   calculateAveragePaceSecondsPerKm,
   formatMetersToKm,
   formatSecondsPerKmToPace,
@@ -28,6 +29,12 @@ const METRIC_FIELDS: readonly MetricField[] = [
   "duration",
 ];
 
+const ALL_FILLED_TARGET: Record<MetricField, MetricField> = {
+  distanceKm: "duration",
+  pace: "duration",
+  duration: "pace",
+};
+
 function tryParse(
   rawValue: string,
   parser: (input: string) => number,
@@ -50,14 +57,23 @@ function resolveTargetField(
     return state.autoField;
   }
 
+  if (state[editedField].trim() === "") {
+    return null;
+  }
+
   const otherFields = METRIC_FIELDS.filter((field) => field !== editedField);
   const emptyTargets = otherFields.filter(
     (field) => state[field].trim() === "",
   );
 
-  // Only auto-fill when exactly one of the three fields is empty and two have input.
-  if (emptyTargets.length === 1 && state[editedField].trim() !== "") {
+  // Auto-fill the single empty field when two fields have input.
+  if (emptyTargets.length === 1) {
     return emptyTargets[0];
+  }
+
+  // When all three fields are filled, keep metrics consistent instead of leaving stale values.
+  if (emptyTargets.length === 0) {
+    return ALL_FILLED_TARGET[editedField];
   }
 
   return null;
@@ -115,7 +131,8 @@ function computeTargetValue(
 
 /**
  * Recomputes the remaining metric field when two of (distance, pace, duration) are valid.
- * Never overwrites a manually entered field or the field currently being edited.
+ * Never overwrites the field currently being edited, and keeps all three metrics consistent
+ * when all fields are filled (editing duration updates pace; editing distance/pace updates duration).
  */
 export function recomputeSessionMetrics(
   current: SessionMetricsState,
@@ -186,14 +203,7 @@ export function inferInitialAutoField(
     return null;
   }
 
-  const paceMatches =
-    calculateAveragePaceSecondsPerKm(distanceM, durationS) === paceS;
-  const durationMatches = Math.round((distanceM * paceS) / 1000) === durationS;
-  const distanceMatches = Math.round((durationS * 1000) / paceS) === distanceM;
-
-  if (paceMatches || durationMatches || distanceMatches) {
-    return "duration";
-  }
-
-  return null;
+  return areSessionMetricsConsistent(distanceM, paceS, durationS)
+    ? "duration"
+    : null;
 }

@@ -12,10 +12,32 @@ export class TrainingForbiddenError extends Error {
   }
 }
 
+export type TemplateSessionErrorField =
+  | "dayOffset"
+  | "distanceKm"
+  | "pace"
+  | "duration"
+  | "metrics";
+
+export type TemplateSessionFieldErrors = Partial<
+  Record<TemplateSessionErrorField, string>
+>;
+
+export type TemplateValidationFieldErrors = {
+  name?: string;
+  sessions?: Record<number, TemplateSessionFieldErrors>;
+};
+
 export class TrainingValidationError extends Error {
-  constructor(message = "Datos de entrenamiento inválidos") {
+  readonly fieldErrors?: TemplateValidationFieldErrors;
+
+  constructor(
+    message = "Datos de entrenamiento inválidos",
+    fieldErrors?: TemplateValidationFieldErrors,
+  ) {
     super(message);
     this.name = "TrainingValidationError";
+    this.fieldErrors = fieldErrors;
   }
 }
 

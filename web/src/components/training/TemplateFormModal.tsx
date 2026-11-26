@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { SessionType } from "@/generated/prisma/client";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -15,9 +15,11 @@ import {
   createTrainingTemplateAction,
   updateTrainingTemplateAction,
 } from "@/lib/training/actions";
+import type { TemplateSessionFieldErrors } from "@/lib/training/errors";
 import { MAX_DAY_OFFSET } from "@/lib/training/schemas";
 import type { TrainingTemplateData } from "@/lib/training/types";
 import {
+  areSessionMetricsConsistent,
   formatMetersToKm,
   formatSecondsPerKmToPace,
   formatSecondsToDuration,
@@ -97,14 +99,31 @@ export function TemplateFormModal({
   onSaved,
 }: TemplateFormModalProps) {
   const formId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
   const nextSessionKeyRef = useRef(0);
 
   const [name, setName] = useState(() => template?.name ?? "");
   const [sessions, setSessions] = useState<SessionDraft[]>(() =>
     template ? templateToDrafts(template) : [makeEmptySession("init-0")],
   );
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [sessionErrors, setSessionErrors] = useState<
+    Record<number, TemplateSessionFieldErrors>
+  >({});
+  const [errorScrollTick, setErrorScrollTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (errorScrollTick === 0) return;
+    const firstInvalid = formRef.current?.querySelector<HTMLElement>(
+      '[aria-invalid="true"]',
+    );
+    if (firstInvalid) {
+      firstInvalid.scrollIntoView?.({ block: "center" });
+      firstInvalid.focus();
+    }
+  }, [errorScrollTick]);
 
   function handleSafeClose() {
     if (!submitting) {
@@ -112,10 +131,34 @@ export function TemplateFormModal({
     }
   }
 
+  function clearSessionFieldErrors(
+    index: number,
+    fields: Array<keyof TemplateSessionFieldErrors>,
+  ) {
+    setSessionErrors((prev) => {
+      const current = prev[index];
+      if (!current) return prev;
+      const updated = { ...current };
+      for (const field of fields) {
+        delete updated[field];
+      }
+      const next = { ...prev };
+      if (Object.keys(updated).length === 0) {
+        delete next[index];
+      } else {
+        next[index] = updated;
+      }
+      return next;
+    });
+  }
+
   function updateSession(index: number, patch: Partial<SessionDraft>) {
     setSessions((prev) =>
       prev.map((row, idx) => (idx === index ? { ...row, ...patch } : row)),
     );
+    if (patch.dayOffset !== undefined) {
+      clearSessionFieldErrors(index, ["dayOffset"]);
+    }
   }
 
   function updateMetric(index: number, field: MetricField, value: string) {
@@ -124,6 +167,7 @@ export function TemplateFormModal({
         idx === index ? { ...row, ...recomputeSessionMetrics(row, field, value) } : row,
       ),
     );
+    clearSessionFieldErrors(index, [field, "metrics"]);
   }
 
   function moveSession(index: number, delta: -1 | 1) {
@@ -135,11 +179,31 @@ export function TemplateFormModal({
       copy.splice(target, 0, item);
       return copy;
     });
+    setSessionErrors({});
   }
 
   function removeSession(index: number) {
     if (sessions.length <= 1) return;
     setSessions((prev) => prev.filter((_, idx) => idx !== index));
+    setSessionErrors({});
+  }
+
+  function parseOptionalMetric(
+    rawValue: string,
+    parser: (input: string) => number,
+    onInvalid: (message: string) => void,
+  ): number | null {
+    if (!rawValue.trim()) {
+      return null;
+    }
+    try {
+      return parser(rawValue);
+    } catch (parseError) {
+      onInvalid(
+        parseError instanceof Error ? parseError.message : "Valor inválido",
+      );
+      return null;
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -148,51 +212,81 @@ export function TemplateFormModal({
     setError(null);
 
     const trimmedName = name.trim();
-    if (!trimmedName) {
-      setError("El nombre de la plantilla es obligatorio");
-      return;
-    }
+    const nextNameError = trimmedName
+      ? null
+      : "El nombre de la plantilla es obligatorio";
+    const nextSessionErrors: Record<number, TemplateSessionFieldErrors> = {};
 
-    let parsedSessions;
-    try {
-      parsedSessions = sessions.map((row, index) => {
-        const dayOffset = Number(row.dayOffset.trim());
-        if (
-          row.dayOffset.trim() === "" ||
-          !Number.isInteger(dayOffset) ||
-          dayOffset < 0 ||
-          dayOffset > MAX_DAY_OFFSET
-        ) {
-          throw new Error(
-            `Sesión ${index + 1}: el día debe ser un entero entre 0 y ${MAX_DAY_OFFSET}`,
-          );
-        }
+    const parsedSessions = sessions.map((row, index) => {
+      const rowErrors: TemplateSessionFieldErrors = {};
+      const dayOffset = Number(row.dayOffset.trim());
+      if (
+        row.dayOffset.trim() === "" ||
+        !Number.isInteger(dayOffset) ||
+        dayOffset < 0 ||
+        dayOffset > MAX_DAY_OFFSET
+      ) {
+        rowErrors.dayOffset = `El día debe ser un entero entre 0 y ${MAX_DAY_OFFSET}`;
+      }
 
-        const targetDistanceM = row.distanceKm.trim()
-          ? parseKmToMeters(row.distanceKm)
-          : null;
-        const targetPaceSPerKm = row.pace.trim()
-          ? parsePaceToSecondsPerKm(row.pace)
-          : null;
-        const targetDurationS = row.duration.trim()
-          ? parseDurationToSeconds(row.duration)
-          : null;
+      const targetDistanceM = parseOptionalMetric(
+        row.distanceKm,
+        parseKmToMeters,
+        (message) => {
+          rowErrors.distanceKm = message;
+        },
+      );
+      const targetPaceSPerKm = parseOptionalMetric(
+        row.pace,
+        parsePaceToSecondsPerKm,
+        (message) => {
+          rowErrors.pace = message;
+        },
+      );
+      const targetDurationS = parseOptionalMetric(
+        row.duration,
+        parseDurationToSeconds,
+        (message) => {
+          rowErrors.duration = message;
+        },
+      );
 
-        return {
-          sessionType: row.sessionType,
-          dayOffset,
+      if (
+        !rowErrors.distanceKm &&
+        !rowErrors.pace &&
+        !rowErrors.duration &&
+        !areSessionMetricsConsistent(
           targetDistanceM,
           targetPaceSPerKm,
           targetDurationS,
-        };
-      });
-    } catch (validationError) {
-      setError(
-        validationError instanceof Error ? validationError.message : "Datos inválidos",
-      );
+        )
+      ) {
+        rowErrors.metrics =
+          "La distancia, el ritmo y la duración no son coherentes entre sí";
+      }
+
+      if (Object.keys(rowErrors).length > 0) {
+        nextSessionErrors[index] = rowErrors;
+      }
+
+      return {
+        sessionType: row.sessionType,
+        dayOffset,
+        targetDistanceM,
+        targetPaceSPerKm,
+        targetDurationS,
+      };
+    });
+
+    if (nextNameError || Object.keys(nextSessionErrors).length > 0) {
+      setNameError(nextNameError);
+      setSessionErrors(nextSessionErrors);
+      setErrorScrollTick((tick) => tick + 1);
       return;
     }
 
+    setNameError(null);
+    setSessionErrors({});
     setSubmitting(true);
     try {
       const payload = { name: trimmedName, sessions: parsedSessions };
@@ -201,7 +295,18 @@ export function TemplateFormModal({
         : await createTrainingTemplateAction(orgId, payload);
 
       if (!result.success) {
-        setError(result.error);
+        if (result.fieldErrors) {
+          setNameError(result.fieldErrors.name ?? null);
+          setSessionErrors(result.fieldErrors.sessions ?? {});
+          setError(
+            result.fieldErrors.name || result.fieldErrors.sessions
+              ? null
+              : result.error,
+          );
+          setErrorScrollTick((tick) => tick + 1);
+        } else {
+          setError(result.error);
+        }
         return;
       }
 
@@ -237,14 +342,21 @@ export function TemplateFormModal({
         </>
       }
     >
-      <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <form ref={formRef} id={formId} onSubmit={handleSubmit} className="flex flex-col gap-6">
         {error && <Alert variant="error">{error}</Alert>}
 
-        <FormField label="Nombre de la plantilla" htmlFor={`${formId}-name`}>
+        <FormField
+          label="Nombre de la plantilla"
+          htmlFor={`${formId}-name`}
+          error={nameError ?? undefined}
+        >
           <Input
             id={`${formId}-name`}
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (nameError) setNameError(null);
+            }}
             placeholder="Ej. Preparación 10K Sub-40"
             maxLength={100}
             required
@@ -264,6 +376,8 @@ export function TemplateFormModal({
           <div className="flex flex-col gap-3">
             {sessions.map((row, index) => {
               const rowPrefix = `${formId}-${row.key}`;
+              const rowErrors = sessionErrors[index];
+              const hasMetricsError = Boolean(rowErrors?.metrics);
               return (
                 <fieldset
                   key={row.key}
@@ -307,7 +421,11 @@ export function TemplateFormModal({
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                      <FormField label="Día (0 = inicio)" htmlFor={`${rowPrefix}-day`}>
+                      <FormField
+                        label="Día (0 = inicio)"
+                        htmlFor={`${rowPrefix}-day`}
+                        error={rowErrors?.dayOffset}
+                      >
                         <Input
                           id={`${rowPrefix}-day`}
                           type="number"
@@ -333,30 +451,49 @@ export function TemplateFormModal({
                         />
                       </FormField>
 
-                      <FormField label="Distancia (km)" htmlFor={`${rowPrefix}-distance`}>
+                      <FormField
+                        label="Distancia (km)"
+                        htmlFor={`${rowPrefix}-distance`}
+                        error={rowErrors?.distanceKm}
+                      >
                         <Input
                           id={`${rowPrefix}-distance`}
                           inputMode="decimal"
                           placeholder="Ej. 10.5"
                           value={row.distanceKm}
+                          aria-invalid={
+                            Boolean(rowErrors?.distanceKm || hasMetricsError) ||
+                            undefined
+                          }
                           onChange={(event) =>
                             updateMetric(index, "distanceKm", event.target.value)
                           }
                         />
                       </FormField>
 
-                      <FormField label="Ritmo (mm:ss/km)" htmlFor={`${rowPrefix}-pace`}>
+                      <FormField
+                        label="Ritmo (mm:ss/km)"
+                        htmlFor={`${rowPrefix}-pace`}
+                        error={rowErrors?.pace}
+                      >
                         <Input
                           id={`${rowPrefix}-pace`}
                           placeholder="Ej. 4:30"
                           value={row.pace}
+                          aria-invalid={
+                            Boolean(rowErrors?.pace || hasMetricsError) || undefined
+                          }
                           onChange={(event) =>
                             updateMetric(index, "pace", event.target.value)
                           }
                         />
                       </FormField>
 
-                      <FormField label="Duración" htmlFor={`${rowPrefix}-duration`}>
+                      <FormField
+                        label="Duración"
+                        htmlFor={`${rowPrefix}-duration`}
+                        error={rowErrors?.duration ?? rowErrors?.metrics}
+                      >
                         <Input
                           id={`${rowPrefix}-duration`}
                           placeholder="Ej. 45 o 1:15:00"

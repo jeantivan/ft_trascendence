@@ -4,12 +4,14 @@ import {
   clubMidnightToUtc,
   type CalendarDay,
 } from "@/lib/time/club-time";
-import {
-  MAX_DAY_OFFSET,
-  MAX_DURATION_SECONDS,
-  MAX_PACE_SECONDS,
-  POSTGRES_INT_MAX,
-} from "./schemas";
+
+export const POSTGRES_INT_MAX = 2_147_483_647;
+// Capped well below Date's +-100M-day limit so clubMidnightToUtc never overflows
+export const MAX_DAY_OFFSET = 3650;
+// Matches the 2-digit minute display cap (99:59) in formatSecondsPerKmToPace
+export const MAX_PACE_SECONDS = 99 * 60 + 59;
+// Matches the 2-digit hour display cap (99:59:59) in formatSecondsToDuration
+export const MAX_DURATION_SECONDS = 99 * 3600 + 59 * 60 + 59;
 
 function assertIntRange(
   value: number,
@@ -149,6 +151,37 @@ export function formatAveragePace(
     return null;
   }
   return formatSecondsPerKmToPace(secondsPerKm);
+}
+
+/**
+ * Checks whether (distanceM, paceSPerKm, durationS) are mathematically consistent under
+ * integer rounding in any of the three calculation directions. Partial tuples (<3 values)
+ * cannot contradict each other and return true.
+ */
+export function areSessionMetricsConsistent(
+  distanceM: number | null | undefined,
+  paceSPerKm: number | null | undefined,
+  durationS: number | null | undefined,
+): boolean {
+  if (
+    distanceM === null ||
+    distanceM === undefined ||
+    paceSPerKm === null ||
+    paceSPerKm === undefined ||
+    durationS === null ||
+    durationS === undefined
+  ) {
+    return true;
+  }
+  if (distanceM <= 0 || paceSPerKm <= 0 || durationS <= 0) {
+    return false;
+  }
+
+  return (
+    calculateAveragePaceSecondsPerKm(distanceM, durationS) === paceSPerKm ||
+    Math.round((distanceM * paceSPerKm) / 1000) === durationS ||
+    Math.round((durationS * 1000) / paceSPerKm) === distanceM
+  );
 }
 
 const DURATION_HMS_PATTERN = /^(\d{1,2}):([0-5]\d):([0-5]\d)$/;

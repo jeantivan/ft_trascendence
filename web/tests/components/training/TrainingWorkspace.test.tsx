@@ -143,7 +143,7 @@ describe("TrainingWorkspace", () => {
           sessionType: "rodaje",
           dayOffset: 0,
           targetDistanceM: 8500,
-          targetPaceSPerKm: 270,
+          targetPaceSPerKm: 268,
           targetDurationS: 2280,
         },
       ],
@@ -463,13 +463,14 @@ describe("TrainingWorkspace", () => {
     fireEvent.change(paceInput, { target: { value: "4:30" } });
     expect(durationInput.value).toBe("45:00");
 
-    // Si cambia el ritmo, recalcula duración; si edita duración manualmente, ya no se pisa.
+    // Si cambia el ritmo, recalcula duración; si edita duración, recalcula ritmo manteniendo distancia.
     fireEvent.change(paceInput, { target: { value: "5:00" } });
     expect(durationInput.value).toBe("50:00");
 
     fireEvent.change(durationInput, { target: { value: "48:00" } });
+    expect(paceInput.value).toBe("4:48");
     fireEvent.change(paceInput, { target: { value: "4:30" } });
-    expect(durationInput.value).toBe("48:00");
+    expect(durationInput.value).toBe("45:00");
   });
 
   it("deshabilita el envío y evita doble llamada mientras una asignación está en curso (#238)", async () => {
@@ -605,7 +606,69 @@ describe("TrainingWorkspace", () => {
     await act(async () => {
       fireEvent.submit(dialog.querySelector("form")!);
     });
-    expect(within(dialog).getByRole("alert")).toHaveTextContent(/ritmo inválido/i);
+    expect(within(row1).getByRole("alert")).toHaveTextContent(/ritmo inválido/i);
+    expect(within(row1).getByLabelText(/ritmo/i)).toHaveAttribute("aria-invalid", "true");
     expect(createTrainingTemplateAction).not.toHaveBeenCalled();
+  });
+
+  it("marca solo los inputs de la sesión con error en cliente o servidor", async () => {
+    vi.mocked(createTrainingTemplateAction).mockResolvedValue({
+      success: false,
+      error: "La distancia, el ritmo y la duración no son coherentes entre sí",
+      fieldErrors: {
+        sessions: {
+          1: {
+            metrics: "La distancia, el ritmo y la duración no son coherentes entre sí",
+          },
+        },
+      },
+    });
+
+    render(
+      <TrainingWorkspace
+        clubs={[CLUB_A]}
+        activeClub={CLUB_A}
+        role="manager"
+        templates={[SAMPLE_TEMPLATE]}
+        groups={SAMPLE_GROUPS}
+        defaultStartDate={DEFAULT_START_DATE}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /nueva plantilla/i }));
+    const dialog = screen.getByRole("dialog", { name: /nueva plantilla/i });
+
+    fireEvent.change(within(dialog).getByLabelText(/nombre de la plantilla/i), {
+      target: { value: "Bloque largo" },
+    });
+    const row1 = within(dialog).getByRole("group", { name: "Sesión 1" });
+    fireEvent.change(within(row1).getByLabelText(/distancia/i), { target: { value: "10" } });
+    fireEvent.change(within(row1).getByLabelText(/ritmo/i), { target: { value: "5:00" } });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /añadir sesión/i }));
+    const row2 = within(dialog).getByRole("group", { name: "Sesión 2" });
+    fireEvent.change(within(row2).getByLabelText(/día/i), { target: { value: "-1" } });
+
+    await act(async () => {
+      fireEvent.submit(dialog.querySelector("form")!);
+    });
+
+    // Sesión 1 permanece sin error; Sesión 2 marca su input de día
+    expect(within(row1).queryByRole("alert")).toBeNull();
+    expect(within(row2).getByLabelText(/día/i)).toHaveAttribute("aria-invalid", "true");
+    expect(within(row2).getByRole("alert")).toHaveTextContent(/entero entre 0/i);
+    expect(createTrainingTemplateAction).not.toHaveBeenCalled();
+
+    // Al corregir el día y recibir fieldErrors del servidor en Sesión 2, marca sus 3 métricas
+    fireEvent.change(within(row2).getByLabelText(/día/i), { target: { value: "1" } });
+    await act(async () => {
+      fireEvent.submit(dialog.querySelector("form")!);
+    });
+
+    expect(within(row1).queryByRole("alert")).toBeNull();
+    expect(within(row2).getByLabelText(/distancia/i)).toHaveAttribute("aria-invalid", "true");
+    expect(within(row2).getByLabelText(/ritmo/i)).toHaveAttribute("aria-invalid", "true");
+    expect(within(row2).getByLabelText(/duración/i)).toHaveAttribute("aria-invalid", "true");
+    expect(within(row2).getByRole("alert")).toHaveTextContent(/no son coherentes/i);
   });
 });

@@ -72,22 +72,56 @@ describe("recomputeSessionMetrics", () => {
     });
   });
 
-  it("no sobrescribe un tercer campo introducido manualmente ni al editar el campo automático", () => {
+  it("recalcula el campo emparejado cuando los tres campos tienen valor", () => {
+    const loadedSession: SessionMetricsState = {
+      distanceKm: "10",
+      pace: "6:00",
+      duration: "1:00:00",
+      autoField: "duration",
+    };
+
+    // Editar duración mantiene la distancia y recalcula el ritmo
+    const editedDuration = recomputeSessionMetrics(loadedSession, "duration", "2:00:00");
+    expect(editedDuration).toEqual({
+      distanceKm: "10",
+      pace: "12:00",
+      duration: "2:00:00",
+      autoField: "pace",
+    });
+
+    // Desde ahí, editar distancia sigue manteniendo pace como autoField
+    const editedDistance = recomputeSessionMetrics(editedDuration, "distanceKm", "20");
+    expect(editedDistance).toEqual({
+      distanceKm: "20",
+      pace: "6:00",
+      duration: "2:00:00",
+      autoField: "pace",
+    });
+
+    // Editar ritmo (cuando es autoField o con autoField null) recalcula duración
+    const editedPace = recomputeSessionMetrics(editedDistance, "pace", "5:00");
+    expect(editedPace).toEqual({
+      distanceKm: "20",
+      pace: "5:00",
+      duration: "01:40:00",
+      autoField: "duration",
+    });
+
     const manualAll: SessionMetricsState = {
       distanceKm: "10",
       pace: "4:30",
       duration: "40:00",
       autoField: null,
     };
-
-    const edited = recomputeSessionMetrics(manualAll, "pace", "5:00");
-    expect(edited).toEqual({
+    expect(recomputeSessionMetrics(manualAll, "pace", "5:00")).toEqual({
       distanceKm: "10",
       pace: "5:00",
-      duration: "40:00",
-      autoField: null,
+      duration: "50:00",
+      autoField: "duration",
     });
+  });
 
+  it("permite vaciar un campo con los tres rellenos sin volver a rellenarlo al instante", () => {
     const autoDuration: SessionMetricsState = {
       distanceKm: "10",
       pace: "4:30",
@@ -95,11 +129,11 @@ describe("recomputeSessionMetrics", () => {
       autoField: "duration",
     };
 
-    const overrideAuto = recomputeSessionMetrics(autoDuration, "duration", "42:00");
-    expect(overrideAuto).toEqual({
+    const cleared = recomputeSessionMetrics(autoDuration, "duration", "");
+    expect(cleared).toEqual({
       distanceKm: "10",
       pace: "4:30",
-      duration: "42:00",
+      duration: "",
       autoField: null,
     });
   });

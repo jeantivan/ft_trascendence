@@ -11,12 +11,17 @@ import {
   TrainingForbiddenError,
   TrainingNotFoundError,
   TrainingValidationError,
+  type TemplateValidationFieldErrors,
 } from "./errors";
 import type { TrainingSessionData, TrainingTemplateData } from "./types";
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
-  | { success: false; error: string };
+  | {
+      success: false;
+      error: string;
+      fieldErrors?: TemplateValidationFieldErrors;
+    };
 
 const trainingService = new TrainingService(trainingRepository, notify);
 
@@ -34,10 +39,12 @@ async function runTrainingAction<T>(
     if (error instanceof TrainingForbiddenError) {
       forbidden();
     }
-    if (
-      error instanceof TrainingValidationError ||
-      error instanceof TrainingConflictError
-    ) {
+    if (error instanceof TrainingValidationError) {
+      return error.fieldErrors
+        ? { success: false, error: error.message, fieldErrors: error.fieldErrors }
+        : { success: false, error: error.message };
+    }
+    if (error instanceof TrainingConflictError) {
       return { success: false, error: error.message };
     }
     throw error;
