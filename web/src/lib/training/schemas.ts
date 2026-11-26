@@ -62,6 +62,7 @@ export const assignTrainingTemplateSchema = z
   .object({
     templateId: idSchema,
     groupId: idSchema,
+    // Past startDates (>= 1970) are intentionally allowed (#135) so managers can backfill blocks.
     startDate: z
       .string()
       .trim()

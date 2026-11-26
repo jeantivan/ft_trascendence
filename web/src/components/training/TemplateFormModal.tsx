@@ -81,7 +81,11 @@ function templateToDrafts(template: TrainingTemplateData): SessionDraft[] {
       session.targetDurationS != null
         ? formatSecondsToDuration(session.targetDurationS)
         : "",
-    autoField: inferInitialAutoField(session.targetDistanceM, session.targetPaceSPerKm, session.targetDurationS)
+    autoField: inferInitialAutoField(
+      session.targetDistanceM,
+      session.targetPaceSPerKm,
+      session.targetDurationS,
+    ),
   }));
 }
 
