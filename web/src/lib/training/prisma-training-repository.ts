@@ -200,6 +200,21 @@ async function isActiveClubAthlete(
   return membership?.role === "athlete";
 }
 
+async function resolveClubScheduledAt(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  calendarDate: string
+): Promise<Date> {
+  const org = await tx.organization.findUnique({
+    where: { id: normalizeId(orgId) },
+    select: { timezone: true },
+  });
+  if (!org) {
+    throw new TrainingNotFoundError();
+  }
+  return computeScheduledAtUtc(calendarDate, 0, org.timezone);
+}
+
 async function findGroupAthletesToNotify(
   tx: Prisma.TransactionClient,
   orgId: string,
@@ -759,7 +774,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
 
         if (parentSession.groupId === null) {
           throw new TrainingValidationError(
-            "No se puede adaptar una sesión cuyo grupo ya no existe"
+            "No se puede adaptar una Session cuyo Group ya no existe"
           );
         }
 
@@ -774,7 +789,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
         });
         if (!membershipInGroup) {
           throw new TrainingValidationError(
-            "El atleta no pertenece al grupo de la sesión a adaptar"
+            "El Athlete no pertenece al Group de la Session a adaptar"
           );
         }
 
@@ -787,7 +802,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
         });
         if (existingAthleteLog) {
           throw new TrainingConflictError(
-            "No se puede adaptar una sesión de grupo que este atleta ya ha registrado",
+            "No se puede adaptar una Session de grupo que este Athlete ya ha registrado",
             SESSION_ALREADY_LOGGED
           );
         }
@@ -803,19 +818,17 @@ export class PrismaTrainingRepository implements TrainingRepository {
         });
         if (existingCustomization) {
           throw new TrainingConflictError(
-            "Ya existe una sesión personalizada para este atleta sobre esta sesión de grupo",
+            "Ya existe una Customized Session para este Athlete sobre esta Session de grupo",
             CUSTOMIZED_SESSION_ALREADY_EXISTS
           );
         }
       }
 
-      const org = await tx.organization.findUnique({
-        where: { id: normalizedOrgId },
-        select: { timezone: true },
-      });
-      if (!org) {
-        throw new TrainingNotFoundError();
-      }
+      const scheduledAt = await resolveClubScheduledAt(
+        tx,
+        normalizedOrgId,
+        input.scheduledAt
+      );
 
       const created = await tx.trainingSession.create({
         data: {
@@ -825,7 +838,7 @@ export class PrismaTrainingRepository implements TrainingRepository {
           targetDistanceM: input.targetDistanceM,
           targetDurationS: input.targetDurationS,
           targetPaceSPerKm: input.targetPaceSPerKm,
-          scheduledAt: computeScheduledAtUtc(input.scheduledAt, 0, org.timezone),
+          scheduledAt,
           groupId: null,
           athleteId: normalizedAthleteId,
           sourceTemplateId: null,
@@ -858,17 +871,10 @@ export class PrismaTrainingRepository implements TrainingRepository {
         normalizedSessionId
       );
 
-      let scheduledAt: Date | undefined;
-      if (input.scheduledAt !== undefined) {
-        const org = await tx.organization.findUnique({
-          where: { id: normalizedOrgId },
-          select: { timezone: true },
-        });
-        if (!org) {
-          throw new TrainingNotFoundError();
-        }
-        scheduledAt = computeScheduledAtUtc(input.scheduledAt, 0, org.timezone);
-      }
+      const scheduledAt =
+        input.scheduledAt !== undefined
+          ? await resolveClubScheduledAt(tx, normalizedOrgId, input.scheduledAt)
+          : undefined;
 
       const data: Prisma.TrainingSessionUpdateInput = {};
       if (input.sessionType !== undefined) {

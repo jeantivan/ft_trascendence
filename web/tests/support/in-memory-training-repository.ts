@@ -710,7 +710,7 @@ export class InMemoryTrainingRepository implements TrainingRepository {
 
       if (parentSession.groupId === null) {
         throw new TrainingValidationError(
-          "No se puede adaptar una sesión cuyo grupo ya no existe"
+          "No se puede adaptar una Session cuyo Group ya no existe"
         );
       }
 
@@ -718,13 +718,13 @@ export class InMemoryTrainingRepository implements TrainingRepository {
         this.athleteGroups.get(normalizedAthleteId) ?? new Set<string>();
       if (!memberGroups.has(parentSession.groupId)) {
         throw new TrainingValidationError(
-          "El atleta no pertenece al grupo de la sesión a adaptar"
+          "El Athlete no pertenece al Group de la Session a adaptar"
         );
       }
 
       if (this.sessionLogs.has(`${parentSession.id}:${normalizedAthleteId}`)) {
         throw new TrainingConflictError(
-          "No se puede adaptar una sesión de grupo que este atleta ya ha registrado",
+          "No se puede adaptar una Session de grupo que este Athlete ya ha registrado",
           SESSION_ALREADY_LOGGED
         );
       }
@@ -738,7 +738,7 @@ export class InMemoryTrainingRepository implements TrainingRepository {
       );
       if (alreadyCustomized) {
         throw new TrainingConflictError(
-          "Ya existe una sesión personalizada para este atleta sobre esta sesión de grupo",
+          "Ya existe una Customized Session para este Athlete sobre esta Session de grupo",
           CUSTOMIZED_SESSION_ALREADY_EXISTS
         );
       }
