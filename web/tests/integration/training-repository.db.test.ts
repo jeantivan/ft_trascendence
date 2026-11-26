@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { PrismaTrainingRepository } from "@/lib/training/prisma-training-repository";
+import {
+  PrismaTrainingRepository,
+  toSessionData,
+} from "@/lib/training/prisma-training-repository";
 import { notify } from "@/lib/notifications/notify";
 import {
   TrainingConflictError,
@@ -157,20 +160,7 @@ describe("Integration: PrismaTrainingRepository", () => {
           targetPaceSPerKm: input.targetPaceSPerKm ?? null,
         },
       });
-      return {
-        id: row.id,
-        orgId: row.orgId,
-        origin: row.origin,
-        sessionType: row.sessionType,
-        targetDistanceM: row.targetDistanceM,
-        targetDurationS: row.targetDurationS,
-        targetPaceSPerKm: row.targetPaceSPerKm,
-        scheduledAt: row.scheduledAt,
-        groupId: row.groupId,
-        athleteId: row.athleteId,
-        sourceTemplateId: row.sourceTemplateId,
-        customizesSessionId: row.customizesSessionId,
-      };
+      return toSessionData(row);
     },
     seedSessionLog: async (sessionId, targetAthleteId) => {
       await prisma.sessionLog.create({

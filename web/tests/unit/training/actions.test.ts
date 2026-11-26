@@ -466,10 +466,14 @@ describe("Training Server Actions", () => {
     });
   });
 
+  const expectedScheduleReadRoles = ORG_ROLES["session.read"].filter((role) =>
+    (ORG_ROLES["freeSession.read"] as readonly string[]).includes(role)
+  );
+
   describe("getAthleteScheduleAction", () => {
     const GROUP_1 = "13700000-0000-4000-8000-000000000041";
 
-    it("calls requireOrgRole with session.read and returns the athlete's substituted schedule", async () => {
+    it("calls requireOrgRole with roles allowed for both session.read and freeSession.read", async () => {
       repo.addGroup(ORG_A, GROUP_1);
       repo.addAthleteToGroup(ATHLETE_USER.id, GROUP_1);
 
@@ -505,7 +509,7 @@ describe("Training Server Actions", () => {
 
       expect(requireOrgRole).toHaveBeenCalledWith(
         ORG_A,
-        ORG_ROLES["session.read"]
+        expectedScheduleReadRoles
       );
       expect(result.success).toBe(true);
       if (result.success) {
@@ -533,7 +537,7 @@ describe("Training Server Actions", () => {
   });
 
   describe("listClubSessionsAction", () => {
-    it("calls requireOrgRole with freeSession.read and returns all club sessions for a manager", async () => {
+    it("calls requireOrgRole with roles allowed for both session.read and freeSession.read and returns all club sessions for a manager", async () => {
       const freeSession = repo.seedSession({
         orgId: ORG_A,
         origin: "free",
@@ -551,7 +555,7 @@ describe("Training Server Actions", () => {
 
       expect(requireOrgRole).toHaveBeenCalledWith(
         ORG_A,
-        ORG_ROLES["freeSession.read"]
+        expectedScheduleReadRoles
       );
       expect(result.success).toBe(true);
       if (result.success) {

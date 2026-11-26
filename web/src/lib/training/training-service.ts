@@ -303,16 +303,16 @@ export class TrainingService {
       if (targetAthleteId !== normalizedActorId) {
         throw new TrainingNotFoundError();
       }
-      return this.repo.getAthleteSchedule(normalizedOrgId, normalizedActorId);
+    } else {
+      const targetRole = await this.repo.findRole(
+        normalizedOrgId,
+        targetAthleteId
+      );
+      if (targetRole !== "athlete") {
+        throw new TrainingNotFoundError();
+      }
     }
 
-    const targetRole = await this.repo.findRole(
-      normalizedOrgId,
-      targetAthleteId
-    );
-    if (targetRole !== "athlete") {
-      throw new TrainingNotFoundError();
-    }
     return this.repo.getAthleteSchedule(normalizedOrgId, targetAthleteId);
   }
 
