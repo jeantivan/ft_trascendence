@@ -34,7 +34,8 @@ echo "check-no-coauthor: $count commits checked"
 hashes=$(git log --format=%H "$1..$2")
 found=0
 for hash in $hashes; do
-  if git log -1 --format=%B "$hash" | grep -qi '^co-authored-by:'; then
+  # Only spaces or > before the key: a line that just talks about the rule passes
+  if git log -1 --format=%B "$hash" | grep -qi '^[[:space:]>]*co-authored-by:'; then
     if [ "$found" -eq 0 ]; then
       echo "check-no-coauthor: these commits have a Co-Authored-By line:" >&2
     fi

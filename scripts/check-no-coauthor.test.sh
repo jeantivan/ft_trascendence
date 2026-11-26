@@ -148,6 +148,34 @@ test_fails_with_the_line_in_the_middle_of_the_message() {
   teardown
 }
 
+# The line still counts with spaces before it (#300, Marta's review)
+test_fails_with_the_line_indented() {
+  setup
+  git commit -q --allow-empty -m "base"
+  base=$(git rev-parse HEAD)
+  git commit -q --allow-empty -m "indented" -m "    Co-Authored-By: X <x@example.com>"
+  sh "$SCRIPT" "$base" HEAD > /dev/null 2>&1
+  code=$?
+  if [ "$code" -ne 1 ]; then
+    fail "fails with the line indented (exit $code)"
+  fi
+  teardown
+}
+
+# The line still counts quoted with > (#300, Marta's review)
+test_fails_with_the_line_quoted() {
+  setup
+  git commit -q --allow-empty -m "base"
+  base=$(git rev-parse HEAD)
+  git commit -q --allow-empty -m "quoted" -m "> Co-Authored-By: X <x@example.com>"
+  sh "$SCRIPT" "$base" HEAD > /dev/null 2>&1
+  code=$?
+  if [ "$code" -ne 1 ]; then
+    fail "fails with the line quoted with > (exit $code)"
+  fi
+  teardown
+}
+
 # Like the 15 commits already in main: the line is before base, not in the PR
 test_passes_when_the_line_is_only_before_base() {
   setup
@@ -191,6 +219,8 @@ test_fails_and_names_the_commit_with_the_line
 test_passes_when_a_subject_only_mentions_the_line
 test_fails_with_the_line_in_any_case
 test_fails_with_the_line_in_the_middle_of_the_message
+test_fails_with_the_line_indented
+test_fails_with_the_line_quoted
 test_passes_when_the_line_is_only_before_base
 test_passes_when_the_line_comes_from_merging_main
 
