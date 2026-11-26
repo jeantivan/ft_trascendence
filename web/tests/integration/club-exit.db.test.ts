@@ -152,9 +152,9 @@ describe("PrismaClubExit.leave", () => {
     });
 
     it("also withdraws a Manager's spots when the Manager leaves", async () => {
-      const [manager, athlete] = [await createUser(), await createUser()];
-      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
-      const eventId = await seedSpot(club.orgId, athlete, manager, "pending");
+      const [manager, otherManager] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [otherManager, "manager"]]);
+      const eventId = await seedSpot(club.orgId, otherManager, manager, "pending");
 
       await new PrismaClubExit(prisma).leave(manager, club.orgId);
 
