@@ -12,8 +12,13 @@ Criterios de revisión para `code-review` (las comprobaciones mecánicas viven e
 
 ## Autorización y anti-enumeración
 
-- **404 (`NotFoundError`)**: para recursos de otro club, identificadores inexistentes, actores fuera del club o intentos de un Athlete de leer recursos privados de otro Athlete (evita revelar existencia de IDs).
-- **403 (`ForbiddenError`)**: cuando un miembro legítimo del club intenta una acción reservada a otro rol dentro de su propio club (p. ej. un Athlete llamando a una acción de Manager).
+- **404 (`NotFoundError`)**: para recursos de otro club, identificadores inexistentes, actores fuera del club, recursos personales de ex-miembros que salieron del club (#150), intentos de un Athlete de leer recursos privados de otro Athlete y rutas de Admin (`requireAdmin` / `requireApiAdmin`) para quien no es Admin (#199, decidido en #2) — evita revelar existencia de IDs o del panel.
+- **403 (`ForbiddenError`)**: cuando un miembro legítimo del club intenta una acción sobre un recurso visible para él reservada a otro rol dentro de su propio club (p. ej. un Athlete llamando a una acción de Manager, o un Manager intentando editar/borrar una `Free Session` de un Athlete activo).
+
+## Concurrencia y validación
+
+- **Bloqueos Postgres frente a FKs (`FOR UPDATE` vs `FOR NO KEY UPDATE`)**: un `INSERT` en una tabla hija toma `FOR KEY SHARE` sobre la fila padre por su foreign key; en Postgres, `FOR NO KEY UPDATE` no bloquea contra `FOR KEY SHARE`, así que las guardias que dependen de que no exista ninguna fila hija (p. ej. `SESSION_ALREADY_LOGGED` frente a `SessionLog`) deben bloquear la fila padre con `FOR UPDATE`.
+- **Esquemas Zod en actualizaciones parciales**: no reutilizar `.nullable().default(null)` en esquemas de edición (sobrescribiría con `null` cualquier campo omitido); usar `.nullable().optional()` para distinguir campo omitido (`undefined`, conservar) de borrado explícito (`null`).
 
 ## Datos de salud y privacidad
 

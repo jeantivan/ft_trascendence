@@ -1,7 +1,7 @@
 if [ ! -d web/node_modules ]; then
+  echo "pre-commit: web/node_modules no encontrado; omitiendo lint-staged (ejecuta npm ci en web/ o usa make test)."
   exit 0
 fi
 
 cd web
 ./node_modules/.bin/lint-staged
-npm run typecheck

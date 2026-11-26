@@ -51,11 +51,11 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/` an
 
 - No leer, mostrar ni versionar `.env`, tokens, claves privadas ni certificados. Si se añade una variable, actualizar `.env.example` con valores vacíos o ficticios.
 - RPE y Feedback son datos de salud: no van a logs ni dentro del payload de eventos SSE o notificaciones. El evento lleva solo ids; el cliente pide el dato a un endpoint que comprueba permisos.
-- Si añades enlaces o rutas con token (`?token=...`), lee `docs/security/tokens.md` antes de tocar Next.js o `nginx/app.conf` (#185).
+- Un token en un enlace va siempre en `?token=...`, nunca en la ruta (#185); antes de tocar Next.js o `nginx/app.conf` para rutas con token, lee `docs/security/tokens.md`.
 
 ## Datos de ejemplo (seed)
 
-- Los datos de ejemplo de cada parte van en `web/prisma/seed/<su-parte>.ts` (en el mismo PR que la funcionalidad, #213) y al terminar solo imprimen recuentos, nunca contraseñas ni datos de salud. Antes de tocar el seed, lee las reglas de idempotencia y rangos de IDs en la cabecera de `web/prisma/seed.ts` (#226).
+- Los datos de ejemplo de cada parte van en `web/prisma/seed/<su-parte>.ts` (en el mismo PR que la funcionalidad, #213), usan `upsert` con los IDs fijos de `web/prisma/seed/ids.ts` y al terminar solo imprimen recuentos, nunca contraseñas ni datos de salud. Antes de tocar el seed, lee las reglas de idempotencia y rangos en la cabecera de `web/prisma/seed.ts` (#226).
 
 ## Operaciones destructivas
 
@@ -63,7 +63,7 @@ Local skills live in `.agents/skills/` and are symlinked in `.claude/skills/` an
 
 ## Autorización
 
-- La matriz de permisos es la fuente de verdad (referenciada en GitHub issues o documentación). No duplicarla en otros documentos; si el código necesita un permiso que no está en la matriz, preguntar.
+- La matriz de permisos es la fuente de verdad (issue #2; espejo de roles por club en `web/src/lib/permissions/org-roles.ts`). No duplicarla en otros documentos; si el código necesita un permiso que no está en la matriz, preguntar.
 - Toda acción que lea o modifique datos comprueba permisos en el servidor, y las sensibles comprueban usuario y rol vigente en la base de datos. No basta el rol del JWT ni el proxy.ts (antes middleware).
 
 ## Veracidad
