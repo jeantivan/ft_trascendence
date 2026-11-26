@@ -51,7 +51,7 @@ describe("generateExport", () => {
     expect(row.tokenHash).toBe(createHash("sha256").update(result.token).digest("hex"));
     expect(result.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     const entries = await readZipEntries(path.join(uploadsDir, `exports/${id}.zip`));
-    expect(Object.keys(entries).sort()).toEqual(["README.txt", "data.json", "sessions.csv"]);
+    expect(Object.keys(entries).sort()).toEqual(["README.txt", "data.json", "messages.csv", "sessions.csv"]);
   });
 
   it("puts the accesses by third parties in data.json and does not log the export itself", async () => {
