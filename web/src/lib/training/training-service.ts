@@ -30,6 +30,8 @@ import {
   TrainingForbiddenError,
   TrainingNotFoundError,
   TrainingValidationError,
+  type TemplateSessionErrorField,
+  type TemplateValidationFieldErrors,
 } from "./errors";
 
 const updateTrainingTemplateSchema = z
@@ -44,6 +46,46 @@ const updateTrainingTemplateSchema = z
     (data) => data.name !== undefined || data.sessions !== undefined,
     { message: "Debe proporcionar al menos un campo para actualizar" }
   );
+
+function buildTemplateValidationError(error: z.ZodError): TrainingValidationError {
+  const message = error.issues[0]?.message ?? "Datos inválidos";
+  const fieldErrors: TemplateValidationFieldErrors = {};
+
+  for (const issue of error.issues) {
+    if (issue.path[0] === "name" && !fieldErrors.name) {
+      fieldErrors.name = issue.message;
+      continue;
+    }
+
+    if (issue.path[0] === "sessions" && typeof issue.path[1] === "number") {
+      const sessionIndex = issue.path[1];
+      const rawField = issue.path[2];
+      let targetField: TemplateSessionErrorField | null = null;
+      if (rawField === "dayOffset") {
+        targetField = "dayOffset";
+      } else if (rawField === "targetDistanceM") {
+        targetField = "distanceKm";
+      } else if (rawField === "targetPaceSPerKm") {
+        targetField = "pace";
+      } else if (rawField === "targetDurationS") {
+        targetField = issue.code === "custom" ? "metrics" : "duration";
+      }
+
+      if (targetField) {
+        fieldErrors.sessions ??= {};
+        fieldErrors.sessions[sessionIndex] ??= {};
+        fieldErrors.sessions[sessionIndex][targetField] ??= issue.message;
+      }
+    }
+  }
+
+  const hasFieldErrors =
+    fieldErrors.name !== undefined || fieldErrors.sessions !== undefined;
+  return new TrainingValidationError(
+    message,
+    hasFieldErrors ? fieldErrors : undefined,
+  );
+}
 
 export class TrainingService {
   constructor(
@@ -144,8 +186,7 @@ export class TrainingService {
 
     const parseResult = trainingTemplateSchema.safeParse(input);
     if (!parseResult.success) {
-      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
-      throw new TrainingValidationError(message);
+      throw buildTemplateValidationError(parseResult.error);
     }
 
     // Known limit (#238): concurrent club deletion can trigger P2003 on training_templates_org_id_fkey.
@@ -184,8 +225,7 @@ export class TrainingService {
 
     const parseResult = updateTrainingTemplateSchema.safeParse(input);
     if (!parseResult.success) {
-      const message = parseResult.error.issues[0]?.message ?? "Datos inválidos";
-      throw new TrainingValidationError(message);
+      throw buildTemplateValidationError(parseResult.error);
     }
 
     // Existence and org ownership are checked inside repo.update under the row lock (FOR UPDATE).

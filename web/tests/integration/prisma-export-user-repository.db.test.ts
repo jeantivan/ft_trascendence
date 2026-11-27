@@ -10,7 +10,12 @@ const repository = createPrismaExportUserRepository(prisma);
 
 describe("Integration: createPrismaExportUserRepository", () => {
   afterEach(async () => {
+    // Conversations first: they have no owner to cascade from once the users are gone
+    await prisma.conversation.deleteMany({
+      where: { OR: [{ participants: { some: { user: { email: { in: [email, otherEmail] } } } } }, { event: { organization: { name: orgName } } }] },
+    });
     await prisma.user.deleteMany({ where: { email: { in: [email, otherEmail] } } });
+    await prisma.event.deleteMany({ where: { organization: { name: orgName } } });
     // Restrict: a club with sessions cannot be deleted, so the sessions go first
     await prisma.trainingSession.deleteMany({ where: { organization: { name: orgName } } });
     await prisma.organization.deleteMany({ where: { name: orgName } });
@@ -343,6 +348,75 @@ describe("Integration: createPrismaExportUserRepository", () => {
       const { user } = await createFixture();
 
       await expect(repository.findSessions(user.id)).resolves.toEqual([]);
+    });
+  });
+
+  describe("findMessages", () => {
+    const at = (minute: number) => new Date(`2026-11-10T10:${String(minute).padStart(2, "0")}:00.000Z`);
+
+    async function createFixture() {
+      const user = await prisma.user.create({ data: { email, nick: "runner" } });
+      const other = await prisma.user.create({ data: { email: otherEmail, nick: "other" } });
+      const org = await prisma.organization.create({ data: { name: orgName, timezone: "Europe/Madrid" } });
+      const event = await prisma.event.create({
+        data: { orgId: org.id, title: "Rodaje", location: "Retiro", startsAt: new Date("2030-01-01T10:00:00Z") },
+      });
+      // She no longer takes part in the DM (removedAt set), but her messages are still hers
+      const dm = await prisma.conversation.create({
+        data: {
+          kind: "dm",
+          participants: { create: [{ userId: user.id, removedAt: at(0) }, { userId: other.id }] },
+        },
+      });
+      const eventChat = await prisma.conversation.create({
+        data: { kind: "event", eventId: event.id, participants: { create: [{ userId: other.id }] } },
+      });
+      return { user, other, dm, eventChat };
+    }
+
+    it("devuelve todos sus mensajes, en DM y en chats de Event, también si ya no participa, por fecha e id", async () => {
+      const { user, dm, eventChat } = await createFixture();
+      const second = await prisma.message.create({
+        data: { conversationId: eventChat.id, authorId: user.id, body: "en el Event", createdAt: at(20) },
+      });
+      const first = await prisma.message.create({
+        data: { conversationId: dm.id, authorId: user.id, body: "en el DM", createdAt: at(10) },
+      });
+      const deleted = await prisma.message.create({
+        data: { conversationId: dm.id, authorId: user.id, body: "borrado", createdAt: at(30), deletedAt: at(40) },
+      });
+
+      await expect(repository.findMessages(user.id)).resolves.toEqual([
+        { id: first.id, conversationId: dm.id, kind: "dm", body: "en el DM", createdAt: at(10), deletedAt: null },
+        { id: second.id, conversationId: eventChat.id, kind: "event", body: "en el Event", createdAt: at(20), deletedAt: null },
+        { id: deleted.id, conversationId: dm.id, kind: "dm", body: "borrado", createdAt: at(30), deletedAt: at(40) },
+      ]);
+    });
+
+    it("no devuelve mensajes de otras personas ni los que quedaron sin autor", async () => {
+      const { user, other, dm, eventChat } = await createFixture();
+      const mine = await prisma.message.create({
+        data: { conversationId: dm.id, authorId: user.id, body: "mío", createdAt: at(10) },
+      });
+      await prisma.message.create({
+        data: { conversationId: dm.id, authorId: other.id, body: "de otra persona", createdAt: at(11) },
+      });
+      await prisma.message.create({
+        data: { conversationId: eventChat.id, authorId: other.id, body: "de otra persona en el Event", createdAt: at(12) },
+      });
+      await prisma.message.create({
+        data: { conversationId: eventChat.id, authorId: null, body: "sin autor", createdAt: at(13) },
+      });
+
+      const messages = await repository.findMessages(user.id);
+
+      expect(messages.map((message) => message.id)).toEqual([mine.id]);
+    });
+
+    it("devuelve una lista vacía si no ha escrito mensajes", async () => {
+      const { user } = await createFixture();
+
+      await expect(repository.findMessages(user.id)).resolves.toEqual([]);
     });
   });
 });

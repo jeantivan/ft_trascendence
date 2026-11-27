@@ -44,13 +44,13 @@ describe("trainingTemplateSchema", () => {
           sessionType: "cuestas",
           dayOffset: 0,
           targetDistanceM: null,
+          targetPaceSPerKm: MAX_PACE_SECONDS,
         },
         {
           sessionType: "tirada_larga",
           dayOffset: MAX_DAY_OFFSET,
           targetDistanceM: 21097,
           targetDurationS: MAX_DURATION_SECONDS,
-          targetPaceSPerKm: MAX_PACE_SECONDS,
         },
       ],
     });
@@ -61,6 +61,60 @@ describe("trainingTemplateSchema", () => {
       targetDurationS: null,
       targetPaceSPerKm: null,
     });
+  });
+
+  it("accepts consistent metric triples (exact and rounded) and partial targets", () => {
+    expect(
+      trainingTemplateSchema.safeParse({
+        name: "Coherente",
+        sessions: [
+          {
+            sessionType: "rodaje",
+            dayOffset: 0,
+            targetDistanceM: 10000,
+            targetPaceSPerKm: 360,
+            targetDurationS: 3600,
+          },
+          {
+            sessionType: "rodaje",
+            dayOffset: 1,
+            // 10 km en 47:23 (2843 s) -> ritmo redondeado 284 s/km
+            targetDistanceM: 10000,
+            targetPaceSPerKm: 284,
+            targetDurationS: 2843,
+          },
+          {
+            sessionType: "intervalos",
+            dayOffset: 2,
+            targetDistanceM: 8000,
+            targetDurationS: 2400,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects inconsistent distance, pace and duration in the same session", () => {
+    const result = trainingTemplateSchema.safeParse({
+      name: "Incoherente",
+      sessions: [
+        {
+          sessionType: "rodaje",
+          dayOffset: 0,
+          targetDistanceM: 10000,
+          targetPaceSPerKm: 360,
+          targetDurationS: 7200,
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual([
+        "sessions",
+        0,
+        "targetDurationS",
+      ]);
+    }
   });
 
   it("rejects unexpected keys such as client-supplied position or unknown template fields", () => {

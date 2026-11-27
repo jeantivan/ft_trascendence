@@ -2,14 +2,20 @@ import { z } from "zod";
 import { SessionType } from "@/generated/prisma/enums";
 import { idSchema } from "@/lib/org/schemas";
 import type { RpeValue } from "./rpe";
+import {
+  areSessionMetricsConsistent,
+  MAX_DAY_OFFSET,
+  MAX_DURATION_SECONDS,
+  MAX_PACE_SECONDS,
+  POSTGRES_INT_MAX,
+} from "./units";
 
-export const POSTGRES_INT_MAX = 2_147_483_647;
-// Capped well below Date's +-100M-day limit so clubMidnightToUtc never overflows
-export const MAX_DAY_OFFSET = 3650;
-// Matches the 2-digit minute display cap (99:59) in formatSecondsPerKmToPace
-export const MAX_PACE_SECONDS = 99 * 60 + 59;
-// Matches the 2-digit hour display cap (99:59:59) in formatSecondsToDuration
-export const MAX_DURATION_SECONDS = 99 * 3600 + 59 * 60 + 59;
+export {
+  MAX_DAY_OFFSET,
+  MAX_DURATION_SECONDS,
+  MAX_PACE_SECONDS,
+  POSTGRES_INT_MAX,
+};
 
 export const trainingTemplateNameSchema = z
   .string()
@@ -39,7 +45,19 @@ export const templateSessionSchema = z
     targetDurationS: optionalPositiveInt(MAX_DURATION_SECONDS),
     targetPaceSPerKm: optionalPositiveInt(MAX_PACE_SECONDS),
   })
-  .strict();
+  .strict()
+  .refine(
+    (session) =>
+      areSessionMetricsConsistent(
+        session.targetDistanceM,
+        session.targetPaceSPerKm,
+        session.targetDurationS,
+      ),
+    {
+      message: "La distancia, el ritmo y la duración no son coherentes entre sí",
+      path: ["targetDurationS"],
+    },
+  );
 
 export type TemplateSessionInput = z.infer<typeof templateSessionSchema>;
 
@@ -75,6 +93,7 @@ export const assignTrainingTemplateSchema = z
   .object({
     templateId: idSchema,
     groupId: idSchema,
+    // Past startDates (>= 1970) are intentionally allowed (#135) so managers can backfill blocks.
     startDate: calendarDateSchema,
   })
   .strict();

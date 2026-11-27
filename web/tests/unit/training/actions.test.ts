@@ -209,6 +209,39 @@ describe("Training Server Actions", () => {
       }
     });
 
+    it("returns { success: false, error, fieldErrors } when a session has inconsistent metrics", async () => {
+      vi.mocked(requireOrgRole).mockResolvedValueOnce({
+        user: MANAGER_USER,
+        role: "manager",
+      });
+
+      const result = await createTrainingTemplateAction(ORG_A, {
+        name: "Incoherent Plan",
+        sessions: [
+          { sessionType: "rodaje", dayOffset: 0 },
+          {
+            sessionType: "rodaje",
+            dayOffset: 1,
+            targetDistanceM: 10000,
+            targetPaceSPerKm: 360,
+            targetDurationS: 7200,
+          },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.fieldErrors).toEqual({
+          sessions: {
+            1: {
+              metrics:
+                "La distancia, el ritmo y la duración no son coherentes entre sí",
+            },
+          },
+        });
+      }
+    });
+
     it("triggers forbidden() (403) if role is downgraded between requireOrgRole and TrainingService", async () => {
       vi.mocked(requireOrgRole).mockResolvedValueOnce({
         user: ATHLETE_USER,

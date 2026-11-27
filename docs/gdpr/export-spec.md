@@ -169,7 +169,9 @@ message_id,conversation_id,kind,body,created_at,deleted_at
 102,uuid-dm,dm,"¿Quedamos antes?",2026-10-06T10:00:00Z,
 ```
 
-No se incluyen los mensajes de otras personas ni sus nombres. `kind` es `event` o `dm`. Los mensajes borrados por el usuario se incluyen mientras sigan conservados en la base de datos, identificados con `deleted_at`; el `README.txt` lo explica.
+No se incluyen los mensajes de otras personas ni sus nombres. `kind` es `event` o `dm`. Los mensajes borrados se incluyen mientras sigan conservados en la base de datos, identificados con `deleted_at`; el `README.txt` lo explica.
+
+Se exportan **todos** los mensajes con `author_id` = usuario, también los de conversaciones DM donde ya no participa (`ConversationParticipant.removedAt` no nulo, p. ej. tras romperse el `Contact`) o de un Event en el que ya no está apuntado. No se filtra por `removedAt` ni por pertenencia actual (decisión de Marta, 21-nov-2026, preflight #172).
 
 ### 3.5 `README.txt`
 
@@ -184,7 +186,7 @@ CONTENIDO:
 - sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de
   grupos que dejaste si registraste la sesión), una fila por sesión
 - session_logs.csv: resultados (completada, RPE, distancia, duración)
-- messages.csv: los mensajes que escribiste (los que borraste
+- messages.csv: los mensajes que escribiste (los borrados por moderación
   aparecen con la fecha de borrado si aún los conservamos)
 
 CAMPOS:
@@ -232,7 +234,7 @@ Si necesitas más datos de los que incluye la descarga, escribe a
 
 ## 6. Decisiones abiertas
 
-Cerradas: `notifications` se exporta sin `payload`; los mensajes borrados por el usuario se incluyen con `deleted_at`; la descarga exige token válido **y** sesión iniciada del mismo usuario (requisito, no opción); el ZIP se guarda en el volumen local privado de Docker, sin NGINX exponiéndolo y con borrado a los 7 días o al borrar la cuenta (confirmado por Jean en #8); `health_consent_version` se exporta como entero o `null`, según lo que define el esquema.
+Cerradas: `notifications` se exporta sin `payload`; los mensajes borrados se incluyen con `deleted_at`; la descarga exige token válido **y** sesión iniciada del mismo usuario (requisito, no opción); el ZIP se guarda en el volumen local privado de Docker, sin NGINX exponiéndolo y con borrado a los 7 días o al borrar la cuenta (confirmado por Jean en #8); `health_consent_version` se exporta como entero o `null`, según lo que define el esquema.
 
 | Tema | Propuesta | Quién decide |
 |---|---|---|

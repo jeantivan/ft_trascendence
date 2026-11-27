@@ -1,5 +1,6 @@
 import type {
   ContactStatus,
+  ConversationKind,
   MembershipRole,
   SessionOrigin,
   SessionType,
@@ -37,6 +38,17 @@ export type ExportSessionSource = {
   customizesSessionId: string | null;
 };
 
+// One row of messages.csv: a message the user wrote, never one from the other people in the chat
+export type ExportMessageSource = {
+  // bigserial: it goes out as a string, like the notification ids
+  id: bigint;
+  conversationId: string;
+  kind: ConversationKind;
+  body: string;
+  createdAt: Date;
+  deletedAt: Date | null;
+};
+
 // The rest of data.json. Nothing of other people is selected: no manager_id, no id, nick or
 // email of a contact, no notification payload (docs/gdpr/export-spec.md, section 3.1).
 export type ExportAccountSource = {
@@ -71,6 +83,10 @@ export type ExportUserRepository = {
   // (so session_logs.csv and customizes_session_id never point to a missing session),
   // ordered by date
   findSessions(userId: string): Promise<ExportSessionSource[]>;
+  // Every message the user wrote, in DMs and Event chats, deleted ones included. Not
+  // filtered by removedAt or current membership (docs/gdpr/export-spec.md, section 3.4),
+  // ordered by date
+  findMessages(userId: string): Promise<ExportMessageSource[]>;
   // Actions a Manager or an Admin took on the user, oldest first. Already shaped for the
   // export: no actor id
   findAccessLog(userId: string): Promise<AccessLogEntry[]>;
@@ -95,6 +111,7 @@ export async function buildExportFiles(
   const account = await repository.findAccountData(userId);
   if (account === null) return null;
   const sessions = await repository.findSessions(userId);
+  const messages = await repository.findMessages(userId);
   const accessLog = await repository.findAccessLog(userId);
 
   const data = {
@@ -167,6 +184,7 @@ export async function buildExportFiles(
   return [
     { name: "data.json", content: JSON.stringify(data, null, 2) },
     { name: "sessions.csv", content: buildSessionsCsv(sessions) },
+    { name: "messages.csv", content: buildMessagesCsv(messages) },
     { name: "README.txt", content: buildReadme(profile.email, now) },
   ];
 }
@@ -200,6 +218,20 @@ function buildSessionsCsv(sessions: ExportSessionSource[]): string {
   );
 }
 
+function buildMessagesCsv(messages: ExportMessageSource[]): string {
+  return toCsv(
+    ["message_id", "conversation_id", "kind", "body", "created_at", "deleted_at"],
+    messages.map((message) => [
+      String(message.id),
+      message.conversationId,
+      message.kind,
+      message.body,
+      toExportDate(message.createdAt),
+      toExportDateOrNull(message.deletedAt),
+    ]),
+  );
+}
+
 // Text from docs/gdpr/export-spec.md section 3.5, limited to what the ZIP holds today.
 // Platform name and contact come from the privacy policy draft (docs/legal/privacy-policy.md).
 function buildReadme(email: string, now: Date): string {
@@ -214,6 +246,8 @@ function buildReadme(email: string, now: Date): string {
     "  feedback recibido, contactos, notificaciones y registro de accesos",
     "- sessions.csv: tus sesiones de entrenamiento (individuales, de tus grupos y de",
     "  grupos que dejaste si registraste la sesión), una fila por sesión",
+    "- messages.csv: los mensajes que escribiste (los borrados por moderación",
+    "  aparecen con la fecha de borrado si aún los conservamos)",
     "",
     "ZONA HORARIA: UTC",
     "",

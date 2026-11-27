@@ -29,7 +29,20 @@ jobs:
       run:
         working-directory: web
     steps:
+      # fetch-depth 0: the check below needs the base of the pull request, and
+      # the default checkout brings only the last commit
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # No commit of the pull request has a Co-Authored-By line (#299). First,
+      # so it fails in seconds. The event data goes through env: only, never
+      # inside run: with ${{ }}, so nothing from the pull request runs as shell
+      - if: github.event_name == 'pull_request'
+        working-directory: .
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: sh scripts/check-no-coauthor.sh "$BASE_SHA" "$HEAD_SHA"
       - run: make check-compose
         working-directory: .
       - uses: actions/setup-node@v7
@@ -58,6 +71,8 @@ jobs:
       - run: sh scripts/container-user.test.sh
         working-directory: .
       - run: sh scripts/host-ip.test.sh
+        working-directory: .
+      - run: sh scripts/check-no-coauthor.test.sh
         working-directory: .
 
   # nginx is the only way in, over HTTPS (#59): start everything as make does,
