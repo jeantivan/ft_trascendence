@@ -2,6 +2,8 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { CannotExpelSelfError, NotMemberError, PrismaClubExit, type CancelPendingContacts } from "@/lib/org/club-exit";
+import { PrismaEventRepository } from "@/lib/events/event-repository";
+import { eventIdOf } from "../support/event-repository-contract";
 import { orderedPair } from "@/lib/social/contact-pair";
 import { withLockHarness } from "../support/lock-harness";
 import type { Notify } from "@/lib/org/club-without-manager";
@@ -28,6 +30,33 @@ async function createClub(members: [string, "athlete" | "manager"][]) {
     include: { groups: true },
   });
   return { orgId: club.id, groupId: club.groups[0].id };
+}
+
+const repository = new PrismaEventRepository(prisma);
+const HOUR = 3_600_000;
+
+// An Event of the club that starts in 24 hours, with the user's spot request in the given state
+async function seedSpot(
+  orgId: string,
+  managerId: string,
+  userId: string,
+  status: "pending" | "approved" | "rejected",
+): Promise<string> {
+  const now = new Date();
+  const event = { title: "Rodaje", location: "Parque", startsAt: new Date(now.getTime() + 24 * HOUR), sessionId: null };
+  const eventId = eventIdOf(await repository.createEvent(orgId, managerId, event, now));
+  expect(await repository.requestSpot(orgId, eventId, userId, now)).toMatchObject({ ok: true });
+  if (status === "approved") expect(await repository.approveSpot(orgId, eventId, userId, now)).toMatchObject({ ok: true });
+  if (status === "rejected") expect(await repository.rejectSpot(orgId, eventId, userId, now)).toMatchObject({ ok: true });
+  return eventId;
+}
+
+async function spotStatus(eventId: string, userId: string) {
+  return (await prisma.spotRequest.findUnique({ where: { eventId_userId: { eventId, userId } } }))?.status;
+}
+
+function chatOf(eventId: string, userId: string) {
+  return prisma.conversationParticipant.findFirst({ where: { userId, conversation: { eventId } } });
 }
 
 afterEach(async () => {
@@ -86,6 +115,87 @@ describe("PrismaClubExit.leave", () => {
     await new PrismaClubExit(prisma, { cancelPendingContacts }).leave(athlete, club.orgId);
 
     expect(seen).toEqual([{ userId: athlete, memberships: 0, groupMembers: 0 }]);
+  });
+
+  it("revokes the club's pending invitations to the user, and only those", async () => {
+    const [manager, athlete] = [await createUser(), await createUser()];
+    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+    const other = await createClub([[manager, "manager"]]);
+    const invite = (orgId: string, status: "pending" | "rejected") =>
+      prisma.membershipRequest.create({ data: { orgId, userId: athlete, kind: "invite", status, createdBy: manager } });
+    const pending = await invite(club.orgId, "pending");
+    const rejected = await invite(club.orgId, "rejected");
+    const inOther = await invite(other.orgId, "pending");
+
+    await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+    const statusOf = async (id: string) => (await prisma.membershipRequest.findUniqueOrThrow({ where: { id } })).status;
+    expect(await statusOf(pending.id)).toBe("revoked");
+    expect(await statusOf(rejected.id)).toBe("rejected");
+    expect(await statusOf(inOther.id)).toBe("pending");
+  });
+
+  describe("spots in Events", () => {
+    const exitAt = new Date(Date.now() + 48 * HOUR);
+
+    it("withdraws pending and approved spots and takes the user out of the chat", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const pending = await seedSpot(club.orgId, manager, athlete, "pending");
+      const approved = await seedSpot(club.orgId, manager, athlete, "approved");
+
+      await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+      expect(await spotStatus(pending, athlete)).toBe("withdrawn");
+      expect(await spotStatus(approved, athlete)).toBe("withdrawn");
+      expect((await chatOf(approved, athlete))?.removedAt).not.toBeNull();
+    });
+
+    it("also withdraws a Manager's spots when the Manager leaves", async () => {
+      const [manager, otherManager] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [otherManager, "manager"]]);
+      const eventId = await seedSpot(club.orgId, otherManager, manager, "pending");
+
+      await new PrismaClubExit(prisma).leave(manager, club.orgId);
+
+      expect(await spotStatus(eventId, manager)).toBe("withdrawn");
+    });
+
+    it("leaves a rejected request rejected, and the spots in another club untouched", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const other = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const rejected = await seedSpot(club.orgId, manager, athlete, "rejected");
+      const inOther = await seedSpot(other.orgId, manager, athlete, "approved");
+
+      await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+      expect(await spotStatus(rejected, athlete)).toBe("rejected");
+      expect(await spotStatus(inOther, athlete)).toBe("approved");
+      expect((await chatOf(inOther, athlete))?.removedAt).toBeNull();
+    });
+
+    it("leaves an Event that has already started as it was", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const eventId = await seedSpot(club.orgId, manager, athlete, "approved");
+
+      await new PrismaClubExit(prisma, { now: () => exitAt }).leave(athlete, club.orgId);
+
+      expect(await spotStatus(eventId, athlete)).toBe("approved");
+      expect((await chatOf(eventId, athlete))?.removedAt).toBeNull();
+    });
+
+    it("leaves a cancelled Event as it was", async () => {
+      const [manager, athlete] = [await createUser(), await createUser()];
+      const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+      const eventId = await seedSpot(club.orgId, manager, athlete, "approved");
+      expect(await repository.cancelEvent(club.orgId, eventId, new Date())).toMatchObject({ ok: true });
+
+      await new PrismaClubExit(prisma).leave(athlete, club.orgId);
+
+      expect(await spotStatus(eventId, athlete)).toBe("approved");
+    });
   });
 
   it("deletes a pending Contact with a Group mate by default, and keeps an accepted one (#154)", async () => {
@@ -155,6 +265,37 @@ describe("PrismaClubExit.expel", () => {
     expect(await prisma.membership.findMany({ where: { userId: athlete } })).toEqual([]);
     expect(await prisma.groupMember.findMany({ where: { userId: athlete } })).toEqual([]);
     expect(calls).toEqual([{ userId: athlete, type: "membership_removed", payload: { orgId: club.orgId } }]);
+  });
+
+  it("withdraws the expelled user's spots in upcoming Events", async () => {
+    const [manager, athlete] = [await createUser(), await createUser()];
+    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+    const eventId = await seedSpot(club.orgId, manager, athlete, "approved");
+
+    await new PrismaClubExit(prisma, { notify: fakeNotify().notify }).expel(
+      { id: manager, role: "manager" },
+      club.orgId,
+      athlete,
+    );
+
+    expect(await spotStatus(eventId, athlete)).toBe("withdrawn");
+    expect((await chatOf(eventId, athlete))?.removedAt).not.toBeNull();
+  });
+
+  it("revokes the expelled user's pending invitations from the club", async () => {
+    const [manager, athlete] = [await createUser(), await createUser()];
+    const club = await createClub([[manager, "manager"], [athlete, "athlete"]]);
+    const invitation = await prisma.membershipRequest.create({
+      data: { orgId: club.orgId, userId: athlete, kind: "invite", status: "pending", createdBy: manager },
+    });
+
+    await new PrismaClubExit(prisma, { notify: fakeNotify().notify }).expel(
+      { id: manager, role: "manager" },
+      club.orgId,
+      athlete,
+    );
+
+    expect((await prisma.membershipRequest.findUniqueOrThrow({ where: { id: invitation.id } })).status).toBe("revoked");
   });
 
   async function auditRows(targetId: string) {
