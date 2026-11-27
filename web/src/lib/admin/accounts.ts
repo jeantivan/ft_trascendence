@@ -4,6 +4,7 @@ import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
 import { deleteAccountAsAdmin } from "@/lib/gdpr/delete-account";
 import { nickSchema } from "@/lib/auth/schemas";
 import { isDbId } from "@/lib/permissions/is-db-id";
+import { notifyAdminsOfClubsWithoutManager } from "@/lib/org/club-without-manager";
 
 // Admin panel (#102, parent #50). Callers check the Admin first (requireAdmin):
 // actions.ts for the forms and queries.ts for the pages. These functions trust
@@ -127,8 +128,17 @@ async function setBlocked(
     action,
     "block",
     { where: { blockedAt: null }, data: { blockedAt: new Date() } },
-    { guard: refuseLastAdmin },
+    { guard: refuseLastAdmin, afterChange: warnClubsWithoutManager },
   );
+}
+
+// A blocked Manager no longer counts as one (#264), so blocking the last active Manager leaves
+// the club without Manager: the Admins get the same notice as when they leave or are deleted
+// (#127). Runs after the block, in its transaction, with the account already locked by the
+// guard (lock order: users, then clubs; ADR 0004). The blocked Manager stays in the club.
+async function warnClubsWithoutManager(tx: Prisma.TransactionClient, accountId: string): Promise<void> {
+  const managed = await tx.membership.findMany({ where: { userId: accountId, role: "manager" }, select: { orgId: true } });
+  await notifyAdminsOfClubsWithoutManager(tx, managed.map((membership) => membership.orgId), accountId);
 }
 
 // Locks the account with every Admin (lockAccountAndAdmins, one ordered statement) and
@@ -155,7 +165,14 @@ async function changeAccount(
   { adminId, accountId }: AccountAction,
   auditAction: AccountAuditAction,
   { where, data }: { where: Prisma.UserWhereInput; data: Prisma.UserUpdateManyMutationInput },
-  { guard }: { guard?: (tx: Prisma.TransactionClient, accountId: string) => Promise<Refusal | null> } = {},
+  {
+    guard,
+    afterChange,
+  }: {
+    guard?: (tx: Prisma.TransactionClient, accountId: string) => Promise<Refusal | null>;
+    // Runs in the same transaction after the audit row, only when the account changed
+    afterChange?: (tx: Prisma.TransactionClient, accountId: string) => Promise<void>;
+  } = {},
 ): Promise<AccountActionResult> {
   if (!isDbId(accountId)) return { ok: false, reason: "not-found" };
   return db.$transaction(async (tx) => {
@@ -168,6 +185,7 @@ async function changeAccount(
     }
     // Ids only: what changed (a nick, say) never goes to audit_log
     await recordAdminAction(tx, { adminId, action: auditAction, resource: "account", subjectId: accountId });
+    await afterChange?.(tx, accountId);
     return { ok: true, changed: true };
   });
 }

@@ -198,6 +198,68 @@ describe("Integration: blockAccount and unblockAccount", () => {
     });
   });
 
+  describe("club_without_manager notice", () => {
+    const CLUB = CLUBS.alpha;
+    const otherManager = IDS.newest;
+
+    async function createClub(managerIds: string[]) {
+      await prisma.organization.create({ data: { id: CLUB, name: "block-notice-club", timezone: "Europe/Madrid" } });
+      await prisma.membership.createMany({ data: managerIds.map((userId) => ({ userId, orgId: CLUB, role: "manager" as const })) });
+    }
+    // Only this test's Admin and club: other files share the database and its Admins
+    async function noticesToAdmin() {
+      const rows = await prisma.notification.findMany({ where: { type: "club_without_manager", userId: ADMIN_ID } });
+      return rows.filter((row) => (row.payload as { orgId: string }).orgId === CLUB);
+    }
+
+    afterEach(async () => {
+      await prisma.organization.deleteMany({ where: { id: CLUB } });
+    });
+
+    it("warns the Admins when the blocked account was the last active Manager", async () => {
+      await createUser(ADMIN_ID, "2099-01-01T00:00:00Z", { roleGlobal: "admin" });
+      await createUser(target, "2099-01-02T00:00:00Z");
+      await createClub([target]);
+
+      await blockAccount(prisma, { adminId: ADMIN_ID, accountId: target });
+
+      expect(await noticesToAdmin()).toHaveLength(1);
+      expect(await prisma.membership.count({ where: { orgId: CLUB, userId: target } })).toBe(1);
+    });
+
+    it("warns when the only other Manager was already blocked", async () => {
+      await createUser(ADMIN_ID, "2099-01-01T00:00:00Z", { roleGlobal: "admin" });
+      await createUser(target, "2099-01-02T00:00:00Z");
+      await createUser(otherManager, "2099-01-03T00:00:00Z", { blockedAt: new Date() });
+      await createClub([target, otherManager]);
+
+      await blockAccount(prisma, { adminId: ADMIN_ID, accountId: target });
+
+      expect(await noticesToAdmin()).toHaveLength(1);
+    });
+
+    it("does not warn when another active Manager stays", async () => {
+      await createUser(ADMIN_ID, "2099-01-01T00:00:00Z", { roleGlobal: "admin" });
+      await createUser(target, "2099-01-02T00:00:00Z");
+      await createUser(otherManager, "2099-01-03T00:00:00Z");
+      await createClub([target, otherManager]);
+
+      await blockAccount(prisma, { adminId: ADMIN_ID, accountId: target });
+
+      expect(await noticesToAdmin()).toEqual([]);
+    });
+
+    it("does not warn again when the account was already blocked", async () => {
+      await createUser(ADMIN_ID, "2099-01-01T00:00:00Z", { roleGlobal: "admin" });
+      await createUser(target, "2099-01-02T00:00:00Z", { blockedAt: new Date() });
+      await createClub([target]);
+
+      await blockAccount(prisma, { adminId: ADMIN_ID, accountId: target });
+
+      expect(await noticesToAdmin()).toEqual([]);
+    });
+  });
+
   it("does not let the Admin block their own account", async () => {
     await createUser(ADMIN_ID, "2099-01-04T00:00:00Z");
 
