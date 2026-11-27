@@ -4,6 +4,7 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { buildExportFiles } from "@/lib/gdpr/export/build-export-files";
+import { exportZipPath } from "@/lib/gdpr/export/export-zip-path";
 import { createPrismaExportUserRepository } from "@/lib/gdpr/export/prisma-export-user-repository";
 import { writeExportZip } from "@/lib/gdpr/export/write-export-zip";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
@@ -29,7 +30,7 @@ export async function generateExport(
   uploadsDir: string = UPLOADS_DIR,
   now: Date = new Date(),
 ): Promise<GenerateExportResult> {
-  const relativePath = `exports/${exportId}.zip`;
+  const relativePath = exportZipPath(exportId);
   const destination = path.join(uploadsDir, relativePath);
   try {
     const row = await db.dataExport.findFirst({

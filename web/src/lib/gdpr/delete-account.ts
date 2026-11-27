@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { lockAccountAndAdmins } from "@/lib/admin/lock-account-and-admins";
 import { recordAudit } from "@/lib/gdpr/audit";
+import { exportZipPath } from "@/lib/gdpr/export/export-zip-path";
 import { verifyOtpWithoutConsuming } from "@/lib/gdpr/otp";
 import { PrismaOtpRepository } from "@/lib/gdpr/prisma-otp-repository";
 import { deleteAvatarFiles } from "@/lib/uploads/delete-avatar-files";
@@ -54,8 +55,9 @@ class AccountNotFoundError extends Error {}
 //    A file that cannot be deleted does not undo the deletion: the result stays
 //    deleted: true (the session must be closed) and carries fileCleanupFailed.
 //    Known limit: an export still being generated when the account goes can finish writing
-//    its ZIP after this cleanup (generateExport then fails to mark the missing row ready),
-//    and nothing removes it. It is a rare race; the ZIP is never served (no row, no token).
+//    its ZIP after this cleanup (generateExport then fails to mark the missing row ready).
+//    It is a rare race; the ZIP is never served (no row, no token), and the daily
+//    purgeExpiredExports job removes it once it is older than 10 minutes (#170).
 export async function deleteAccountWithOtp(
   userId: string,
   code: string,
@@ -158,7 +160,7 @@ async function deleteLockedAccount(userId: string, tx: Prisma.TransactionClient)
   await deleteAccountRows(userId, tx);
   return [
     ...avatars.map((avatar) => avatar.path),
-    ...exports.flatMap((row) => [`exports/${row.id}.zip`, `exports/${row.id}.zip.tmp`]),
+    ...exports.flatMap((row) => [exportZipPath(row.id), `${exportZipPath(row.id)}.tmp`]),
   ];
 }
 

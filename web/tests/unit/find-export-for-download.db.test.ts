@@ -64,6 +64,14 @@ describe("findExportForDownload", () => {
     expect(await findExportForDownload(USER_ID, row.id, TOKEN, db)).toBeNull();
   });
 
+  it("returns null from the exact moment it expires, while the row and file still exist", async () => {
+    const now = new Date();
+    const row = await ready({ expiresAt: now });
+
+    expect(await findExportForDownload(USER_ID, row.id, TOKEN, db, now)).toBeNull();
+    expect(await db.dataExport.count({ where: { id: row.id } })).toBe(1);
+  });
+
   it("returns null while pending or failed, which have no token", async () => {
     const pending = await db.dataExport.create({ data: { userId: USER_ID } });
     const failed = await ready({ status: "failed" });

@@ -2,6 +2,7 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { PrismaClient } from "@/generated/prisma/client";
+import { EXPORTS_DIR, exportZipPath } from "@/lib/gdpr/export/export-zip-path";
 import { UPLOADS_DIR } from "@/lib/uploads/uploads-dir";
 
 // Runs once when the server starts. The ZIP is generated inside the app process
@@ -32,9 +33,9 @@ export async function cleanupInterruptedExports(
     data: { status: "failed", tokenHash: null, path: null, expiresAt: null },
   });
 
-  const exportsDir = path.join(uploadsDir, "exports");
+  const exportsDir = path.join(uploadsDir, EXPORTS_DIR);
   const files = await readdir(exportsDir).catch(() => []);
-  const interruptedFiles = new Set([...interrupted, ...undelivered].map((row) => `${row.id}.zip`));
+  const interruptedFiles = new Set([...interrupted, ...undelivered].map((row) => path.basename(exportZipPath(row.id))));
   for (const file of files) {
     if (file.endsWith(".tmp") || interruptedFiles.has(file)) {
       await rm(path.join(exportsDir, file), { force: true });
