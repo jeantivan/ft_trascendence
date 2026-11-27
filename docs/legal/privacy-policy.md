@@ -132,7 +132,7 @@ Puedes borrar tu cuenta o abandonar el club en cualquier momento. Avisamos al Ad
 
 | Derecho | Cómo ejercerlo |
 |---|---|
-| **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días. El archivo se guarda en almacenamiento privado, solo se descarga con tu sesión y se borra a los 7 días o antes si borras tu cuenta |
+| **Acceso** (art. 15) | Ajustes > Privacidad > Descargar mis datos. Recibes por email un enlace válido 7 días. El archivo se guarda en almacenamiento privado, solo se descarga con tu sesión y se borra a los 7 días (como máximo 24 horas más tarde del plazo) o antes si borras tu cuenta |
 | **Rectificación** (art. 16) | Ajustes > Perfil: email, foto y nick |
 | **Supresión** (art. 17) | Ajustes > Privacidad > Borrar cuenta. Confirmas con un código enviado a tu email, que caduca en 10 minutos. **Es permanente y no tiene marcha atrás** |
 | **Limitación del tratamiento** (art. 18) | Escríbenos a legal@stridesync.fit |

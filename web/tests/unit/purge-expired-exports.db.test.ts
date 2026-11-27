@@ -117,6 +117,35 @@ describe("purgeExpiredExports", () => {
     expect(await readdir(exportsDir)).toEqual([`${fresh.id}.zip.tmp`]);
   });
 
+  it("leaves a pending export alone, with its ZIP, when its generation finishes right before the delete", async () => {
+    const stuck = await db.dataExport.create({ data: { userId: USER_ID, createdAt: new Date(now.getTime() - 16 * MINUTE) } });
+    await writeFileAged(`${stuck.id}.zip`, 16 * MINUTE);
+    // generateExport's updateMany lands between the purge's findMany and its deleteMany
+    const racing = new Proxy(db, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop);
+        if (prop !== "dataExport") return typeof value === "function" ? value.bind(target) : value;
+        return new Proxy(target.dataExport, {
+          get(model, method) {
+            const original = Reflect.get(model, method).bind(model);
+            if (method !== "deleteMany") return original;
+            return async (args: Parameters<typeof model.deleteMany>[0]) => {
+              await model.updateMany({
+                where: { id: stuck.id },
+                data: { status: "ready", tokenHash: "h", path: `exports/${stuck.id}.zip`, expiresAt: new Date(now.getTime() + DAY) },
+              });
+              return original(args);
+            };
+          },
+        });
+      },
+    });
+
+    expect(await purgeExpiredExports(racing, uploadsDir, now)).toBe(0);
+    expect((await db.dataExport.findUniqueOrThrow({ where: { id: stuck.id } })).status).toBe("ready");
+    expect(await readdir(exportsDir)).toEqual([`${stuck.id}.zip`]);
+  });
+
   it("removes ZIPs and .tmp files without a row once they are older than 10 minutes", async () => {
     const orphan = randomUUID();
     const orphanTmp = randomUUID();
@@ -144,5 +173,12 @@ describe("purgeExpiredExports", () => {
     await rm(exportsDir, { recursive: true });
 
     expect(await purgeExpiredExports(db, uploadsDir, now)).toBe(0);
+  });
+
+  it("does not swallow a read error other than a missing folder", async () => {
+    await rm(exportsDir, { recursive: true });
+    await writeFile(exportsDir, "not a folder");
+
+    await expect(purgeExpiredExports(db, uploadsDir, now)).rejects.toMatchObject({ code: "ENOTDIR" });
   });
 });

@@ -14,9 +14,12 @@ const EXPORT_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 // Periodic cleanup of the exports (#170). Returns how many rows and files it removed.
 // 1. Rows past their expiry, failed ones (they have no expiry date) older than EXPORT_TTL_MS and pending ones stuck for
-//    more than STUCK_PENDING_MS: the ZIP goes first, then the row. If the ZIP cannot be
-//    removed the row stays, so the next run retries (the download is already refused
-//    by expiresAt, whatever this job does).
+//    more than STUCK_PENDING_MS. For ready and failed rows the ZIP goes first, then the row: if the
+//    ZIP cannot be removed the row stays, so the next run retries (the download is already
+//    refused by expiresAt, whatever this job does). For pending rows the row goes first, with
+//    its status in the condition: a generation that finishes in between turns the row into
+//    ready, and removing the ZIP before that would leave a ready row whose link answers 404.
+//    Leftover files of a deleted pending row are removed by step 2.
 // 2. ZIPs and .tmp files with no row at all (see Known limit in delete-account.ts).
 // Known limit: one app process, like cleanupInterruptedExports. A generation that really
 // lasts more than STUCK_PENDING_MS loses its row (requestExport already treats it as stuck).
@@ -38,11 +41,19 @@ export async function purgeExpiredExports(
 
   let removed = 0;
   for (const row of stale) {
+    if (row.status === "pending") {
+      const { count } = await db.dataExport.deleteMany({ where: { id: row.id, status: "pending" } });
+      if (count === 0) continue;
+      removed += count;
+      await removeExportFiles(uploadsDir, row.id).catch((error) => {
+        console.warn(`Export ${row.id}: files not removed, the orphan sweep will retry (${errorName(error)})`);
+      });
+      continue;
+    }
     try {
-      await rm(path.join(uploadsDir, exportZipPath(row.id)), { force: true });
-      await rm(path.join(uploadsDir, `${exportZipPath(row.id)}.tmp`), { force: true });
+      await removeExportFiles(uploadsDir, row.id);
     } catch (error) {
-      console.warn(`Export ${row.id}: ZIP not removed, will retry (${error instanceof Error ? error.name : "unknown"})`);
+      console.warn(`Export ${row.id}: ZIP not removed, will retry (${errorName(error)})`);
       continue;
     }
     // The status is part of the condition: a row that changed meanwhile is left alone
@@ -53,8 +64,21 @@ export async function purgeExpiredExports(
   return removed + (await removeOrphanFiles(db, path.join(uploadsDir, EXPORTS_DIR), now));
 }
 
+async function removeExportFiles(uploadsDir: string, id: string): Promise<void> {
+  await rm(path.join(uploadsDir, exportZipPath(id)), { force: true });
+  await rm(path.join(uploadsDir, `${exportZipPath(id)}.tmp`), { force: true });
+}
+
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : "unknown";
+}
+
 async function removeOrphanFiles(db: PrismaClient, exportsDir: string, now: Date): Promise<number> {
-  const files = await readdir(exportsDir).catch(() => []);
+  // Only a missing folder is normal; any other error is left to the job runner to log
+  const files = await readdir(exportsDir).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
   const candidates = files.flatMap((file) => {
     const match = EXPORT_FILE.exec(file);
     return match === null ? [] : [{ file, id: match[1] }];
@@ -77,7 +101,7 @@ async function removeOrphanFiles(db: PrismaClient, exportsDir: string, now: Date
       await rm(filePath, { force: true });
       removed += 1;
     } catch (error) {
-      console.warn(`Export file of ${id} not removed (${error instanceof Error ? error.name : "unknown"})`);
+      console.warn(`Export file of ${id} not removed (${errorName(error)})`);
     }
   }
   return removed;
