@@ -1,0 +1,556 @@
+<!DOCTYPE html><html lang="es" class="dark"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrenamiento Manager — StrideSync</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">/** @type {import('tailwindcss').Config} */
+globalThis.tailwind = globalThis.tailwind || {};
+globalThis.tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        'surface': '#10141a',
+        'surface-dim': '#10141a',
+        'surface-bright': '#353940',
+        'surface-container-lowest': '#0a0e14',
+        'surface-container-low': '#181c22',
+        'surface-container': '#1c2026',
+        'surface-container-high': '#262a31',
+        'surface-container-highest': '#31353c',
+        'on-surface': '#dfe2eb',
+        'on-surface-variant': '#c4c9ac',
+        'inverse-surface': '#dfe2eb',
+        'inverse-on-surface': '#2d3137',
+        'outline': '#8e9379',
+        'outline-variant': '#444933',
+        'surface-tint': '#abd600',
+        'primary': '#ffffff',
+        'on-primary': '#283500',
+        'primary-container': '#c3f400',
+        'on-primary-container': '#556d00',
+        'inverse-primary': '#506600',
+        'secondary': '#d3fbff',
+        'on-secondary': '#00363a',
+        'secondary-container': '#00eefc',
+        'on-secondary-container': '#00686f',
+        'tertiary': '#ffffff',
+        'on-tertiary': '#003824',
+        'tertiary-container': '#6ffbbe',
+        'on-tertiary-container': '#00734e',
+        'error': '#ffb4ab',
+        'on-error': '#690005',
+        'error-container': '#93000a',
+        'on-error-container': '#ffdad6',
+        'primary-fixed': '#c3f400',
+        'primary-fixed-dim': '#abd600',
+        'on-primary-fixed': '#161e00',
+        'on-primary-fixed-variant': '#3c4d00',
+        'secondary-fixed': '#7df4ff',
+        'secondary-fixed-dim': '#00dbe9',
+        'on-secondary-fixed': '#002022',
+        'on-secondary-fixed-variant': '#004f54',
+        'tertiary-fixed': '#6ffbbe',
+        'tertiary-fixed-dim': '#4edea3',
+        'on-tertiary-fixed': '#002113',
+        'on-tertiary-fixed-variant': '#005236',
+        'background': '#10141a',
+        'on-background': '#dfe2eb',
+        'surface-variant': '#31353c',
+        'surface-base': '#090D12',
+        'surface-elevated': '#131923',
+        'surface-overlay': '#1E2638',
+        'border-subtle': '#253047',
+        'border-strong': '#374563',
+        'text-primary': '#F8FAFC',
+        'text-secondary': '#94A3B8',
+        'text-muted': '#64748B',
+        'session-rodaje': '#00F0FF',
+        'session-intervalos': '#FF3366',
+        'session-cuestas': '#FF8800',
+        'session-tirada-larga': '#A855F7',
+        'session-fartlek': '#CCFF00',
+        'rpe-low': '#10B981',
+        'rpe-moderate': '#EAB308',
+        'rpe-hard': '#F97316',
+        'rpe-max': '#EF4444',
+        'volume-alert': '#FFB800',
+      },
+      borderRadius: {
+        'sm': '0.25rem',
+        'DEFAULT': '0.5rem',
+        'md': '0.75rem',
+        'lg': '1rem',
+        'xl': '1.5rem',
+        'full': '9999px',
+      },
+      spacing: {
+        'gutter': '1.25rem',
+        'gutter-desktop': '1.75rem',
+        'margin': '1rem',
+        'margin-tablet': '2rem',
+        'margin-desktop': '3rem',
+        'space-xs': '0.25rem',
+        'space-sm': '0.5rem',
+        'space-md': '1rem',
+        'space-lg': '1.5rem',
+        'space-xl': '2.5rem',
+      },
+      fontFamily: {
+        'display': ['"Space Grotesk"', 'sans-serif'],
+        'headline': ['"Space Grotesk"', 'sans-serif'],
+        'metric': ['"Space Grotesk"', 'sans-serif'],
+        'body': ['"Hanken Grotesk"', 'sans-serif'],
+        'label': ['"Space Grotesk"', 'sans-serif'],
+      },
+      fontSize: {
+        'display-hero': ['56px', { lineHeight: '64px', letterSpacing: '-0.03em', fontWeight: '700' }],
+        'display-hero-mobile': ['36px', { lineHeight: '42px', letterSpacing: '-0.02em', fontWeight: '700' }],
+        'headline-lg': ['32px', { lineHeight: '40px', letterSpacing: '-0.02em', fontWeight: '600' }],
+        'headline-lg-mobile': ['26px', { lineHeight: '32px', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'headline-md': ['22px', { lineHeight: '28px', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'headline-sm': ['18px', { lineHeight: '24px', letterSpacing: '0', fontWeight: '600' }],
+        'metric-huge': ['44px', { lineHeight: '48px', letterSpacing: '-0.03em', fontWeight: '700' }],
+        'metric-huge-mobile': ['32px', { lineHeight: '40px', letterSpacing: '-0.02em', fontWeight: '700' }],
+        'body-lg': ['17px', { lineHeight: '26px', letterSpacing: '-0.01em', fontWeight: '400' }],
+        'body-md': ['15px', { lineHeight: '22px', letterSpacing: '0', fontWeight: '400' }],
+        'body-sm': ['13px', { lineHeight: '18px', letterSpacing: '0', fontWeight: '400' }],
+        'label-caps': ['11px', { lineHeight: '14px', letterSpacing: '0.08em', fontWeight: '700' }],
+        'label-badge': ['12px', { lineHeight: '16px', letterSpacing: '0.02em', fontWeight: '600' }],
+      },
+      transitionDuration: {
+        'state-change': '150ms',
+        'surface-enter': '220ms',
+        'surface-exit': '150ms',
+      },
+      transitionDelay: {
+        'state-change': '0ms',
+        'surface-enter': '0ms',
+        'surface-exit': '0ms',
+      },
+      transitionTimingFunction: {
+        'state-change': 'ease-out',
+        'surface-enter': 'cubic-bezier(0.2, 0, 0, 1)',
+        'surface-exit': 'cubic-bezier(0.3, 0, 1, 1)',
+      },
+    },
+  },
+};
+if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
+</script>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet">
+  <style>
+    .material-symbols-outlined, .material-symbols-rounded, .material-symbols-sharp, .material-icons {
+      display: inline-block; width: 1em; height: 1em; line-height: 1 !important;
+      box-sizing: content-box; overflow: hidden; white-space: nowrap; direction: ltr; vertical-align: middle;
+    }
+  </style>
+</head>
+<body class="bg-surface-base text-text-primary font-body antialiased min-h-[1024px]" data-stitch-vh="min-h-[1024px]===min-h-screen">
+  <div aria-hidden="true" class="min-h-[1024px] flex flex-col lg:flex-row" data-stitch-vh="min-h-[1024px]===min-h-screen">
+
+    <!-- Persistent Left Sidebar (Desktop) -->
+    <aside aria-label="Navegación principal" class="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:justify-between border-r border-border-subtle bg-surface-elevated p-space-lg min-h-[1024px]" data-stitch-vh="min-h-[1024px]===min-h-screen">
+      <div class="flex flex-col gap-space-xl">
+        <!-- Brand Logo -->
+        <a href="/dashboard" class="flex items-center gap-space-sm px-space-sm focus-visible:outline-2 focus-visible:outline-session-fartlek rounded">
+          <span class="flex size-9 items-center justify-center rounded bg-session-fartlek text-surface-base">
+            <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">bolt</span>
+          </span>
+          <span data-design-text-token="headline-md" class="font-headline text-headline-md text-text-primary tracking-tight">StrideSync</span>
+        </a>
+
+        <!-- Navigation Links -->
+        <nav aria-label="Menú del club" class="flex flex-col gap-space-xs">
+          <a href="/dashboard" class="flex items-center gap-space-sm rounded px-space-md py-3 font-headline text-body-md font-medium text-text-secondary transition-colors duration-state-change hover:bg-surface-overlay hover:text-text-primary motion-reduce:transition-none">
+            <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">space_dashboard</span>
+            <span>Dashboard</span>
+          </a>
+          <a href="/club" class="flex items-center gap-space-sm rounded px-space-md py-3 font-headline text-body-md font-medium text-text-secondary transition-colors duration-state-change hover:bg-surface-overlay hover:text-text-primary motion-reduce:transition-none">
+            <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">groups</span>
+            <span>Club</span>
+          </a>
+          <a href="/training" aria-current="page" class="flex items-center gap-space-sm rounded border-l-2 border-session-fartlek bg-session-fartlek/12 px-space-md py-3 font-headline text-body-md font-bold text-session-fartlek">
+            <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">directions_run</span>
+            <span>Entrenamiento</span>
+          </a>
+          <a href="/events" class="flex items-center gap-space-sm rounded px-space-md py-3 font-headline text-body-md font-medium text-text-secondary transition-colors duration-state-change hover:bg-surface-overlay hover:text-text-primary motion-reduce:transition-none">
+            <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">event</span>
+            <span>Eventos</span>
+          </a>
+          <a href="/contacts" class="flex items-center gap-space-sm rounded px-space-md py-3 font-headline text-body-md font-medium text-text-secondary transition-colors duration-state-change hover:bg-surface-overlay hover:text-text-primary motion-reduce:transition-none">
+            <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">person_add</span>
+            <span>Contactos</span>
+          </a>
+          <a href="/settings" class="flex items-center gap-space-sm rounded px-space-md py-3 font-headline text-body-md font-medium text-text-secondary transition-colors duration-state-change hover:bg-surface-overlay hover:text-text-primary motion-reduce:transition-none">
+            <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">settings</span>
+            <span>Ajustes</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- Logout Footer -->
+      <div class="border-t border-border-subtle pt-space-md">
+        <button type="button" class="w-full flex items-center gap-space-sm rounded px-space-md py-3 font-headline text-body-md font-medium text-text-secondary transition-colors duration-state-change hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-2 focus-visible:outline-session-fartlek motion-reduce:transition-none">
+          <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">logout</span>
+          <span>Cerrar sesión</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Mobile Top Bar (Responsive <1024px) -->
+    <header class="lg:hidden flex items-center justify-between border-b border-border-subtle bg-surface-elevated px-margin py-space-md">
+      <a href="/dashboard" class="flex items-center gap-space-sm">
+        <span class="flex size-8 items-center justify-center rounded bg-session-fartlek text-surface-base">
+          <span class="material-symbols-outlined text-body-lg" aria-hidden="true">bolt</span>
+        </span>
+        <span class="font-headline text-headline-sm text-text-primary">StrideSync</span>
+      </a>
+      <button id="mobile-menu-btn" type="button" aria-label="Abrir menú" aria-expanded="false" class="inline-flex size-11 items-center justify-center rounded border border-border-subtle bg-surface-overlay text-text-primary">
+        <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">menu</span>
+      </button>
+    </header>
+
+    <!-- Mobile Slide-down Nav -->
+    <nav id="mobile-nav" aria-label="Menú móvil" class="hidden lg:hidden border-b border-border-subtle bg-surface-elevated px-margin py-space-md flex-col gap-space-xs">
+      <a href="/dashboard" class="rounded px-space-md py-2.5 font-headline text-body-md text-text-secondary">Dashboard</a>
+      <a href="/club" class="rounded px-space-md py-2.5 font-headline text-body-md text-text-secondary">Club</a>
+      <a href="/training" aria-current="page" class="rounded bg-session-fartlek/12 px-space-md py-2.5 font-headline text-body-md font-bold text-session-fartlek">Entrenamiento</a>
+      <a href="/events" class="rounded px-space-md py-2.5 font-headline text-body-md text-text-secondary">Eventos</a>
+      <a href="/contacts" class="rounded px-space-md py-2.5 font-headline text-body-md text-text-secondary">Contactos</a>
+      <a href="/settings" class="rounded px-space-md py-2.5 font-headline text-body-md text-text-secondary">Ajustes</a>
+    </nav>
+
+    <!-- Main Workspace Content -->
+    <div class="flex-1 flex flex-col justify-between min-w-0">
+      <main class="w-full max-w-7xl mx-auto px-margin md:px-margin-tablet lg:px-margin-desktop py-space-lg lg:py-space-xl flex flex-col gap-space-lg">
+
+        <!-- PageHeader (Manager) -->
+        <header data-component-id="page-header-manager-training" data-component-type="page-header" data-component-variant="listing" class="border-b border-border-subtle pb-space-lg flex flex-col xl:flex-row xl:items-end xl:justify-between gap-space-md">
+          <div class="flex flex-col gap-space-xs min-w-0">
+            <div class="flex flex-wrap items-center gap-space-sm">
+              <h1 data-design-text-token="headline-lg" class="font-headline text-headline-lg-mobile md:text-headline-lg text-text-primary">Entrenamiento</h1>
+              <span data-component-id="badge-role-manager" data-component-type="badge" data-component-variant="info" class="inline-flex items-center rounded-full border border-session-rodaje bg-session-rodaje/12 px-3 py-0.5 font-label text-label-caps uppercase text-session-rodaje">MANAGER</span>
+            </div>
+            <p data-design-text-token="body-md" class="font-body text-body-md text-text-secondary max-w-2xl text-pretty">
+              Gestiona las plantillas de entrenamiento del club y asígnalas a tus grupos
+            </p>
+          </div>
+
+          <!-- Right Controls: Active Club Select + Primary CTA -->
+          <div class="flex flex-col sm:flex-row sm:items-end gap-space-sm shrink-0">
+            <div class="flex flex-col gap-space-xs sm:w-64">
+              <label for="club-selector" data-design-text-token="label-caps" class="font-label text-label-caps uppercase text-text-secondary">Club activo</label>
+              <div class="relative">
+                <select id="club-selector" data-component-id="select-club" data-component-type="select" class="h-12 w-full appearance-none rounded border border-border-subtle bg-surface-overlay pl-3 pr-10 font-body text-body-md text-text-primary hover:border-border-strong focus:border-session-fartlek focus:ring-0 focus-visible:outline-2 focus-visible:outline-session-fartlek">
+                  <option value="madrid-runners" selected>Madrid Runners Club</option>
+                  <option value="retiro-trail">Retiro Trail Team</option>
+                </select>
+                <span class="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-headline-sm text-text-secondary" aria-hidden="true">expand_more</span>
+              </div>
+            </div>
+
+            <button type="button" data-component-id="button-new-template" data-component-type="button" data-component-variant="primary" class="inline-flex h-12 items-center justify-center gap-space-xs rounded bg-session-fartlek px-5 font-headline text-body-md font-bold text-surface-base transition-transform duration-state-change hover:scale-[1.01] hover:shadow-[0_0_18px_rgba(204,255,0,0.35)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-session-fartlek motion-reduce:transition-none">
+              <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">add</span>
+              <span>Nueva plantilla</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Training Templates Grid -->
+        <section aria-labelledby="sec-templates-list" class="flex flex-col gap-space-md">
+          <div class="flex items-center justify-between">
+            <h2 id="sec-templates-list" data-design-text-token="headline-md" class="font-headline text-headline-md text-text-primary">Plantillas de entrenamiento</h2>
+            <span data-design-text-token="label-caps" class="font-label text-label-caps uppercase tabular-nums text-text-secondary">3 plantillas en Madrid Runners Club</span>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg items-stretch">
+
+            <!-- Template Card 1: Preparación 10K Sub-40 -->
+            <article data-component-id="card-template-1" data-component-type="card" data-component-variant="action" class="rounded-lg border border-border-subtle bg-surface-elevated p-space-lg flex flex-col justify-between gap-space-lg">
+              <div class="flex flex-col gap-space-md">
+                <header class="flex flex-wrap items-start justify-between gap-space-sm border-b border-border-subtle pb-space-md">
+                  <div class="flex flex-col gap-space-xs">
+                    <h3 data-design-text-token="headline-sm" class="font-headline text-headline-sm text-text-primary">Preparación 10K Sub-40</h3>
+                    <span data-design-text-token="body-sm" class="font-body text-body-sm text-text-secondary">Enfoque en umbral anaeróbico y velocidad específica</span>
+                  </div>
+                  <div class="flex items-center gap-space-sm shrink-0">
+                    <span class="inline-flex items-center rounded-full border border-border-strong bg-surface-overlay px-3 py-1 font-label text-label-badge tabular-nums text-text-primary">4 sesiones</span>
+                    <span class="inline-flex items-center rounded-full border border-session-rodaje bg-session-rodaje/12 px-3 py-1 font-label text-label-badge tabular-nums text-session-rodaje">Días 1–7</span>
+                  </div>
+                </header>
+
+                <!-- Compact Template Sessions List -->
+                <div class="flex flex-col gap-space-xs">
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-rodaje bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +0</span>
+                      <span class="inline-flex items-center rounded-full border border-session-rodaje bg-session-rodaje/12 px-2.5 py-0.5 font-label text-label-caps uppercase text-session-rodaje">RODAJE</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">10 km · 4:25 /km · 44 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-intervalos bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +2</span>
+                      <span class="inline-flex items-center rounded-full border border-session-intervalos bg-session-intervalos/12 px-2.5 py-0.5 font-label text-label-caps uppercase text-error">INTERVALOS</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">11 km · 3:50 /km · 48 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-fartlek bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +4</span>
+                      <span class="inline-flex items-center rounded-full border border-session-fartlek bg-session-fartlek px-2.5 py-0.5 font-label text-label-caps uppercase text-surface-base">FARTLEK</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">9 km · 4:10 /km · 38 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-tirada-larga bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +6</span>
+                      <span class="inline-flex items-center rounded-full border border-session-tirada-larga bg-session-tirada-larga/25 px-2.5 py-0.5 font-label text-label-caps uppercase text-text-primary">TIRADA LARGA</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">15 km · 4:35 /km · 69 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Footer Actions -->
+              <footer class="border-t border-border-subtle pt-space-md flex flex-wrap items-center justify-between gap-space-sm">
+                <button type="button" data-assign-btn="Preparación 10K Sub-40" class="inline-flex h-10 items-center justify-center gap-space-xs rounded border border-border-strong bg-transparent px-4 font-headline text-body-sm font-semibold text-text-primary transition-colors duration-state-change hover:border-session-fartlek hover:bg-session-fartlek/5 hover:text-session-fartlek motion-reduce:transition-none">
+                  <span class="material-symbols-outlined text-body-lg" aria-hidden="true">group_add</span>
+                  <span>Asignar a grupo</span>
+                </button>
+                <div class="flex items-center gap-space-sm">
+                  <button type="button" class="inline-flex h-10 items-center justify-center rounded border border-border-subtle bg-transparent px-4 font-headline text-body-sm font-semibold text-text-secondary transition-colors duration-state-change hover:border-border-strong hover:text-text-primary motion-reduce:transition-none">
+                    <span>Editar</span>
+                  </button>
+                  <button type="button" class="inline-flex h-10 items-center justify-center rounded border border-rpe-max bg-transparent px-4 font-headline text-body-sm font-semibold text-error transition-colors duration-state-change hover:bg-rpe-max/12 motion-reduce:transition-none">
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              </footer>
+            </article>
+
+            <!-- Template Card 2: Base Aeróbica Maratón -->
+            <article data-component-id="card-template-2" data-component-type="card" data-component-variant="action" class="rounded-lg border border-border-subtle bg-surface-elevated p-space-lg flex flex-col justify-between gap-space-lg">
+              <div class="flex flex-col gap-space-md">
+                <header class="flex flex-wrap items-start justify-between gap-space-sm border-b border-border-subtle pb-space-md">
+                  <div class="flex flex-col gap-space-xs">
+                    <h3 data-design-text-token="headline-sm" class="font-headline text-headline-sm text-text-primary">Base Aeróbica Maratón</h3>
+                    <span data-design-text-token="body-sm" class="font-body text-body-sm text-text-secondary">Construcción de volumen progresivo y resistencia muscular</span>
+                  </div>
+                  <div class="flex items-center gap-space-sm shrink-0">
+                    <span class="inline-flex items-center rounded-full border border-border-strong bg-surface-overlay px-3 py-1 font-label text-label-badge tabular-nums text-text-primary">4 sesiones</span>
+                    <span class="inline-flex items-center rounded-full border border-session-rodaje bg-session-rodaje/12 px-3 py-1 font-label text-label-badge tabular-nums text-session-rodaje">Días 1–7</span>
+                  </div>
+                </header>
+
+                <!-- Compact Template Sessions List -->
+                <div class="flex flex-col gap-space-xs">
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-rodaje bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +0</span>
+                      <span class="inline-flex items-center rounded-full border border-session-rodaje bg-session-rodaje/12 px-2.5 py-0.5 font-label text-label-caps uppercase text-session-rodaje">RODAJE</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">12 km · 4:50 /km · 58 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-cuestas bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +2</span>
+                      <span class="inline-flex items-center rounded-full border border-session-cuestas bg-session-cuestas/12 px-2.5 py-0.5 font-label text-label-caps uppercase text-session-cuestas">CUESTAS</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">10 km · 4:35 /km · 46 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-rodaje bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +4</span>
+                      <span class="inline-flex items-center rounded-full border border-session-rodaje bg-session-rodaje/12 px-2.5 py-0.5 font-label text-label-caps uppercase text-session-rodaje">RODAJE</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">14 km · 4:45 /km · 66 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-tirada-larga bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +6</span>
+                      <span class="inline-flex items-center rounded-full border border-session-tirada-larga bg-session-tirada-larga/25 px-2.5 py-0.5 font-label text-label-caps uppercase text-text-primary">TIRADA LARGA</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">24 km · 4:55 /km · 118 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Footer Actions -->
+              <footer class="border-t border-border-subtle pt-space-md flex flex-wrap items-center justify-between gap-space-sm">
+                <button type="button" data-assign-btn="Base Aeróbica Maratón" class="inline-flex h-10 items-center justify-center gap-space-xs rounded border border-border-strong bg-transparent px-4 font-headline text-body-sm font-semibold text-text-primary transition-colors duration-state-change hover:border-session-fartlek hover:bg-session-fartlek/5 hover:text-session-fartlek motion-reduce:transition-none">
+                  <span class="material-symbols-outlined text-body-lg" aria-hidden="true">group_add</span>
+                  <span>Asignar a grupo</span>
+                </button>
+                <div class="flex items-center gap-space-sm">
+                  <button type="button" class="inline-flex h-10 items-center justify-center rounded border border-border-subtle bg-transparent px-4 font-headline text-body-sm font-semibold text-text-secondary transition-colors duration-state-change hover:border-border-strong hover:text-text-primary motion-reduce:transition-none">
+                    <span>Editar</span>
+                  </button>
+                  <button type="button" class="inline-flex h-10 items-center justify-center rounded border border-rpe-max bg-transparent px-4 font-headline text-body-sm font-semibold text-error transition-colors duration-state-change hover:bg-rpe-max/12 motion-reduce:transition-none">
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              </footer>
+            </article>
+
+            <!-- Template Card 3: Fuerza y Cuestas Trail -->
+            <article data-component-id="card-template-3" data-component-type="card" data-component-variant="action" class="rounded-lg border border-border-subtle bg-surface-elevated p-space-lg flex flex-col justify-between gap-space-lg">
+              <div class="flex flex-col gap-space-md">
+                <header class="flex flex-wrap items-start justify-between gap-space-sm border-b border-border-subtle pb-space-md">
+                  <div class="flex flex-col gap-space-xs">
+                    <h3 data-design-text-token="headline-sm" class="font-headline text-headline-sm text-text-primary">Fuerza y Cuestas Trail</h3>
+                    <span data-design-text-token="body-sm" class="font-body text-body-sm text-text-secondary">Potencia en desnivel positivo y transiciones técnicas</span>
+                  </div>
+                  <div class="flex items-center gap-space-sm shrink-0">
+                    <span class="inline-flex items-center rounded-full border border-border-strong bg-surface-overlay px-3 py-1 font-label text-label-badge tabular-nums text-text-primary">3 sesiones</span>
+                    <span class="inline-flex items-center rounded-full border border-session-rodaje bg-session-rodaje/12 px-3 py-1 font-label text-label-badge tabular-nums text-session-rodaje">Días 1–5</span>
+                  </div>
+                </header>
+
+                <!-- Compact Template Sessions List -->
+                <div class="flex flex-col gap-space-xs">
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-cuestas bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +0</span>
+                      <span class="inline-flex items-center rounded-full border border-session-cuestas bg-session-cuestas/12 px-2.5 py-0.5 font-label text-label-caps uppercase text-session-cuestas">CUESTAS</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">8 km · 4:40 /km · 37 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-fartlek bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +2</span>
+                      <span class="inline-flex items-center rounded-full border border-session-fartlek bg-session-fartlek px-2.5 py-0.5 font-label text-label-caps uppercase text-surface-base">FARTLEK</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">11 km · 4:20 /km · 48 min</span>
+                  </div>
+
+                  <div class="rounded border border-border-subtle border-l-4 border-l-session-tirada-larga bg-surface-overlay px-space-md py-space-sm flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-xs">
+                    <div class="flex flex-wrap items-center gap-space-sm">
+                      <span class="font-headline text-body-sm font-bold tabular-nums text-text-secondary">Día +4</span>
+                      <span class="inline-flex items-center rounded-full border border-session-tirada-larga bg-session-tirada-larga/25 px-2.5 py-0.5 font-label text-label-caps uppercase text-text-primary">TIRADA LARGA</span>
+                    </div>
+                    <span class="font-headline text-body-sm font-semibold tabular-nums text-text-primary">19 km · 5:10 /km · 98 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Footer Actions -->
+              <footer class="border-t border-border-subtle pt-space-md flex flex-wrap items-center justify-between gap-space-sm">
+                <button type="button" data-assign-btn="Fuerza y Cuestas Trail" class="inline-flex h-10 items-center justify-center gap-space-xs rounded border border-border-strong bg-transparent px-4 font-headline text-body-sm font-semibold text-text-primary transition-colors duration-state-change hover:border-session-fartlek hover:bg-session-fartlek/5 hover:text-session-fartlek motion-reduce:transition-none">
+                  <span class="material-symbols-outlined text-body-lg" aria-hidden="true">group_add</span>
+                  <span>Asignar a grupo</span>
+                </button>
+                <div class="flex items-center gap-space-sm">
+                  <button type="button" class="inline-flex h-10 items-center justify-center rounded border border-border-subtle bg-transparent px-4 font-headline text-body-sm font-semibold text-text-secondary transition-colors duration-state-change hover:border-border-strong hover:text-text-primary motion-reduce:transition-none">
+                    <span>Editar</span>
+                  </button>
+                  <button type="button" class="inline-flex h-10 items-center justify-center rounded border border-rpe-max bg-transparent px-4 font-headline text-body-sm font-semibold text-error transition-colors duration-state-change hover:bg-rpe-max/12 motion-reduce:transition-none">
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              </footer>
+            </article>
+
+          </div>
+        </section>
+
+      </main>
+
+      <!-- Discrete Legal Footer -->
+      <footer class="w-full max-w-7xl mx-auto px-margin md:px-margin-tablet lg:px-margin-desktop py-space-lg border-t border-border-subtle flex flex-col sm:flex-row items-center justify-between gap-space-sm">
+        <span data-design-text-token="body-sm" class="font-body text-body-sm text-text-secondary">© 2026 StrideSync · Plataforma de clubes de running</span>
+        <nav aria-label="Enlaces legales" class="flex items-center gap-space-lg">
+          <a href="/legal/privacidad" class="font-body text-body-sm text-text-secondary hover:text-text-primary">Privacidad</a>
+          <a href="/legal/terminos" class="font-body text-body-sm text-text-secondary hover:text-text-primary">Términos</a>
+          <a href="/ayuda" class="font-body text-body-sm text-text-secondary hover:text-text-primary">Ayuda</a>
+        </nav>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Open Modal: Asignar plantilla a grupo (Overlay de referencia) -->
+  <div id="assign-modal" role="dialog" aria-modal="true" aria-labelledby="assign-modal-title" class="fixed inset-0 z-50 flex items-center justify-center bg-surface-base/80 p-space-md">
+    <div class="w-full max-w-lg rounded-lg border border-border-subtle bg-surface-overlay p-space-lg flex flex-col gap-space-lg">
+      <div class="flex items-start justify-between gap-space-sm border-b border-border-subtle pb-space-md">
+        <div class="flex flex-col gap-space-xs">
+          <span class="font-label text-label-caps uppercase text-session-rodaje">Asignar Training Template</span>
+          <h2 id="assign-modal-title" class="font-headline text-headline-md text-text-primary">Asignar plantilla a grupo</h2>
+          <p class="font-body text-body-sm text-text-secondary">Plantilla: <strong class="text-text-primary">Preparación 10K Sub-40</strong> (4 sesiones · Días 1–7)</p>
+        </div>
+        <button id="assign-close" type="button" aria-label="Cerrar" class="inline-flex size-10 items-center justify-center rounded text-text-secondary hover:bg-surface-elevated hover:text-text-primary">
+          <span class="material-symbols-outlined text-headline-sm" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+      <div class="flex flex-col gap-space-md">
+        <label class="flex flex-col gap-space-xs">
+          <span class="font-label text-label-badge text-text-primary">Grupo del club</span>
+          <select class="h-12 w-full rounded border border-border-subtle bg-surface-elevated px-3 font-body text-body-md text-text-primary hover:border-border-strong focus:border-session-fartlek focus:ring-0 focus-visible:outline-2 focus-visible:outline-session-fartlek">
+            <option selected>Grupo Sub-40 — Avanzado · 10K</option>
+            <option>Grupo Intermedio — Media Maratón</option>
+            <option>Grupo Base — Iniciación · Rodaje</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-space-xs">
+          <span class="font-label text-label-badge text-text-primary">Fecha de inicio (startDate)</span>
+          <input type="date" value="2026-12-01" class="h-12 w-full rounded border border-border-subtle bg-surface-elevated px-3 font-headline text-body-md tabular-nums text-text-primary hover:border-border-strong focus:border-session-fartlek focus:ring-0 focus-visible:outline-2 focus-visible:outline-session-fartlek">
+          <span class="font-body text-body-sm text-text-secondary">Al asignarse se crea una copia independiente para cada atleta del grupo.</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end gap-space-sm pt-space-md border-t border-border-subtle">
+        <button id="assign-cancel" type="button" class="inline-flex h-12 items-center justify-center rounded border border-border-strong bg-transparent px-5 font-headline text-body-md font-semibold text-text-primary hover:border-session-fartlek hover:text-session-fartlek">Cancelar</button>
+        <button id="assign-confirm" type="button" class="inline-flex h-12 items-center justify-center rounded bg-session-fartlek px-6 font-headline text-body-md font-bold text-surface-base">Asignar plantilla</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var menuBtn = document.getElementById('mobile-menu-btn');
+      var mobileNav = document.getElementById('mobile-nav');
+      if (menuBtn && mobileNav) {
+        menuBtn.addEventListener('click', function () {
+          var open = menuBtn.getAttribute('aria-expanded') === 'true';
+          menuBtn.setAttribute('aria-expanded', String(!open));
+          mobileNav.classList.toggle('hidden', open);
+          mobileNav.classList.toggle('flex', !open);
+        });
+      }
+
+      var modal = document.getElementById('assign-modal');
+      var modalTitle = document.getElementById('assign-modal-title');
+      function closeModal() {
+        if (modal) {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+      }
+      document.querySelectorAll('[data-assign-btn]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (modal && modalTitle) {
+            modalTitle.textContent = 'Asignar "' + btn.getAttribute('data-assign-btn') + '"';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+          }
+        });
+      });
+      ['assign-close', 'assign-cancel', 'assign-confirm'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('click', closeModal);
+      });
+    })();
+  </script>
+
+
+</body></html>
