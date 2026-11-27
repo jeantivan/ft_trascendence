@@ -1,0 +1,7 @@
+if [ ! -d web/node_modules ]; then
+  echo "pre-push: web/node_modules no encontrado; omitiendo typecheck (la CI lo comprobará igualmente)."
+  exit 0
+fi
+
+cd web
+npm run typecheck

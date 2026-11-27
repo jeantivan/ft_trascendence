@@ -1,7 +1,6 @@
 import react from "@vitejs/plugin-react";
-import tsconfigPaths from "vite-tsconfig-paths";
 import { configDefaults, defineConfig } from "vitest/config";
-import { resolveTestDatabaseUrl } from "./tests/support/test-database-url";
+import { resolveTestDatabaseUrl } from "./tests/support/test-database-url.mjs";
 
 // Test database (#83): with DATABASE_URL_TEST every test runs, and DATABASE_URL is
 // replaced by it so Prisma and the realtime listener use the test database too.
@@ -17,7 +16,8 @@ const vmIncompatible = ["tests/unit/uploads/upload-route.test.ts"];
 const baseExclude = testDatabaseUrl === null ? [...configDefaults.exclude, "**/*.db.test.ts"] : configDefaults.exclude;
 
 export default defineConfig({
-  plugins: [tsconfigPaths(), react()],
+  plugins: [react()],
+  resolve: { tsconfigPaths: true },
   test: {
     // next-auth imports "next/server", "next/headers" and "next/navigation" without .js:
     // inline it so Vite resolves them and applies vi.mock inside next-auth when tested unmocked
