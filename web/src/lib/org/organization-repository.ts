@@ -195,7 +195,8 @@ export interface OrganizationRepository {
   // does not count blocked Managers as "another Manager" (#264), but the blocked state of the
   // other Managers is read without locking their user rows: an Admin blocking one at the same
   // time (#102) can slip past removeManager. The matrix (#2) says nothing about a club whose
-  // Manager gets blocked, so blocking does not touch the club either.
+  // Manager gets blocked: blocking keeps the Manager in the club and only warns the Admins
+  // when it was the last active one (#292).
   // Known limit: "a club has at least one Manager" is enforced by createOrganizationSchema
   // (min 1 managerId), not here: a caller that skips the schema could create a club with none.
   createWithManagers(adminId: string, input: CreateOrganizationInput): Promise<OrganizationDetail>;
