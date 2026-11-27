@@ -100,8 +100,22 @@ With rootless Docker (as on the 42 campus computers), `make dev` and `make test`
 - **User Management (Major - 2pts)**: Standard user auth and profiles.
 - **File upload (Minor - 1pt)**: Avatar uploads stored in a private Docker volume.
 - **ORM (Minor - 1pt)**: Prisma.
-- **SSR (Minor - 1pt)**: Server-Side Rendering with Next.js App Router.
+- **SSR (Minor - 1pt)**: Server-Side Rendering with Next.js App Router (see [Server-Side Rendering](#server-side-rendering)).
 - **Custom Design System (Minor - 1pt)**: Reusable UI component library built on the Kinetic Obsidian design tokens, with no third-party UI libraries. It has 12 components (`Alert`, `Avatar`, `Badge`, `Button`, `Card`, `FormField`, `Icon`, `Input`, `LegalLinks`, `Logo`, `Modal`, `RpeBadge`), documented in `web/src/components/ui/docs/`.
 - **GDPR Compliance (Minor - 1pt)**: User data export and account deletion with OTP verification.
 
 **Total Target**: 17 points (14 points minimum required)
+
+### Server-Side Rendering
+
+The pages are React Server Components, the default in the Next.js App Router. The server reads the data from the database and sends the browser an HTML page that already has it. No second request is needed to fill the page.
+
+- **Pages with data**: `/admin/accounts` (the list of accounts of the admin panel) and `/training` (the active club and its Training Templates). Every page that reads its data in its `page.tsx` works the same way.
+- **Why**:
+  - Performance: the first response already shows the content, without waiting for JavaScript to load and fetch it.
+  - Security: the server checks who the user is and their role before it reads the data of the page, so that data never reaches someone who may not see it.
+  - SEO: the public pages (`/register`, `/privacy`, `/terms`) are also rendered on the server, as static HTML, so search engines read their content. The pages with data need a session, so SEO does not apply to them.
+- **What runs in the browser**: no page loads its data from the browser. Client Components only handle interaction (forms, buttons, modals), such as removing the avatar in `/settings`.
+- **How to check it**:
+  - In the browser: sign in, open one of the pages and view its source (`Ctrl+U`): the data is in the HTML. With JavaScript turned off, the page still shows it.
+  - Test: `make test args="tests/app/ssr.test.tsx"` renders each page component on the server, without running anything in the browser, and checks that the data is in the markup. If one of these pages moves its data loading to the browser, the test fails.
