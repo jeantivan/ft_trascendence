@@ -9,7 +9,9 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=true
 RUN chown node:node /app
 USER node
 COPY --chown=node:node package.json package-lock.json ./
-RUN npm ci
+# Clean npm's download cache in the same RUN: a later RUN would only hide it, and
+# its ~540 MB would stay in this layer, in every image built from deps (#269)
+RUN npm ci && npm cache clean --force
 
 # Dev stage (make dev): no build, the source code is bind-mounted at runtime
 # and `next dev` reloads on every change. Not used by the default build.
