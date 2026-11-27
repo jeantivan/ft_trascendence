@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
+import { userRepository } from "@/lib/auth/user-repository";
+import { buildExportFiles } from "@/lib/gdpr/export/build-export-files";
 import { createPrismaExportUserRepository } from "@/lib/gdpr/export/prisma-export-user-repository";
 
 const email = "export-user-repository@example.com";
@@ -348,6 +350,71 @@ describe("Integration: createPrismaExportUserRepository", () => {
       const { user } = await createFixture();
 
       await expect(repository.findSessions(user.id)).resolves.toEqual([]);
+    });
+  });
+
+  describe("findSessionLogs", () => {
+    const at = (day: number) => new Date(`2026-11-${String(day).padStart(2, "0")}T08:00:00.000Z`);
+
+    async function createFixture() {
+      const user = await prisma.user.create({ data: { email, nick: "runner" } });
+      const other = await prisma.user.create({ data: { email: otherEmail, nick: "other" } });
+      const org = await prisma.organization.create({ data: { name: orgName, timezone: "Europe/Madrid" } });
+      const group = await prisma.group.create({ data: { orgId: org.id, name: "group" } });
+      const groupSession = await prisma.trainingSession.create({
+        data: { orgId: org.id, groupId: group.id, origin: "template", sessionType: "rodaje", scheduledAt: at(9) },
+      });
+      const individual = await prisma.trainingSession.create({
+        data: { orgId: org.id, athleteId: user.id, origin: "template", sessionType: "rodaje", scheduledAt: at(10) },
+      });
+      return { user, other, groupSession, individual };
+    }
+
+    it("devuelve solo sus registros, por fecha, con extra tal cual y sin los de otro atleta en la misma sesión", async () => {
+      const { user, other, groupSession, individual } = await createFixture();
+      const later = await prisma.sessionLog.create({
+        data: { sessionId: individual.id, athleteId: user.id, completed: false, rpe: 5, durationS: 600, performedAt: at(12), extra: { incompletion_reason: "time_constraints" } },
+      });
+      const earlier = await prisma.sessionLog.create({
+        data: { sessionId: groupSession.id, athleteId: user.id, completed: true, rpe: 7, distanceM: 10200, durationS: 3600, performedAt: at(11), extra: { avg_heart_rate_bpm: 148, max_heart_rate_bpm: 175 } },
+      });
+      await prisma.sessionLog.create({
+        data: { sessionId: groupSession.id, athleteId: other.id, completed: true, rpe: 9, performedAt: at(11) },
+      });
+
+      await expect(repository.findSessionLogs(user.id)).resolves.toEqual([
+        { sessionId: earlier.sessionId, completed: true, rpe: 7, distanceM: 10200, durationS: 3600, performedAt: at(11), extra: { avg_heart_rate_bpm: 148, max_heart_rate_bpm: 175 } },
+        { sessionId: later.sessionId, completed: false, rpe: 5, distanceM: null, durationS: 600, performedAt: at(12), extra: { incompletion_reason: "time_constraints" } },
+      ]);
+    });
+
+    it("tras purgeHealthData, session_logs.csv sale con rpe y frecuencias vacíos y el resto intacto", async () => {
+      const { user, groupSession, individual } = await createFixture();
+      await prisma.sessionLog.create({
+        data: { sessionId: groupSession.id, athleteId: user.id, completed: true, rpe: 7, distanceM: 10200, durationS: 3600, performedAt: at(11), extra: { avg_heart_rate_bpm: 148, max_heart_rate_bpm: 175 } },
+      });
+      await prisma.sessionLog.create({
+        data: { sessionId: individual.id, athleteId: user.id, completed: false, rpe: 5, durationS: 600, performedAt: at(12), extra: { incompletion_reason: "time_constraints", avg_heart_rate_bpm: 150 } },
+      });
+
+      await userRepository.purgeHealthData(user.id);
+
+      const files = await buildExportFiles(user.id, repository, new Date("2026-11-20T10:00:00.000Z"));
+      const csv = files!.find((file) => file.name === "session_logs.csv")!.content;
+      expect(csv).toBe(
+        [
+          "session_id,completed,rpe,distance_m,duration_s,performed_at,incompletion_reason,avg_heart_rate_bpm,max_heart_rate_bpm",
+          `${groupSession.id},true,,10200,3600,2026-11-11T08:00:00Z,,,`,
+          `${individual.id},false,,,600,2026-11-12T08:00:00Z,time_constraints,,`,
+          "",
+        ].join("\r\n"),
+      );
+    });
+
+    it("devuelve una lista vacía si no tiene registros", async () => {
+      const { user } = await createFixture();
+
+      await expect(repository.findSessionLogs(user.id)).resolves.toEqual([]);
     });
   });
 
