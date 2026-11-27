@@ -9,7 +9,9 @@ describe("InMemoryTrainingRepository", () => {
   const MANAGER_1 = "13400000-0000-4000-8000-000000000011";
   const MANAGER_2 = "13400000-0000-4000-8000-000000000012";
   const ATHLETE_1 = "13400000-0000-4000-8000-000000000021";
+  const ATHLETE_2 = "13400000-0000-4000-8000-000000000022";
   const GROUP_1 = "13400000-0000-4000-8000-000000000041";
+  const GROUP_2 = "13400000-0000-4000-8000-000000000044";
   const EMPTY_GROUP = "13400000-0000-4000-8000-000000000042";
   const OTHER_GROUP = "13400000-0000-4000-8000-000000000043";
 
@@ -18,10 +20,14 @@ describe("InMemoryTrainingRepository", () => {
     repo.addMember(ORG_A, MANAGER_1, "manager");
     repo.addMember(ORG_A, MANAGER_2, "manager");
     repo.addMember(ORG_A, ATHLETE_1, "athlete");
+    repo.addMember(ORG_A, ATHLETE_2, "athlete");
     repo.addGroup(ORG_A, GROUP_1);
+    repo.addGroup(ORG_A, GROUP_2);
     repo.addGroup(ORG_A, EMPTY_GROUP);
     repo.addGroup(ORG_B, OTHER_GROUP);
     repo.addAthleteToGroup(ATHLETE_1, GROUP_1);
+    repo.addAthleteToGroup(ATHLETE_1, GROUP_2);
+    repo.addAthleteToGroup(ATHLETE_2, GROUP_2);
   });
 
   runTrainingRepositoryContract("in memory", () => ({
@@ -31,11 +37,29 @@ describe("InMemoryTrainingRepository", () => {
     manager1Id: MANAGER_1,
     manager2Id: MANAGER_2,
     athleteId: ATHLETE_1,
+    secondAthleteId: ATHLETE_2,
     groupId: GROUP_1,
+    secondGroupId: GROUP_2,
     emptyGroupId: EMPTY_GROUP,
     otherOrgGroupId: OTHER_GROUP,
     seedTemplateAssignment: async (groupId, templateId) => {
       repo.seedTemplateAssignment(groupId, templateId);
+    },
+    seedSession: async (input) => repo.seedSession(input),
+    seedSessionLog: async (sessionId, athleteId) => {
+      repo.seedSessionLog(sessionId, athleteId);
+    },
+    removeMember: async (orgId, userId) => {
+      repo.removeMember(orgId, userId);
+    },
+    setMemberRole: async (orgId, userId, role) => {
+      repo.addMember(orgId, userId, role);
+    },
+    removeAthleteFromGroup: async (groupId, athleteId) => {
+      repo.removeAthleteFromGroup(athleteId, groupId);
+    },
+    deleteGroup: async (groupId) => {
+      repo.deleteGroup(groupId);
     },
   }));
 

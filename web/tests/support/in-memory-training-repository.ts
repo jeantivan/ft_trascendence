@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
-import type { MembershipRole, Prisma } from "@/generated/prisma/client";
+import type {
+  MembershipRole,
+  Prisma,
+  SessionOrigin,
+} from "@/generated/prisma/client";
 import { normalizeId } from "@/lib/org/schemas";
 import {
   isDuplicateTemplateAssignment,
   type SessionSignature,
 } from "@/lib/training/duplicate-assignment";
 import { TrainingConflictError, TrainingNotFoundError } from "@/lib/training/errors";
+import { excludeSubstitutedGroupSessions } from "@/lib/training/schedule";
 import { computeScheduledAtUtc } from "@/lib/training/units";
 import type {
   AssignTrainingTemplateInput,
@@ -18,6 +23,61 @@ import type {
   TrainingTemplateData,
   UpdateTrainingTemplateInput,
 } from "@/lib/training/types";
+import type { SeedSessionInput } from "./training-repository-contract";
+
+interface StoredSession {
+  id: string;
+  orgId?: string;
+  origin?: SessionOrigin;
+  sourceTemplateId: string | null;
+  customizesSessionId?: string | null;
+  groupId?: string | null;
+  athleteId?: string | null;
+  sessionType?: TemplateSessionData["sessionType"];
+  dayOffset?: number;
+  targetDistanceM?: number | null;
+  targetDurationS?: number | null;
+  targetPaceSPerKm?: number | null;
+  scheduledAt?: Date;
+}
+
+function toClubSessionData(
+  session: StoredSession,
+  normalizedOrgId: string
+): TrainingSessionData | null {
+  if (
+    session.orgId !== normalizedOrgId ||
+    !session.origin ||
+    !session.sessionType ||
+    !session.scheduledAt
+  ) {
+    return null;
+  }
+  return {
+    id: session.id,
+    orgId: session.orgId,
+    origin: session.origin,
+    sessionType: session.sessionType,
+    targetDistanceM: session.targetDistanceM ?? null,
+    targetDurationS: session.targetDurationS ?? null,
+    targetPaceSPerKm: session.targetPaceSPerKm ?? null,
+    scheduledAt: session.scheduledAt,
+    groupId: session.groupId ?? null,
+    athleteId: session.athleteId ?? null,
+    sourceTemplateId: session.sourceTemplateId,
+    customizesSessionId: session.customizesSessionId ?? null,
+  };
+}
+
+function compareSessions(
+  a: TrainingSessionData,
+  b: TrainingSessionData
+): number {
+  return (
+    a.scheduledAt.getTime() - b.scheduledAt.getTime() ||
+    a.id.localeCompare(b.id)
+  );
+}
 
 export const IN_MEMORY_TX_TOKEN = Symbol(
   "in-memory-tx"
@@ -30,20 +90,8 @@ export class InMemoryTrainingRepository implements TrainingRepository {
   private groups: Map<string, string> = new Map();
   private athleteGroups: Map<string, Set<string>> = new Map();
   private groupTemplates: Map<string, Set<string>> = new Map();
-  public copiedSessions: Array<{
-    id: string;
-    orgId?: string;
-    origin?: "template" | "customized" | "free";
-    sourceTemplateId: string | null;
-    groupId?: string | null;
-    athleteId?: string | null;
-    sessionType?: TemplateSessionData["sessionType"];
-    dayOffset?: number;
-    targetDistanceM?: number | null;
-    targetDurationS?: number | null;
-    targetPaceSPerKm?: number | null;
-    scheduledAt?: Date;
-  }> = [];
+  private sessionLogs: Set<string> = new Set();
+  public copiedSessions: StoredSession[] = [];
 
   addOrganization(orgId: string, timezone = "Europe/Madrid"): void {
     this.orgTimezones.set(normalizeId(orgId), timezone);
@@ -57,11 +105,71 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     this.memberships.set(`${normalizeId(orgId)}:${normalizeId(userId)}`, role);
   }
 
+  removeMember(orgId: string, userId: string): void {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedUserId = normalizeId(userId);
+    this.memberships.delete(`${normalizedOrgId}:${normalizedUserId}`);
+    const groups = this.athleteGroups.get(normalizedUserId);
+    if (groups) {
+      for (const groupId of [...groups]) {
+        if (this.groups.get(groupId) === normalizedOrgId) {
+          groups.delete(groupId);
+        }
+      }
+    }
+  }
+
   addAthleteToGroup(athleteId: string, groupId: string): void {
     const normalizedAthleteId = normalizeId(athleteId);
     const groups = this.athleteGroups.get(normalizedAthleteId) ?? new Set();
     groups.add(normalizeId(groupId));
     this.athleteGroups.set(normalizedAthleteId, groups);
+  }
+
+  removeAthleteFromGroup(athleteId: string, groupId: string): void {
+    const groups = this.athleteGroups.get(normalizeId(athleteId));
+    groups?.delete(normalizeId(groupId));
+  }
+
+  deleteGroup(groupId: string): void {
+    const normalizedGroupId = normalizeId(groupId);
+    this.groups.delete(normalizedGroupId);
+    this.groupTemplates.delete(normalizedGroupId);
+    for (const groups of this.athleteGroups.values()) {
+      groups.delete(normalizedGroupId);
+    }
+    for (const session of this.copiedSessions) {
+      if (session.groupId === normalizedGroupId) {
+        session.groupId = null;
+      }
+    }
+  }
+
+  seedSession(input: SeedSessionInput): TrainingSessionData {
+    const record: TrainingSessionData = {
+      id: randomUUID(),
+      orgId: normalizeId(input.orgId),
+      origin: input.origin,
+      sessionType: input.sessionType,
+      targetDistanceM: input.targetDistanceM ?? null,
+      targetDurationS: input.targetDurationS ?? null,
+      targetPaceSPerKm: input.targetPaceSPerKm ?? null,
+      scheduledAt: input.scheduledAt,
+      groupId: input.groupId ? normalizeId(input.groupId) : null,
+      athleteId: input.athleteId ? normalizeId(input.athleteId) : null,
+      sourceTemplateId: input.sourceTemplateId
+        ? normalizeId(input.sourceTemplateId)
+        : null,
+      customizesSessionId: input.customizesSessionId
+        ? normalizeId(input.customizesSessionId)
+        : null,
+    };
+    this.copiedSessions.push(record);
+    return { ...record };
+  }
+
+  seedSessionLog(sessionId: string, athleteId: string): void {
+    this.sessionLogs.add(`${normalizeId(sessionId)}:${normalizeId(athleteId)}`);
   }
 
   seedTemplateAssignment(groupId: string, templateId: string): void {
@@ -288,6 +396,7 @@ export class InMemoryTrainingRepository implements TrainingRepository {
       groupId: normalizedGroupId,
       athleteId: null,
       sourceTemplateId: normalizedTemplateId,
+      customizesSessionId: null,
     }));
 
     if (created.length > 0) {
@@ -340,5 +449,79 @@ export class InMemoryTrainingRepository implements TrainingRepository {
     }
 
     return created.map((s) => ({ ...s }));
+  }
+
+  async getAthleteSchedule(
+    orgId: string,
+    athleteId: string
+  ): Promise<TrainingSessionData[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedAthleteId = normalizeId(athleteId);
+    const memberGroups =
+      this.athleteGroups.get(normalizedAthleteId) ?? new Set<string>();
+
+    const results: TrainingSessionData[] = [];
+    for (const stored of this.copiedSessions) {
+      const session = toClubSessionData(stored, normalizedOrgId);
+      if (!session) {
+        continue;
+      }
+
+      const isGroupTemplate =
+        session.origin === "template" &&
+        session.groupId !== null &&
+        memberGroups.has(session.groupId) &&
+        this.groups.get(session.groupId) === normalizedOrgId;
+
+      const isLoggedTemplate =
+        session.origin === "template" &&
+        session.athleteId === null &&
+        this.sessionLogs.has(`${session.id}:${normalizedAthleteId}`);
+
+      const isPersonalSession =
+        (session.origin === "customized" || session.origin === "free") &&
+        session.athleteId === normalizedAthleteId;
+
+      if (isGroupTemplate || isLoggedTemplate || isPersonalSession) {
+        results.push(session);
+      }
+    }
+
+    const sorted = results.sort(compareSessions);
+
+    const loggedSessionIds = new Set<string>();
+    for (const session of sorted) {
+      if (this.sessionLogs.has(`${session.id}:${normalizedAthleteId}`)) {
+        loggedSessionIds.add(session.id);
+      }
+    }
+
+    return excludeSubstitutedGroupSessions(sorted, loggedSessionIds);
+  }
+
+  async listClubSessions(orgId: string): Promise<TrainingSessionData[]> {
+    const normalizedOrgId = normalizeId(orgId);
+    const results: TrainingSessionData[] = [];
+
+    for (const stored of this.copiedSessions) {
+      const session = toClubSessionData(stored, normalizedOrgId);
+      if (!session) {
+        continue;
+      }
+
+      const isClubTemplate =
+        session.origin === "template" && session.athleteId === null;
+      const isActiveAthleteSession =
+        (session.origin === "customized" || session.origin === "free") &&
+        session.athleteId !== null &&
+        this.memberships.get(`${normalizedOrgId}:${session.athleteId}`) ===
+          "athlete";
+
+      if (isClubTemplate || isActiveAthleteSession) {
+        results.push(session);
+      }
+    }
+
+    return results.sort(compareSessions);
   }
 }

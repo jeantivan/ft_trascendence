@@ -46,6 +46,7 @@ export interface TrainingSessionData {
   groupId: string | null;
   athleteId: string | null;
   sourceTemplateId: string | null;
+  customizesSessionId: string | null;
 }
 
 export interface AssignTrainingTemplateInput {
@@ -133,4 +134,9 @@ export interface TrainingRepository {
     input: AssignTrainingTemplateInput,
     afterAssign?: TrainingAssignCallback
   ): Promise<TrainingSessionData[]>;
+  getAthleteSchedule(
+    orgId: string,
+    athleteId: string
+  ): Promise<TrainingSessionData[]>;
+  listClubSessions(orgId: string): Promise<TrainingSessionData[]>;
 }

@@ -10,6 +10,7 @@ import type {
 } from "@/generated/prisma/client";
 import { isDuplicateTemplateAssignment } from "./duplicate-assignment";
 import { TrainingConflictError, TrainingNotFoundError } from "./errors";
+import { excludeSubstitutedGroupSessions } from "./schedule";
 import type {
   AssignTrainingTemplateInput,
   CreateTrainingTemplateInput,
@@ -53,7 +54,7 @@ function toTemplateData(template: PrismaTemplateWithSessions): TrainingTemplateD
   };
 }
 
-function toSessionData(row: TrainingSessionData): TrainingSessionData {
+export function toSessionData(row: TrainingSessionData): TrainingSessionData {
   return {
     id: row.id,
     orgId: row.orgId,
@@ -66,6 +67,7 @@ function toSessionData(row: TrainingSessionData): TrainingSessionData {
     groupId: row.groupId,
     athleteId: row.athleteId,
     sourceTemplateId: row.sourceTemplateId,
+    customizesSessionId: row.customizesSessionId,
   };
 }
 
@@ -426,6 +428,97 @@ export class PrismaTrainingRepository implements TrainingRepository {
 
       return created.map(toSessionData);
     });
+  }
+
+  async getAthleteSchedule(
+    orgId: string,
+    athleteId: string
+  ): Promise<TrainingSessionData[]> {
+    if (!isDbId(orgId) || !isDbId(athleteId)) {
+      return [];
+    }
+    const normalizedOrgId = normalizeId(orgId);
+    const normalizedAthleteId = normalizeId(athleteId);
+
+    // Known limit: customizesSessionId has no DB CHECK constraint tying it to the
+    // same org or origin "template"; org/athlete filters prevent cross-club leaks.
+    const sessions = await this.db.trainingSession.findMany({
+      where: {
+        orgId: normalizedOrgId,
+        OR: [
+          {
+            origin: "template",
+            group: {
+              orgId: normalizedOrgId,
+              members: {
+                some: { userId: normalizedAthleteId },
+              },
+            },
+          },
+          {
+            origin: "template",
+            athleteId: null,
+            logs: {
+              some: { athleteId: normalizedAthleteId },
+            },
+          },
+          {
+            origin: { in: ["customized", "free"] },
+            athleteId: normalizedAthleteId,
+          },
+        ],
+      },
+      include: {
+        logs: {
+          where: { athleteId: normalizedAthleteId },
+          select: { sessionId: true },
+        },
+      },
+      orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
+    });
+
+    const loggedSessionIds = new Set<string>();
+    for (const session of sessions) {
+      if (session.logs.length > 0) {
+        loggedSessionIds.add(session.id);
+      }
+    }
+
+    return excludeSubstitutedGroupSessions(
+      sessions.map(toSessionData),
+      loggedSessionIds
+    );
+  }
+
+  async listClubSessions(orgId: string): Promise<TrainingSessionData[]> {
+    if (!isDbId(orgId)) {
+      return [];
+    }
+    const normalizedOrgId = normalizeId(orgId);
+    const sessions = await this.db.trainingSession.findMany({
+      where: {
+        orgId: normalizedOrgId,
+        OR: [
+          {
+            origin: "template",
+            athleteId: null,
+          },
+          {
+            origin: { in: ["customized", "free"] },
+            athlete: {
+              memberships: {
+                some: {
+                  orgId: normalizedOrgId,
+                  role: "athlete",
+                },
+              },
+            },
+          },
+        ],
+      },
+      orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
+    });
+    return sessions.map(toSessionData);
   }
 }
 

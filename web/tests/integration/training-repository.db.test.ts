@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { PrismaTrainingRepository } from "@/lib/training/prisma-training-repository";
+import {
+  PrismaTrainingRepository,
+  toSessionData,
+} from "@/lib/training/prisma-training-repository";
 import { notify } from "@/lib/notifications/notify";
 import {
   TrainingConflictError,
@@ -26,7 +29,9 @@ describe("Integration: PrismaTrainingRepository", () => {
   let manager1Id: string;
   let manager2Id: string;
   let athleteId: string;
+  let secondAthleteId: string;
   let groupId: string;
+  let secondGroupId: string;
   let emptyGroupId: string;
   let otherOrgGroupId: string;
 
@@ -56,11 +61,17 @@ describe("Integration: PrismaTrainingRepository", () => {
     });
     athleteId = athlete.id;
 
+    const secondAthlete = await prisma.user.create({
+      data: { email: `${PREFIX}ath-peer@test.com`, nick: "AthletePeer" },
+    });
+    secondAthleteId = secondAthlete.id;
+
     await prisma.membership.createMany({
       data: [
         { orgId, userId: manager1Id, role: "manager" },
         { orgId, userId: manager2Id, role: "manager" },
         { orgId, userId: athleteId, role: "athlete" },
+        { orgId, userId: secondAthleteId, role: "athlete" },
       ],
     });
 
@@ -68,6 +79,11 @@ describe("Integration: PrismaTrainingRepository", () => {
       data: { orgId, name: `${PREFIX}Group` },
     });
     groupId = group.id;
+
+    const secondGroup = await prisma.group.create({
+      data: { orgId, name: `${PREFIX}SecondGroup` },
+    });
+    secondGroupId = secondGroup.id;
 
     const emptyGroup = await prisma.group.create({
       data: { orgId, name: `${PREFIX}EmptyGroup` },
@@ -79,8 +95,12 @@ describe("Integration: PrismaTrainingRepository", () => {
     });
     otherOrgGroupId = otherGroup.id;
 
-    await prisma.groupMember.create({
-      data: { groupId, userId: athleteId },
+    await prisma.groupMember.createMany({
+      data: [
+        { groupId, userId: athleteId },
+        { groupId: secondGroupId, userId: athleteId },
+        { groupId: secondGroupId, userId: secondAthleteId },
+      ],
     });
   });
 
@@ -107,7 +127,9 @@ describe("Integration: PrismaTrainingRepository", () => {
     manager1Id,
     manager2Id,
     athleteId,
+    secondAthleteId,
     groupId,
+    secondGroupId,
     emptyGroupId,
     otherOrgGroupId,
     seedTemplateAssignment: async (targetGroupId, templateId) => {
@@ -121,6 +143,57 @@ describe("Integration: PrismaTrainingRepository", () => {
           sourceTemplateId: templateId,
         },
       });
+    },
+    seedSession: async (input) => {
+      const row = await prisma.trainingSession.create({
+        data: {
+          orgId: input.orgId,
+          origin: input.origin,
+          sessionType: input.sessionType,
+          scheduledAt: input.scheduledAt,
+          groupId: input.groupId ?? null,
+          athleteId: input.athleteId ?? null,
+          sourceTemplateId: input.sourceTemplateId ?? null,
+          customizesSessionId: input.customizesSessionId ?? null,
+          targetDistanceM: input.targetDistanceM ?? null,
+          targetDurationS: input.targetDurationS ?? null,
+          targetPaceSPerKm: input.targetPaceSPerKm ?? null,
+        },
+      });
+      return toSessionData(row);
+    },
+    seedSessionLog: async (sessionId, targetAthleteId) => {
+      await prisma.sessionLog.create({
+        data: {
+          sessionId,
+          athleteId: targetAthleteId,
+          completed: true,
+          performedAt: new Date("2026-07-11T10:00:00.000Z"),
+        },
+      });
+    },
+    removeMember: async (targetOrgId, userId) => {
+      await prisma.groupMember.deleteMany({
+        where: { userId, group: { orgId: targetOrgId } },
+      });
+      await prisma.membership.deleteMany({
+        where: { orgId: targetOrgId, userId },
+      });
+    },
+    setMemberRole: async (targetOrgId, userId, role) => {
+      await prisma.membership.upsert({
+        where: { userId_orgId: { userId, orgId: targetOrgId } },
+        create: { orgId: targetOrgId, userId, role },
+        update: { role },
+      });
+    },
+    removeAthleteFromGroup: async (targetGroupId, targetAthleteId) => {
+      await prisma.groupMember.deleteMany({
+        where: { groupId: targetGroupId, userId: targetAthleteId },
+      });
+    },
+    deleteGroup: async (targetGroupId) => {
+      await prisma.group.delete({ where: { id: targetGroupId } });
     },
   }));
 
@@ -570,5 +643,51 @@ describe("Integration: PrismaTrainingRepository", () => {
       where: { userId: athleteId, type: TRAINING_TEMPLATE_ASSIGNED },
     });
     expect(notifications).toHaveLength(1);
+  });
+
+  it("enforces club boundaries and manager/athlete roles for schedule queries via TrainingService in Postgres", async () => {
+    const trainingService = new TrainingService(repo, notify);
+    const outsider = await prisma.user.create({
+      data: { email: `${PREFIX}outsider@test.com`, nick: "Outsider" },
+    });
+    await prisma.membership.create({
+      data: { orgId: otherOrgId, userId: outsider.id, role: "manager" },
+    });
+
+    const groupSession = await prisma.trainingSession.create({
+      data: {
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-10-01T08:00:00.000Z"),
+        groupId,
+      },
+    });
+    const freeSession = await prisma.trainingSession.create({
+      data: {
+        orgId,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-10-02T08:00:00.000Z"),
+        athleteId,
+      },
+    });
+
+    const managerSessions = await trainingService.listClubSessions(
+      manager1Id,
+      orgId.toUpperCase()
+    );
+    expect(managerSessions.map((s) => s.id)).toEqual([
+      groupSession.id,
+      freeSession.id,
+    ]);
+
+    await expect(
+      trainingService.listClubSessions(outsider.id, orgId)
+    ).rejects.toThrow(TrainingNotFoundError);
+
+    await expect(
+      trainingService.getAthleteSchedule(outsider.id, orgId, athleteId)
+    ).rejects.toThrow(TrainingNotFoundError);
   });
 });

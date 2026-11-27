@@ -1,6 +1,14 @@
+import type {
+  MembershipRole,
+  SessionOrigin,
+  SessionType,
+} from "@/generated/prisma/client";
 import { describe, expect, it } from "vitest";
 import { TrainingConflictError, TrainingNotFoundError } from "@/lib/training/errors";
-import type { TrainingRepository } from "@/lib/training/types";
+import type {
+  TrainingRepository,
+  TrainingSessionData,
+} from "@/lib/training/types";
 import { computeScheduledAtUtc } from "@/lib/training/units";
 
 const UNKNOWN_ID = "33333333-3333-4333-8333-333333333333";
@@ -12,6 +20,20 @@ function formatUtcDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export interface SeedSessionInput {
+  orgId: string;
+  origin: SessionOrigin;
+  sessionType: SessionType;
+  scheduledAt: Date;
+  groupId?: string | null;
+  athleteId?: string | null;
+  sourceTemplateId?: string | null;
+  customizesSessionId?: string | null;
+  targetDistanceM?: number | null;
+  targetDurationS?: number | null;
+  targetPaceSPerKm?: number | null;
+}
+
 export interface TrainingRepositoryFixture {
   repo: TrainingRepository;
   orgId: string;
@@ -19,10 +41,25 @@ export interface TrainingRepositoryFixture {
   manager1Id: string;
   manager2Id: string;
   athleteId: string;
+  secondAthleteId: string;
+  // Contains only athleteId (assignment notification tests assert [athleteId]).
   groupId: string;
+  // Shared by athleteId and secondAthleteId.
+  secondGroupId: string;
+  // Contains no members.
   emptyGroupId: string;
   otherOrgGroupId: string;
   seedTemplateAssignment(groupId: string, templateId: string): Promise<void>;
+  seedSession(input: SeedSessionInput): Promise<TrainingSessionData>;
+  seedSessionLog(sessionId: string, athleteId: string): Promise<void>;
+  removeMember(orgId: string, userId: string): Promise<void>;
+  setMemberRole(
+    orgId: string,
+    userId: string,
+    role: MembershipRole
+  ): Promise<void>;
+  removeAthleteFromGroup(groupId: string, athleteId: string): Promise<void>;
+  deleteGroup(groupId: string): Promise<void>;
 }
 
 /** Shared contract suite run against both InMemoryTrainingRepository and PrismaTrainingRepository. */
@@ -547,6 +584,312 @@ export function runTrainingRepositoryContract(
           startDate: "2026-06-08",
         })
       ).rejects.toThrow(TrainingConflictError);
+    });
+
+    it("combines template sessions from multiple groups, customized, and free sessions in chronological order", async () => {
+      const {
+        repo,
+        orgId,
+        athleteId,
+        groupId,
+        secondGroupId,
+        emptyGroupId,
+        seedSession,
+      } = getFixture();
+
+      const freeSession = await seedSession({
+        orgId,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-07-03T08:00:00.000Z"),
+        athleteId,
+      });
+      const group1Session = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-07-01T08:00:00.000Z"),
+        groupId,
+      });
+      const customizedSession = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-07-02T08:00:00.000Z"),
+        athleteId,
+      });
+      const group2Session = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "tirada_larga",
+        scheduledAt: new Date("2026-07-04T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+      // Group the athlete does not belong to must not appear in their schedule
+      await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-07-02T12:00:00.000Z"),
+        groupId: emptyGroupId,
+      });
+
+      const schedule = await repo.getAthleteSchedule(orgId, athleteId);
+
+      expect(schedule.map((s) => s.id)).toEqual([
+        group1Session.id,
+        customizedSession.id,
+        freeSession.id,
+        group2Session.id,
+      ]);
+      expect(schedule[0].groupId).toBe(groupId);
+      expect(schedule[3].groupId).toBe(secondGroupId);
+    });
+
+    it("substitutes group session with Customized Session unless the athlete already logged that group session", async () => {
+      const {
+        repo,
+        orgId,
+        athleteId,
+        secondAthleteId,
+        secondGroupId,
+        seedSession,
+        seedSessionLog,
+      } = getFixture();
+
+      // Group session A: adapted for athleteId, logged only by secondAthleteId
+      const groupSessionA = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-07-10T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+      await seedSessionLog(groupSessionA.id, secondAthleteId);
+
+      const customizedForA = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "rodaje",
+        targetDistanceM: 6000,
+        scheduledAt: new Date("2026-07-10T09:00:00.000Z"),
+        athleteId,
+        customizesSessionId: groupSessionA.id,
+      });
+
+      // Group session B: athleteId already has a SessionLog, so it must stay visible
+      const groupSessionB = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-07-11T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+      await seedSessionLog(groupSessionB.id, athleteId);
+
+      const customizedForB = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-07-11T09:00:00.000Z"),
+        athleteId,
+        customizesSessionId: groupSessionB.id,
+      });
+
+      const athleteSchedule = await repo.getAthleteSchedule(orgId, athleteId);
+      expect(athleteSchedule.map((s) => s.id)).toEqual([
+        customizedForA.id,
+        groupSessionB.id,
+        customizedForB.id,
+      ]);
+
+      // Teammate in the same group still sees both original group sessions
+      const peerSchedule = await repo.getAthleteSchedule(orgId, secondAthleteId);
+      expect(peerSchedule.map((s) => s.id)).toEqual([
+        groupSessionA.id,
+        groupSessionB.id,
+      ]);
+    });
+
+    it("lists all club sessions (template, customized, free) in chronological order and excludes other clubs", async () => {
+      const {
+        repo,
+        orgId,
+        otherOrgId,
+        athleteId,
+        secondAthleteId,
+        groupId,
+        otherOrgGroupId,
+        seedSession,
+      } = getFixture();
+
+      const freeSession = await seedSession({
+        orgId,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-08-03T08:00:00.000Z"),
+        athleteId,
+      });
+      const groupSession = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-08-01T08:00:00.000Z"),
+        groupId,
+      });
+      const customizedSession = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-08-02T08:00:00.000Z"),
+        athleteId: secondAthleteId,
+      });
+      // Session in another club must never leak into orgId
+      await seedSession({
+        orgId: otherOrgId,
+        origin: "template",
+        sessionType: "tirada_larga",
+        scheduledAt: new Date("2026-08-02T00:00:00.000Z"),
+        groupId: otherOrgGroupId,
+      });
+
+      const clubSessions = await repo.listClubSessions(orgId);
+
+      expect(clubSessions.map((s) => s.id)).toEqual([
+        groupSession.id,
+        customizedSession.id,
+        freeSession.id,
+      ]);
+    });
+
+    it("hides customized and free sessions of former or non-athlete members in listClubSessions and restores them when the athlete rejoins", async () => {
+      const {
+        repo,
+        orgId,
+        athleteId,
+        secondAthleteId,
+        groupId,
+        seedSession,
+        removeMember,
+        setMemberRole,
+      } = getFixture();
+
+      const groupSession = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-08-10T08:00:00.000Z"),
+        groupId,
+      });
+      const athleteCustomized = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-08-11T08:00:00.000Z"),
+        athleteId,
+      });
+      const athleteFree = await seedSession({
+        orgId,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-08-12T08:00:00.000Z"),
+        athleteId,
+      });
+      const peerFree = await seedSession({
+        orgId,
+        origin: "free",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-08-13T08:00:00.000Z"),
+        athleteId: secondAthleteId,
+      });
+
+      // After leaving the club, managers lose access to the former member's personal sessions
+      await removeMember(orgId, athleteId);
+      const afterLeave = await repo.listClubSessions(orgId);
+      expect(afterLeave.map((s) => s.id)).toEqual([
+        groupSession.id,
+        peerFree.id,
+      ]);
+
+      // Non-athlete membership (manager) does not expose personal sessions either
+      await setMemberRole(orgId, athleteId, "manager");
+      const asManager = await repo.listClubSessions(orgId);
+      expect(asManager.map((s) => s.id)).toEqual([
+        groupSession.id,
+        peerFree.id,
+      ]);
+
+      // Rejoining as athlete restores visibility to the club's managers
+      await setMemberRole(orgId, athleteId, "athlete");
+      const afterRejoin = await repo.listClubSessions(orgId);
+      expect(afterRejoin.map((s) => s.id)).toEqual([
+        groupSession.id,
+        athleteCustomized.id,
+        athleteFree.id,
+        peerFree.id,
+      ]);
+    });
+
+    it("keeps logged template sessions in getAthleteSchedule after leaving a group or deleting the group", async () => {
+      const {
+        repo,
+        orgId,
+        athleteId,
+        secondAthleteId,
+        groupId,
+        secondGroupId,
+        seedSession,
+        seedSessionLog,
+        removeAthleteFromGroup,
+        deleteGroup,
+      } = getFixture();
+
+      const loggedFromLeftGroup = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-08-20T08:00:00.000Z"),
+        groupId,
+      });
+      await seedSessionLog(loggedFromLeftGroup.id, athleteId);
+
+      // Unlogged session in the left group must disappear
+      await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-08-21T08:00:00.000Z"),
+        groupId,
+      });
+
+      const loggedFromDeletedGroup = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-08-22T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+      await seedSessionLog(loggedFromDeletedGroup.id, athleteId);
+
+      // Logged only by a teammate in the deleted group must not appear for athleteId
+      const peerLoggedFromDeletedGroup = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-08-23T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+      await seedSessionLog(peerLoggedFromDeletedGroup.id, secondAthleteId);
+
+      await removeAthleteFromGroup(groupId, athleteId);
+      await deleteGroup(secondGroupId);
+
+      const schedule = await repo.getAthleteSchedule(orgId, athleteId);
+      expect(schedule.map((s) => s.id)).toEqual([
+        loggedFromLeftGroup.id,
+        loggedFromDeletedGroup.id,
+      ]);
+      expect(schedule[1].groupId).toBeNull();
     });
   });
 }

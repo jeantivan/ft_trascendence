@@ -2,6 +2,7 @@
 
 import { forbidden, notFound } from "next/navigation";
 import { requireOrgRole } from "@/lib/permissions/require-org-role";
+import type { OrgRole } from "@/lib/permissions/org-role";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { notify } from "@/lib/notifications/notify";
 import { trainingRepository } from "./prisma-training-repository";
@@ -106,5 +107,32 @@ export async function assignTrainingTemplateAction(
   const { user } = await requireOrgRole(orgId, ORG_ROLES["trainingTemplate.write"]);
   return runTrainingAction(() =>
     trainingService.assignTemplateToGroup(user.id, orgId, input)
+  );
+}
+
+// Both schedule queries return template/customized ("session.read") and free
+// ("freeSession.read") sessions, so access requires a role present in both rows.
+// Kept unexported because "use server" files may only export async functions.
+const freeSessionReadRoles: readonly OrgRole[] = ORG_ROLES["freeSession.read"];
+const SCHEDULE_READ_ROLES: readonly OrgRole[] = ORG_ROLES[
+  "session.read"
+].filter((role) => freeSessionReadRoles.includes(role));
+
+export async function getAthleteScheduleAction(
+  orgId: string,
+  athleteId?: string
+): Promise<ActionResult<TrainingSessionData[]>> {
+  const { user } = await requireOrgRole(orgId, SCHEDULE_READ_ROLES);
+  return runTrainingAction(() =>
+    trainingService.getAthleteSchedule(user.id, orgId, athleteId)
+  );
+}
+
+export async function listClubSessionsAction(
+  orgId: string
+): Promise<ActionResult<TrainingSessionData[]>> {
+  const { user } = await requireOrgRole(orgId, SCHEDULE_READ_ROLES);
+  return runTrainingAction(() =>
+    trainingService.listClubSessions(user.id, orgId)
   );
 }
