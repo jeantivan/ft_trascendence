@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getCatalog, getMyMembershipRequests, getOrganizationPage, userHasClub } from "@/lib/org/queries";
+import { getCatalog, getMyClubs, getMyMembershipRequests, getOrganizationPage, userHasClub } from "@/lib/org/queries";
 import { OrganizationNotFoundError } from "@/lib/org/organization-service";
 import { ORG_ROLES } from "@/lib/permissions/org-roles";
 import { requireAuth } from "@/lib/permissions/require-auth";
@@ -9,6 +9,7 @@ const listCatalog = vi.hoisted(() => vi.fn());
 const getOrganization = vi.hoisted(() => vi.fn());
 const listUserRequests = vi.hoisted(() => vi.fn());
 const hasClub = vi.hoisted(() => vi.fn());
+const listUserClubs = vi.hoisted(() => vi.fn());
 
 // The real "server-only" throws outside a server bundle, as in Vitest: replaced by an empty module
 vi.mock("server-only", () => ({}));
@@ -29,6 +30,7 @@ vi.mock("@/lib/org/organization-service", async (importOriginal) => ({
     getOrganization = getOrganization;
     listUserRequests = listUserRequests;
     hasClub = hasClub;
+    listUserClubs = listUserClubs;
   },
 }));
 
@@ -161,5 +163,29 @@ describe("userHasClub", () => {
     await expect(userHasClub()).rejects.toBeInstanceOf(RejectionSignal);
 
     expect(hasClub).not.toHaveBeenCalled();
+  });
+});
+
+describe("getMyClubs", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("asks the service for the session user's clubs", async () => {
+    const clubs = [{ orgId: ORG_ID, name: "Club de prueba", role: "manager", isLastManager: true }];
+    vi.mocked(requireAuth).mockResolvedValue(USER);
+    listUserClubs.mockResolvedValue(clubs);
+
+    await expect(getMyClubs()).resolves.toEqual(clubs);
+
+    expect(listUserClubs).toHaveBeenCalledWith(USER.id);
+  });
+
+  it("propagates the rejection of requireAuth and does not call the service", async () => {
+    vi.mocked(requireAuth).mockRejectedValue(new RejectionSignal());
+
+    await expect(getMyClubs()).rejects.toBeInstanceOf(RejectionSignal);
+
+    expect(listUserClubs).not.toHaveBeenCalled();
   });
 });

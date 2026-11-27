@@ -12,6 +12,7 @@ import {
   RequestAlreadyPendingError,
   UserNotFoundError,
   type MembershipRequestDetail,
+  type UserClub,
   type UserMembershipRequest,
   type OrganizationDetail,
   type OrganizationRepository,
@@ -186,6 +187,11 @@ export class OrganizationService {
   // The signed-in user's own state: requireAuth(), and userId is the session's
   hasClub(userId: string): Promise<boolean> {
     return this.repo.hasClub(userId);
+  }
+
+  // The signed-in user's own clubs: requireAuth(), and userId is the session's
+  listUserClubs(userId: string): Promise<UserClub[]> {
+    return this.repo.listUserClubs(userId);
   }
 
   // The signed-in user's own rows: requireAuth(), and userId is the session's, never a parameter
