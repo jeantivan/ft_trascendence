@@ -4,6 +4,7 @@ import type { AccessLogEntry } from "@/lib/gdpr/audit";
 import {
   buildExportFiles,
   type ExportAccountSource,
+  type ExportMessageSource,
   type ExportProfileSource,
   type ExportSessionSource,
   type ExportUserRepository,
@@ -27,12 +28,14 @@ function repositoryWith(
   sessions: ExportSessionSource[] = [],
   account: ExportAccountSource | null = emptyAccount,
   accessLog: AccessLogEntry[] = [],
+  messages: ExportMessageSource[] = [],
 ): ExportUserRepository {
   return {
     findProfile: async () => user,
     findAccountData: async () => account,
     findSessions: async () => sessions,
     findAccessLog: async () => accessLog,
+    findMessages: async () => messages,
   };
 }
 
@@ -52,6 +55,11 @@ const session: ExportSessionSource = {
 async function sessionsCsvOf(sessions: ExportSessionSource[]) {
   const files = await buildExportFiles(athlete.id, repositoryWith(athlete, sessions), NOW);
   return files!.find((file) => file.name === "sessions.csv")!.content;
+}
+
+async function messagesCsvOf(messages: ExportMessageSource[]) {
+  const files = await buildExportFiles(athlete.id, repositoryWith(athlete, [], emptyAccount, [], messages), NOW);
+  return files!.find((file) => file.name === "messages.csv")!.content;
 }
 
 const athlete: ExportProfileSource = {
@@ -149,10 +157,12 @@ describe("buildExportFiles", () => {
   it("incluye un README.txt que dice qué contiene el ZIP y qué no", async () => {
     const files = await buildExportFiles(athlete.id, repositoryWith(athlete), NOW);
 
-    expect(files!.map((file) => file.name)).toEqual(["data.json", "sessions.csv", "README.txt"]);
+    expect(files!.map((file) => file.name)).toEqual(["data.json", "sessions.csv", "messages.csv", "README.txt"]);
     const readme = files!.find((file) => file.name === "README.txt")!.content;
     expect(readme).toContain("data.json");
     expect(readme).toContain("sessions.csv");
+    expect(readme).toContain("messages.csv: los mensajes que escribiste");
+    expect(readme).toContain("aparecen con la fecha de borrado si aún los conservamos");
     expect(readme).toContain("2026-10-06 11:28 UTC");
     expect(readme).toContain("athlete@example.com");
     expect(readme).toContain("NO SE INCLUYE");
@@ -196,6 +206,72 @@ describe("buildExportFiles", () => {
     expect(await sessionsCsvOf([])).toBe(
       "session_id,org_id,origin,session_type,target_distance_m,target_pace_s_per_km,target_duration_s,scheduled_at,group_id,customizes_session_id\r\n",
     );
+  });
+
+  it("messages.csv lleva la cabecera de la spec, el id como texto y deleted_at vacío si no se borró", async () => {
+    const dm: ExportMessageSource = {
+      id: BigInt("9007199254740993"),
+      conversationId: "66666666-6666-4666-8666-666666666666",
+      kind: "dm",
+      body: "¿Quedamos antes?",
+      createdAt: new Date("2026-10-06T10:00:00.456Z"),
+      deletedAt: null,
+    };
+    const event: ExportMessageSource = {
+      ...dm,
+      id: BigInt(101),
+      conversationId: "77777777-7777-4777-8777-777777777777",
+      kind: "event",
+      body: "Llego en 5 minutos",
+      createdAt: new Date("2026-10-05T07:55:00.000Z"),
+    };
+
+    expect(await messagesCsvOf([event, dm])).toBe(
+      [
+        "message_id,conversation_id,kind,body,created_at,deleted_at",
+        `101,${event.conversationId},event,Llego en 5 minutos,2026-10-05T07:55:00Z,`,
+        `9007199254740993,${dm.conversationId},dm,¿Quedamos antes?,2026-10-06T10:00:00Z,`,
+        "",
+      ].join("\r\n"),
+    );
+  });
+
+  it("messages.csv incluye los mensajes borrados con su fecha de borrado", async () => {
+    const deleted: ExportMessageSource = {
+      id: BigInt(7),
+      conversationId: "66666666-6666-4666-8666-666666666666",
+      kind: "dm",
+      body: "borrado",
+      createdAt: new Date("2026-10-06T10:00:00.000Z"),
+      deletedAt: new Date("2026-10-07T08:30:00.789Z"),
+    };
+
+    expect(await messagesCsvOf([deleted])).toContain(
+      `7,${deleted.conversationId},dm,borrado,2026-10-06T10:00:00Z,2026-10-07T08:30:00Z\r\n`,
+    );
+  });
+
+  it("messages.csv entrecomilla el texto con comas y saltos de línea, y neutraliza fórmulas en el cuerpo", async () => {
+    const base: ExportMessageSource = {
+      id: BigInt(1),
+      conversationId: "66666666-6666-4666-8666-666666666666",
+      kind: "event",
+      body: "",
+      createdAt: new Date("2026-10-06T10:00:00.000Z"),
+      deletedAt: null,
+    };
+
+    const csv = await messagesCsvOf([
+      { ...base, id: BigInt(1), body: '=HYPERLINK("http://evil.example")' },
+      { ...base, id: BigInt(2), body: "hola, \"mundo\"\nadiós" },
+    ]);
+
+    expect(csv).toContain(`1,${base.conversationId},event,"'=HYPERLINK(""http://evil.example"")",`);
+    expect(csv).toContain(`2,${base.conversationId},event,"hola, ""mundo""\nadiós",`);
+  });
+
+  it("messages.csv lleva solo la cabecera si el usuario no ha escrito mensajes", async () => {
+    expect(await messagesCsvOf([])).toBe("message_id,conversation_id,kind,body,created_at,deleted_at\r\n");
   });
 
   it("devuelve null si el usuario no existe", async () => {
