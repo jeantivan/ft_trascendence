@@ -7,11 +7,18 @@ import {
 } from "@/lib/training/prisma-training-repository";
 import { notify } from "@/lib/notifications/notify";
 import {
+  CUSTOMIZED_SESSION_ALREADY_EXISTS,
+  SESSION_ALREADY_LOGGED,
   TrainingConflictError,
   TrainingNotFoundError,
 } from "@/lib/training/errors";
 import { TrainingService } from "@/lib/training/training-service";
 import {
+  CUSTOMIZED_SESSION_CREATED,
+  CUSTOMIZED_SESSION_DELETED,
+  CUSTOMIZED_SESSION_UPDATED,
+  TRAINING_SESSION_DELETED,
+  TRAINING_SESSION_UPDATED,
   TRAINING_TEMPLATE_ASSIGNED,
   TRAINING_TEMPLATE_CREATED,
   TRAINING_TEMPLATE_DELETED,
@@ -689,5 +696,278 @@ describe("Integration: PrismaTrainingRepository", () => {
     await expect(
       trainingService.getAthleteSchedule(outsider.id, orgId, athleteId)
     ).rejects.toThrow(TrainingNotFoundError);
+  });
+
+  it("persists real Postgres notifications with IDs only for Customized Session CRUD and group session edits/deletes", async () => {
+    const trainingService = new TrainingService(repo, notify);
+
+    const groupSession = await prisma.trainingSession.create({
+      data: {
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        targetDistanceM: 10000,
+        scheduledAt: new Date("2026-10-10T08:00:00.000Z"),
+        groupId: secondGroupId,
+      },
+    });
+
+    const customized = await trainingService.createCustomizedSession(
+      manager1Id,
+      orgId,
+      {
+        athleteId,
+        customizesSessionId: groupSession.id,
+        sessionType: "rodaje",
+        scheduledAt: "2026-10-10",
+        targetDistanceM: 6000,
+      }
+    );
+
+    await trainingService.updateManagerSession(manager1Id, orgId, groupSession.id, {
+      sessionType: "intervalos",
+    });
+    await trainingService.deleteManagerSession(manager1Id, orgId, groupSession.id);
+
+    await trainingService.updateManagerSession(manager1Id, orgId, customized.id, {
+      targetDistanceM: 7000,
+    });
+    await trainingService.deleteManagerSession(manager1Id, orgId, customized.id);
+
+    const athlete1Notifications = await prisma.notification.findMany({
+      where: { userId: athleteId },
+      orderBy: { id: "asc" },
+    });
+    expect(athlete1Notifications.map((n) => n.type)).toEqual([
+      CUSTOMIZED_SESSION_CREATED,
+      CUSTOMIZED_SESSION_UPDATED,
+      CUSTOMIZED_SESSION_DELETED,
+    ]);
+    for (const notification of athlete1Notifications) {
+      expect(notification.payload).toEqual({
+        orgId,
+        sessionId: customized.id,
+        athleteId,
+      });
+    }
+
+    const athlete2Notifications = await prisma.notification.findMany({
+      where: { userId: secondAthleteId },
+      orderBy: { id: "asc" },
+    });
+    expect(athlete2Notifications.map((n) => n.type)).toEqual([
+      TRAINING_SESSION_UPDATED,
+      TRAINING_SESSION_DELETED,
+    ]);
+    for (const notification of athlete2Notifications) {
+      expect(notification.payload).toEqual({
+        orgId,
+        sessionId: groupSession.id,
+        groupId: secondGroupId,
+      });
+    }
+  });
+
+  it("serializes concurrent duplicate createCustomizedSession calls for the same group session and athlete", async () => {
+    const trainingService = new TrainingService(repo, notify);
+    const groupSession = await prisma.trainingSession.create({
+      data: {
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-10-15T08:00:00.000Z"),
+        groupId,
+      },
+    });
+
+    const results = await Promise.allSettled([
+      trainingService.createCustomizedSession(manager1Id, orgId, {
+        athleteId,
+        customizesSessionId: groupSession.id,
+        sessionType: "rodaje",
+        scheduledAt: "2026-10-15",
+        targetDistanceM: 5000,
+      }),
+      trainingService.createCustomizedSession(manager2Id, orgId, {
+        athleteId,
+        customizesSessionId: groupSession.id,
+        sessionType: "cuestas",
+        scheduledAt: "2026-10-15",
+        targetDistanceM: 4000,
+      }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(TrainingConflictError);
+    expect((rejected[0].reason as TrainingConflictError).code).toBe(
+      CUSTOMIZED_SESSION_ALREADY_EXISTS
+    );
+
+    const rows = await prisma.trainingSession.findMany({
+      where: {
+        orgId,
+        origin: "customized",
+        athleteId,
+        customizesSessionId: groupSession.id,
+      },
+    });
+    expect(rows).toHaveLength(1);
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId: athleteId, type: CUSTOMIZED_SESSION_CREATED },
+    });
+    expect(notifications).toHaveLength(1);
+  });
+
+  it("serializes concurrent deleteManagerSession calls without P2025 (#238 row 18)", async () => {
+    for (let i = 0; i < 5; i++) {
+      const groupSession = await prisma.trainingSession.create({
+        data: {
+          orgId,
+          origin: "template",
+          sessionType: "rodaje",
+          scheduledAt: new Date(`2026-11-0${i + 1}T08:00:00.000Z`),
+          groupId,
+        },
+      });
+
+      const results = await Promise.allSettled([
+        repo.deleteManagerSession(orgId, groupSession.id),
+        repo.deleteManagerSession(orgId, groupSession.id),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(TrainingNotFoundError);
+    }
+  });
+
+  it("serializes Manager update, delete, and customize against concurrent SessionLog insert via FOR UPDATE", async () => {
+    for (let i = 0; i < 5; i++) {
+      const updateSession = await prisma.trainingSession.create({
+        data: {
+          orgId,
+          origin: "template",
+          sessionType: "rodaje",
+          targetDistanceM: 8000,
+          scheduledAt: new Date(`2026-12-0${i + 1}T08:00:00.000Z`),
+          groupId,
+        },
+      });
+
+      const [logUpdateResult, updateResult] = await Promise.allSettled([
+        prisma.sessionLog.create({
+          data: {
+            sessionId: updateSession.id,
+            athleteId,
+            completed: true,
+            performedAt: new Date(`2026-12-0${i + 1}T10:00:00.000Z`),
+          },
+        }),
+        repo.updateManagerSession(orgId, updateSession.id, {
+          sessionType: "cuestas",
+        }),
+      ]);
+
+      expect(logUpdateResult.status).toBe("fulfilled");
+      if (updateResult.status === "rejected") {
+        expect(updateResult.reason).toBeInstanceOf(TrainingConflictError);
+        expect((updateResult.reason as TrainingConflictError).code).toBe(
+          SESSION_ALREADY_LOGGED
+        );
+      } else {
+        expect(updateResult.value.sessionType).toBe("cuestas");
+      }
+
+      const customizeSession = await prisma.trainingSession.create({
+        data: {
+          orgId,
+          origin: "template",
+          sessionType: "rodaje",
+          scheduledAt: new Date(`2026-12-1${i + 1}T08:00:00.000Z`),
+          groupId,
+        },
+      });
+
+      const [logCustomizeResult, customizeResult] = await Promise.allSettled([
+        prisma.sessionLog.create({
+          data: {
+            sessionId: customizeSession.id,
+            athleteId,
+            completed: true,
+            performedAt: new Date(`2026-12-1${i + 1}T10:00:00.000Z`),
+          },
+        }),
+        repo.createCustomizedSession({
+          orgId,
+          athleteId,
+          customizesSessionId: customizeSession.id,
+          sessionType: "intervalos",
+          scheduledAt: `2026-12-1${i + 1}`,
+          targetDistanceM: 5000,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        }),
+      ]);
+
+      expect(logCustomizeResult.status).toBe("fulfilled");
+      if (customizeResult.status === "rejected") {
+        expect(customizeResult.reason).toBeInstanceOf(TrainingConflictError);
+        expect((customizeResult.reason as TrainingConflictError).code).toBe(
+          SESSION_ALREADY_LOGGED
+        );
+      } else {
+        expect(customizeResult.value.customizesSessionId).toBe(
+          customizeSession.id
+        );
+      }
+
+      const deleteSession = await prisma.trainingSession.create({
+        data: {
+          orgId,
+          origin: "template",
+          sessionType: "rodaje",
+          scheduledAt: new Date(`2026-12-2${i + 1}T08:00:00.000Z`),
+          groupId,
+        },
+      });
+
+      const [logDeleteResult, deleteResult] = await Promise.allSettled([
+        prisma.sessionLog.create({
+          data: {
+            sessionId: deleteSession.id,
+            athleteId,
+            completed: true,
+            performedAt: new Date(`2026-12-2${i + 1}T10:00:00.000Z`),
+          },
+        }),
+        repo.deleteManagerSession(orgId, deleteSession.id),
+      ]);
+
+      if (deleteResult.status === "fulfilled") {
+        expect(logDeleteResult.status).toBe("rejected");
+        expect(
+          await prisma.trainingSession.findUnique({
+            where: { id: deleteSession.id },
+          })
+        ).toBeNull();
+      } else {
+        expect(logDeleteResult.status).toBe("fulfilled");
+        expect(deleteResult.reason).toBeInstanceOf(TrainingConflictError);
+        expect((deleteResult.reason as TrainingConflictError).code).toBe(
+          SESSION_ALREADY_LOGGED
+        );
+        expect(
+          await prisma.trainingSession.findUnique({
+            where: { id: deleteSession.id },
+          })
+        ).not.toBeNull();
+      }
+    }
   });
 });

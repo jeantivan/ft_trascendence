@@ -4,10 +4,18 @@ import type {
   SessionType,
 } from "@/generated/prisma/client";
 import { describe, expect, it } from "vitest";
-import { TrainingConflictError, TrainingNotFoundError } from "@/lib/training/errors";
+import {
+  CUSTOMIZED_SESSION_ALREADY_EXISTS,
+  SESSION_ALREADY_LOGGED,
+  TrainingConflictError,
+  TrainingForbiddenError,
+  TrainingNotFoundError,
+  TrainingValidationError,
+} from "@/lib/training/errors";
 import type {
   TrainingRepository,
   TrainingSessionData,
+  TrainingSessionMutationTarget,
 } from "@/lib/training/types";
 import { computeScheduledAtUtc } from "@/lib/training/units";
 
@@ -890,6 +898,553 @@ export function runTrainingRepositoryContract(
         loggedFromDeletedGroup.id,
       ]);
       expect(schedule[1].groupId).toBeNull();
+    });
+
+    it("creates direct and adapted Customized Sessions with club timezone conversion and validates invariants", async () => {
+      const {
+        repo,
+        orgId,
+        otherOrgId,
+        manager1Id,
+        athleteId,
+        secondAthleteId,
+        groupId,
+        secondGroupId,
+        otherOrgGroupId,
+        seedSession,
+        seedSessionLog,
+        removeMember,
+        deleteGroup,
+      } = getFixture();
+
+      // Direct Customized Session (customizesSessionId: null)
+      const createdIds: string[] = [];
+      const direct = await repo.createCustomizedSession(
+        {
+          orgId,
+          athleteId,
+          customizesSessionId: null,
+          sessionType: "rodaje",
+          scheduledAt: "2026-03-29",
+          targetDistanceM: 9000,
+          targetDurationS: null,
+          targetPaceSPerKm: 310,
+        },
+        async (sessionId) => {
+          createdIds.push(sessionId);
+        }
+      );
+      expect(direct).toMatchObject({
+        orgId,
+        origin: "customized",
+        sessionType: "rodaje",
+        targetDistanceM: 9000,
+        targetDurationS: null,
+        targetPaceSPerKm: 310,
+        scheduledAt: computeScheduledAtUtc("2026-03-29", 0, "Europe/Madrid"),
+        groupId: null,
+        athleteId,
+        sourceTemplateId: null,
+        customizesSessionId: null,
+      });
+      expect(createdIds).toEqual([direct.id]);
+
+      // Group session shared by athleteId and secondAthleteId; only secondAthleteId has logged it
+      const groupSession = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-09-01T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+      await seedSessionLog(groupSession.id, secondAthleteId);
+
+      // Adapting for secondAthleteId fails with SESSION_ALREADY_LOGGED (409)
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId: secondAthleteId,
+          customizesSessionId: groupSession.id,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-01",
+          targetDistanceM: 5000,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          err instanceof TrainingConflictError &&
+          err.code === SESSION_ALREADY_LOGGED
+      );
+
+      // Adapting the same group session for athleteId (who has no log) succeeds
+      const adapted = await repo.createCustomizedSession({
+        orgId,
+        athleteId,
+        customizesSessionId: groupSession.id,
+        sessionType: "rodaje",
+        scheduledAt: "2026-09-01",
+        targetDistanceM: 6000,
+        targetDurationS: null,
+        targetPaceSPerKm: null,
+      });
+      expect(adapted.customizesSessionId).toBe(groupSession.id);
+      expect(adapted.groupId).toBeNull();
+      expect(adapted.athleteId).toBe(athleteId);
+
+      // Creating a duplicate adaptation for the same (customizesSessionId, athleteId) fails with 409
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId,
+          customizesSessionId: groupSession.id,
+          sessionType: "cuestas",
+          scheduledAt: "2026-09-01",
+          targetDistanceM: 4000,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          err instanceof TrainingConflictError &&
+          err.code === CUSTOMIZED_SESSION_ALREADY_EXISTS
+      );
+
+      // Cannot target a manager or non-member (404)
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId: manager1Id,
+          customizesSessionId: null,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-02",
+          targetDistanceM: null,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId: UNKNOWN_ID,
+          customizesSessionId: null,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-02",
+          targetDistanceM: null,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      // Cannot customize a session from another club (404)
+      const otherClubSession = await seedSession({
+        orgId: otherOrgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-09-02T08:00:00.000Z"),
+        groupId: otherOrgGroupId,
+      });
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId,
+          customizesSessionId: otherClubSession.id,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-02",
+          targetDistanceM: null,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      // Cannot customize a visible free or customized session (400)
+      const freeSession = await seedSession({
+        orgId,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-09-03T08:00:00.000Z"),
+        athleteId: secondAthleteId,
+      });
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId,
+          customizesSessionId: freeSession.id,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-03",
+          targetDistanceM: null,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toThrow(TrainingValidationError);
+
+      // Cannot customize a group session when athlete is not in that group (400)
+      const groupOnlyForAthlete1 = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-09-04T08:00:00.000Z"),
+        groupId,
+      });
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId: secondAthleteId,
+          customizesSessionId: groupOnlyForAthlete1.id,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-04",
+          targetDistanceM: null,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toThrow(TrainingValidationError);
+
+      // Cannot customize an orphan group session whose group was deleted (400)
+      await deleteGroup(groupId);
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId,
+          customizesSessionId: groupOnlyForAthlete1.id,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-04",
+          targetDistanceM: null,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toThrow(TrainingValidationError);
+
+      // Customizing a former member's personal session returns 404 (not 400) to avoid leaking existence
+      await removeMember(orgId, secondAthleteId);
+      await expect(
+        repo.createCustomizedSession({
+          orgId,
+          athleteId,
+          customizesSessionId: freeSession.id,
+          sessionType: "rodaje",
+          scheduledAt: "2026-09-03",
+          targetDistanceM: null,
+          targetDurationS: null,
+          targetPaceSPerKm: null,
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+    });
+
+    it("updates and deletes unlogged template and customized sessions, excluding substituted athletes and preserving child customized sessions", async () => {
+      const {
+        repo,
+        orgId,
+        athleteId,
+        secondAthleteId,
+        secondGroupId,
+        seedSession,
+        deleteGroup,
+      } = getFixture();
+
+      const groupSession = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        targetDistanceM: 10000,
+        targetDurationS: 3600,
+        targetPaceSPerKm: 360,
+        scheduledAt: new Date("2026-10-01T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+
+      // athleteId has a Customized Session substituting groupSession
+      const childCustomized = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "rodaje",
+        targetDistanceM: 5000,
+        scheduledAt: new Date("2026-10-01T08:00:00.000Z"),
+        athleteId,
+        customizesSessionId: groupSession.id,
+      });
+
+      // Partial update preserves omitted fields, clears explicit null, and excludes substituted athleteId from notification target
+      const updateTargets: TrainingSessionMutationTarget[] = [];
+      const updatedGroup = await repo.updateManagerSession(
+        orgId,
+        groupSession.id,
+        {
+          sessionType: "intervalos",
+          targetDistanceM: null,
+          scheduledAt: "2026-10-02",
+        },
+        async (target) => {
+          updateTargets.push(target);
+        }
+      );
+      expect(updatedGroup).toMatchObject({
+        id: groupSession.id,
+        sessionType: "intervalos",
+        targetDistanceM: null,
+        targetDurationS: 3600,
+        targetPaceSPerKm: 360,
+        scheduledAt: computeScheduledAtUtc("2026-10-02", 0, "Europe/Madrid"),
+      });
+      expect(updateTargets).toEqual([
+        {
+          kind: "group",
+          sessionId: groupSession.id,
+          groupId: secondGroupId,
+          athleteIds: [secondAthleteId],
+        },
+      ]);
+
+      // Deleting the group session still excludes athleteId from delete notifications,
+      // and keeps childCustomized intact with customizesSessionId = null
+      const deleteTargets: TrainingSessionMutationTarget[] = [];
+      await repo.deleteManagerSession(orgId, groupSession.id, async (target) => {
+        deleteTargets.push(target);
+      });
+      expect(deleteTargets).toEqual([
+        {
+          kind: "group",
+          sessionId: groupSession.id,
+          groupId: secondGroupId,
+          athleteIds: [secondAthleteId],
+        },
+      ]);
+
+      const clubSessionsAfterDelete = await repo.listClubSessions(orgId);
+      const survivingChild = clubSessionsAfterDelete.find(
+        (s) => s.id === childCustomized.id
+      );
+      expect(survivingChild).toBeDefined();
+      expect(survivingChild?.customizesSessionId).toBeNull();
+
+      // Update and delete the customized session
+      const customUpdateTargets: TrainingSessionMutationTarget[] = [];
+      const updatedCustomized = await repo.updateManagerSession(
+        orgId,
+        childCustomized.id,
+        { targetDistanceM: 7500 },
+        async (target) => {
+          customUpdateTargets.push(target);
+        }
+      );
+      expect(updatedCustomized.targetDistanceM).toBe(7500);
+      expect(customUpdateTargets).toEqual([
+        {
+          kind: "customized",
+          sessionId: childCustomized.id,
+          athleteId,
+        },
+      ]);
+
+      const customDeleteTargets: TrainingSessionMutationTarget[] = [];
+      await repo.deleteManagerSession(
+        orgId,
+        childCustomized.id,
+        async (target) => {
+          customDeleteTargets.push(target);
+        }
+      );
+      expect(customDeleteTargets).toEqual([
+        {
+          kind: "customized",
+          sessionId: childCustomized.id,
+          athleteId,
+        },
+      ]);
+      expect(await repo.listClubSessions(orgId)).toHaveLength(0);
+
+      // Orphan template session (group deleted) yields kind: "group_orphan"
+      const orphanSession = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-10-05T08:00:00.000Z"),
+        groupId: secondGroupId,
+      });
+      await deleteGroup(secondGroupId);
+
+      const orphanTargets: TrainingSessionMutationTarget[] = [];
+      await repo.deleteManagerSession(orgId, orphanSession.id, async (target) => {
+        orphanTargets.push(target);
+      });
+      expect(orphanTargets).toEqual([
+        {
+          kind: "group_orphan",
+          sessionId: orphanSession.id,
+        },
+      ]);
+    });
+
+    it("enforces SESSION_ALREADY_LOGGED (409), 403 on active athlete free sessions, and 404 on former-member or other-club sessions", async () => {
+      const {
+        repo,
+        orgId,
+        otherOrgId,
+        athleteId,
+        secondAthleteId,
+        groupId,
+        otherOrgGroupId,
+        seedSession,
+        seedSessionLog,
+        removeMember,
+      } = getFixture();
+
+      const loggedGroup = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-11-01T08:00:00.000Z"),
+        groupId,
+      });
+      await seedSessionLog(loggedGroup.id, athleteId);
+
+      const loggedCustomized = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "intervalos",
+        scheduledAt: new Date("2026-11-02T08:00:00.000Z"),
+        athleteId,
+      });
+      await seedSessionLog(loggedCustomized.id, athleteId);
+
+      const activeFree = await seedSession({
+        orgId,
+        origin: "free",
+        sessionType: "fartlek",
+        scheduledAt: new Date("2026-11-03T08:00:00.000Z"),
+        athleteId: secondAthleteId,
+      });
+      const exMemberCustomized = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "cuestas",
+        scheduledAt: new Date("2026-11-04T08:00:00.000Z"),
+        athleteId: secondAthleteId,
+      });
+      const otherClubSession = await seedSession({
+        orgId: otherOrgId,
+        origin: "template",
+        sessionType: "rodaje",
+        scheduledAt: new Date("2026-11-05T08:00:00.000Z"),
+        groupId: otherOrgGroupId,
+      });
+
+      // Logged template or customized sessions fail with 409 SESSION_ALREADY_LOGGED
+      for (const sessionId of [loggedGroup.id, loggedCustomized.id]) {
+        await expect(
+          repo.updateManagerSession(orgId, sessionId, { sessionType: "cuestas" })
+        ).rejects.toSatisfy(
+          (err: unknown) =>
+            err instanceof TrainingConflictError &&
+            err.code === SESSION_ALREADY_LOGGED
+        );
+        await expect(
+          repo.deleteManagerSession(orgId, sessionId)
+        ).rejects.toSatisfy(
+          (err: unknown) =>
+            err instanceof TrainingConflictError &&
+            err.code === SESSION_ALREADY_LOGGED
+        );
+      }
+
+      // Active athlete's Free Session returns 403 Forbidden (Manager can see it, cannot write it)
+      await expect(
+        repo.updateManagerSession(orgId, activeFree.id, { sessionType: "rodaje" })
+      ).rejects.toThrow(TrainingForbiddenError);
+      await expect(
+        repo.deleteManagerSession(orgId, activeFree.id)
+      ).rejects.toThrow(TrainingForbiddenError);
+
+      // Once secondAthleteId leaves the club, both their Free and Customized Sessions return 404
+      await removeMember(orgId, secondAthleteId);
+      await expect(
+        repo.updateManagerSession(orgId, activeFree.id, { sessionType: "rodaje" })
+      ).rejects.toThrow(TrainingNotFoundError);
+      await expect(
+        repo.deleteManagerSession(orgId, activeFree.id)
+      ).rejects.toThrow(TrainingNotFoundError);
+      await expect(
+        repo.updateManagerSession(orgId, exMemberCustomized.id, {
+          sessionType: "rodaje",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+      await expect(
+        repo.deleteManagerSession(orgId, exMemberCustomized.id)
+      ).rejects.toThrow(TrainingNotFoundError);
+
+      // Another club's session returns 404
+      await expect(
+        repo.updateManagerSession(orgId, otherClubSession.id, {
+          sessionType: "cuestas",
+        })
+      ).rejects.toThrow(TrainingNotFoundError);
+      await expect(
+        repo.deleteManagerSession(orgId, otherClubSession.id)
+      ).rejects.toThrow(TrainingNotFoundError);
+    });
+
+    it("rolls back createCustomizedSession, updateManagerSession, and deleteManagerSession when callbacks throw", async () => {
+      const { repo, orgId, athleteId, groupId, seedSession } = getFixture();
+
+      await expect(
+        repo.createCustomizedSession(
+          {
+            orgId,
+            athleteId,
+            customizesSessionId: null,
+            sessionType: "rodaje",
+            scheduledAt: "2026-12-01",
+            targetDistanceM: 5000,
+            targetDurationS: null,
+            targetPaceSPerKm: null,
+          },
+          async () => {
+            throw new Error("Rollback create customized");
+          }
+        )
+      ).rejects.toThrow("Rollback create customized");
+      expect(await repo.listClubSessions(orgId)).toHaveLength(0);
+
+      const groupSession = await seedSession({
+        orgId,
+        origin: "template",
+        sessionType: "rodaje",
+        targetDistanceM: 8000,
+        scheduledAt: new Date("2026-12-02T08:00:00.000Z"),
+        groupId,
+      });
+      const childCustomized = await seedSession({
+        orgId,
+        origin: "customized",
+        sessionType: "rodaje",
+        targetDistanceM: 4000,
+        scheduledAt: new Date("2026-12-02T08:00:00.000Z"),
+        athleteId,
+        customizesSessionId: groupSession.id,
+      });
+
+      await expect(
+        repo.updateManagerSession(
+          orgId,
+          groupSession.id,
+          { sessionType: "cuestas" },
+          async () => {
+            throw new Error("Rollback update session");
+          }
+        )
+      ).rejects.toThrow("Rollback update session");
+
+      await expect(
+        repo.deleteManagerSession(orgId, groupSession.id, async () => {
+          throw new Error("Rollback delete session");
+        })
+      ).rejects.toThrow("Rollback delete session");
+
+      const sessions = await repo.listClubSessions(orgId);
+      const stillGroup = sessions.find((s) => s.id === groupSession.id);
+      const stillChild = sessions.find((s) => s.id === childCustomized.id);
+      expect(stillGroup?.sessionType).toBe("rodaje");
+      expect(stillChild?.customizesSessionId).toBe(groupSession.id);
     });
   });
 }

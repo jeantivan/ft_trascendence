@@ -13,6 +13,7 @@ import {
   TrainingNotFoundError,
   TrainingValidationError,
   type TemplateValidationFieldErrors,
+  type TrainingConflictCode,
 } from "./errors";
 import type { TrainingSessionData, TrainingTemplateData } from "./types";
 
@@ -21,6 +22,7 @@ export type ActionResult<T = void> =
   | {
       success: false;
       error: string;
+      code?: TrainingConflictCode;
       fieldErrors?: TemplateValidationFieldErrors;
     };
 
@@ -40,13 +42,15 @@ async function runTrainingAction<T>(
     if (error instanceof TrainingForbiddenError) {
       forbidden();
     }
+    if (error instanceof TrainingConflictError) {
+      return error.code !== undefined
+        ? { success: false, error: error.message, code: error.code }
+        : { success: false, error: error.message };
+    }
     if (error instanceof TrainingValidationError) {
       return error.fieldErrors
         ? { success: false, error: error.message, fieldErrors: error.fieldErrors }
         : { success: false, error: error.message };
-    }
-    if (error instanceof TrainingConflictError) {
-      return { success: false, error: error.message };
     }
     throw error;
   }
@@ -134,5 +138,36 @@ export async function listClubSessionsAction(
   const { user } = await requireOrgRole(orgId, SCHEDULE_READ_ROLES);
   return runTrainingAction(() =>
     trainingService.listClubSessions(user.id, orgId)
+  );
+}
+
+export async function createCustomizedSessionAction(
+  orgId: string,
+  input: unknown
+): Promise<ActionResult<TrainingSessionData>> {
+  const { user } = await requireOrgRole(orgId, ORG_ROLES["session.write"]);
+  return runTrainingAction(() =>
+    trainingService.createCustomizedSession(user.id, orgId, input)
+  );
+}
+
+export async function updateManagerSessionAction(
+  orgId: string,
+  sessionId: string,
+  input: unknown
+): Promise<ActionResult<TrainingSessionData>> {
+  const { user } = await requireOrgRole(orgId, ORG_ROLES["session.write"]);
+  return runTrainingAction(() =>
+    trainingService.updateManagerSession(user.id, orgId, sessionId, input)
+  );
+}
+
+export async function deleteManagerSessionAction(
+  orgId: string,
+  sessionId: string
+): Promise<ActionResult<void>> {
+  const { user } = await requireOrgRole(orgId, ORG_ROLES["session.write"]);
+  return runTrainingAction(() =>
+    trainingService.deleteManagerSession(user.id, orgId, sessionId)
   );
 }

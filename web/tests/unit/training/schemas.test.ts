@@ -4,6 +4,7 @@ import {
   MAX_DURATION_SECONDS,
   MAX_PACE_SECONDS,
   POSTGRES_INT_MAX,
+  createCustomizedSessionSchema,
   incompletionReasonSchema,
   rpeSchema,
   sessionLogExtraSchema,
@@ -11,6 +12,7 @@ import {
   sessionTypeSchema,
   trainingTemplateNameSchema,
   trainingTemplateSchema,
+  updateManagerSessionSchema,
 } from "@/lib/training/schemas";
 
 describe("trainingTemplateNameSchema", () => {
@@ -285,5 +287,105 @@ describe("sessionLogSchema", () => {
     expect(sessionLogSchema.safeParse({ completed: true, distanceM: 0 }).success).toBe(false);
     expect(sessionLogSchema.safeParse({ completed: true, durationS: MAX_DURATION_SECONDS + 1 }).success).toBe(false);
     expect(sessionLogSchema.safeParse({ completed: true, unknownField: 1 }).success).toBe(false);
+  });
+});
+
+describe("createCustomizedSessionSchema", () => {
+  const ATHLETE_ID = "13800000-0000-4000-8000-000000000021";
+  const GROUP_SESSION_ID = "13800000-0000-4000-8000-000000000051";
+
+  it("accepts direct and adapted customized sessions, normalizes UUIDs, and defaults omitted optional fields to null", () => {
+    const direct = createCustomizedSessionSchema.parse({
+      athleteId: ATHLETE_ID.toUpperCase(),
+      sessionType: "rodaje",
+      scheduledAt: " 2026-06-15 ",
+    });
+    expect(direct).toEqual({
+      athleteId: ATHLETE_ID,
+      customizesSessionId: null,
+      sessionType: "rodaje",
+      scheduledAt: "2026-06-15",
+      targetDistanceM: null,
+      targetDurationS: null,
+      targetPaceSPerKm: null,
+    });
+
+    const adapted = createCustomizedSessionSchema.parse({
+      athleteId: ATHLETE_ID,
+      customizesSessionId: GROUP_SESSION_ID.toUpperCase(),
+      sessionType: "intervalos",
+      scheduledAt: "2026-06-16",
+      targetDistanceM: 8000,
+      targetDurationS: 2400,
+      targetPaceSPerKm: 280,
+    });
+    expect(adapted.customizesSessionId).toBe(GROUP_SESSION_ID);
+    expect(adapted.targetDistanceM).toBe(8000);
+  });
+
+  it("rejects invalid dates, pre-1970 years, invalid IDs, and unexpected keys", () => {
+    expect(
+      createCustomizedSessionSchema.safeParse({
+        athleteId: "not-a-uuid",
+        sessionType: "rodaje",
+        scheduledAt: "2026-06-15",
+      }).success,
+    ).toBe(false);
+    expect(
+      createCustomizedSessionSchema.safeParse({
+        athleteId: ATHLETE_ID,
+        sessionType: "rodaje",
+        scheduledAt: "2026-02-30",
+      }).success,
+    ).toBe(false);
+    expect(
+      createCustomizedSessionSchema.safeParse({
+        athleteId: ATHLETE_ID,
+        sessionType: "rodaje",
+        scheduledAt: "1969-12-31",
+      }).success,
+    ).toBe(false);
+    expect(
+      createCustomizedSessionSchema.safeParse({
+        athleteId: ATHLETE_ID,
+        sessionType: "rodaje",
+        scheduledAt: "2026-06-15",
+        origin: "free",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("updateManagerSessionSchema", () => {
+  it("preserves omitted fields as undefined and allows explicit null to clear targets", () => {
+    const partial = updateManagerSessionSchema.parse({
+      sessionType: "cuestas",
+      targetDistanceM: null,
+    });
+    expect(partial).toEqual({
+      sessionType: "cuestas",
+      targetDistanceM: null,
+    });
+    expect("targetDurationS" in partial).toBe(false);
+    expect("scheduledAt" in partial).toBe(false);
+  });
+
+  it("rejects empty payloads, invalid dates, and disallowed fields", () => {
+    expect(updateManagerSessionSchema.safeParse({}).success).toBe(false);
+    expect(
+      updateManagerSessionSchema.safeParse({ scheduledAt: "2026-02-30" }).success,
+    ).toBe(false);
+    expect(
+      updateManagerSessionSchema.safeParse({
+        sessionType: "rodaje",
+        groupId: "13800000-0000-4000-8000-000000000041",
+      }).success,
+    ).toBe(false);
+    expect(
+      updateManagerSessionSchema.safeParse({
+        sessionType: "rodaje",
+        athleteId: "13800000-0000-4000-8000-000000000021",
+      }).success,
+    ).toBe(false);
   });
 });
