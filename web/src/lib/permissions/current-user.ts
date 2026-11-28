@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Session } from "next-auth";
 import { auth } from "@/auth";
 import {
@@ -13,7 +14,10 @@ export type CurrentUserResult =
   | { ok: true; user: CurrentUser }
   | { ok: false; reason: "no-session" | "blocked" };
 
-export async function getCurrentUser(
+// One database read per page render (#291), shared by the layout, the template
+// and the page; a block still shows on the next request. Server Actions and
+// route handlers run outside a render: there every call reads again
+export const getCurrentUser = cache(async function getCurrentUser(
   getSession: () => Promise<Session | null> = auth,
   repo: CurrentUserRepository = currentUserRepository
 ): Promise<CurrentUserResult> {
@@ -41,4 +45,4 @@ export async function getCurrentUser(
       roleGlobal: user.roleGlobal,
     },
   };
-}
+});

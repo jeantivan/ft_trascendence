@@ -11,7 +11,7 @@ export type AdminResult =
 // The decision the adapters depend on: getAdmin in the app, a fake in tests
 export type AdminCheck = () => Promise<AdminResult>;
 
-// roleGlobal comes from the database on every call (getCurrentUser), never from the JWT
+// roleGlobal comes from the database on every request (getCurrentUser), never from the JWT
 export async function getAdmin(
   getUser: () => Promise<CurrentUserResult> = getCurrentUser
 ): Promise<AdminResult> {
